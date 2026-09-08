@@ -1,50 +1,198 @@
-<nav class="navbar">
+<!-- FRANJA SUPERIOR NAVY -->
+<div class="top-bar">
+  <p>🚀 ¡Lanzamiento especial! Probá Reserva2 con 0% de comisiones para siempre.</p>
+</div>
+
+<!-- FONDO ANIMADO (EFECTO AURORA) -->
+<div class="animated-background">
+  <div class="blob orange"></div>
+  <div class="blob navy"></div>
+</div>
+
+<!-- NAVBAR CON NUEVO ORDEN Y LOGIN -->
+<nav class="navbar" [class.scrolled]="isScrolled">
   <div class="logo-container">
     <img src="/reserva2_icono_navy.png" alt="Icono" class="logo-icon">
     <img src="/reserva2_logo_coral.png" alt="Texto" class="logo-text">
   </div>
   <ul class="nav-links">
-    <li><a href="#">Producto</a></li>
-    <li><a href="#">Cómo funciona</a></li>
-    <li><a href="#">Precios</a></li>
+    <li><a href="#planes">Planes</a></li>
+    <li><a href="#como-funciona">Cómo funciona</a></li>
+    <li><a href="#automatiza">Automatizá</a></li>
   </ul>
-  <button class="btn-naranja">Crear mi negocio</button>
+  <div class="nav-actions">
+    <a href="#" class="nav-login">Iniciar sesión</a>
+    <button class="btn-naranja">Registrar mi negocio</button>
+  </div>
 </nav>
 
+<!-- SECCIÓN HERO LIMPIA Y CON BOTÓN LARGO -->
 <section class="hero-section">
   <div class="hero-center">
     <div class="badge-novedad">✨ Gestioná tus turnos en segundos</div>
-    <h1 class="hero-title">App para crear agendas de turnos <span class="texto-resaltado">gratis</span></h1>
-    <p class="hero-subtitle">Gestioná tu agenda de turnos y reservas de manera simple, fácil y gratuita. Sin comisiones de por medio.</p>
+    <h1 class="hero-title">Tu agenda de turnos online <span class="texto-resaltado">gratis</span></h1>
+    <p class="hero-subtitle">Centralizá tus reservas, automatizá recordatorios por WhatsApp y cobrá señas sin pagar comisiones extra. Tu negocio, tus reglas.</p>
     
     <div class="hero-buttons">
-      <button class="btn-naranja btn-grande">Creá tu cuenta hoy</button>
-      <button class="btn-secundario">Ver demo</button>
+      <button class="btn-naranja btn-largo">Creá tu cuenta hoy</button>
+    </div>
+  </div>
+</section>
+
+<!-- SECCIÓN DE PLANES -->
+<section id="planes" class="pricing-section">
+  <div class="pricing-header">
+    <h2>Elegí el plan perfecto para tu negocio</h2>
+    <p>Sin comisiones por reserva. Cambiá de plan o cancelá cuando quieras, sin letra chica.</p>
+  </div>
+  
+  <div class="pricing-cards">
+    <div class="card basic-card">
+      <h3>Gratuito</h3>
+      <p class="card-desc">Ideal para empezar a digitalizarte.</p>
+      <div class="price"><span>$0</span>/mes</div>
+      <ul class="features">
+        <li><span class="check">✓</span> 1 agenda / profesional</li>
+        <li><span class="check">✓</span> Hasta 100 reservas al mes</li>
+        <li><span class="check">✓</span> Link web personalizado</li>
+        <li><span class="check">✓</span> 0% de comisión por cobro</li>
+      </ul>
+      <button class="btn-secundario-outline">Empezar gratis</button>
     </div>
 
-    <div class="hero-preview-container">
-      <div class="phone-mockup">
-        <div class="phone-header">
-          <span class="dot red"></span>
-          <span class="dot yellow"></span>
-          <span class="dot green"></span>
-          <span class="phone-url">reserva2.app/barberia</span>
+    <div class="card pro-card">
+      <div class="badge-recomendado">Más elegido</div>
+      <h3 class="pro-text">Pro</h3>
+      <p class="card-desc pro-text-muted">Para negocios en crecimiento.</p>
+      <div class="price pro-text"><span>$15.000</span>/mes</div>
+      <ul class="features pro-text">
+        <li><span class="check-orange">✓</span> Agendas ilimitadas</li>
+        <li><span class="check-orange">✓</span> Reservas ilimitadas</li>
+        <li><span class="check-orange">✓</span> Recordatorios WhatsApp</li>
+        <li><span class="check-orange">✓</span> Historial de clientes</li>
+        <li><span class="check-orange">✓</span> 0% de comisión por cobro</li>
+      </ul>
+      <button class="btn-naranja btn-full">Probar 14 días gratis</button>
+    </div>
+
+    <div class="card business-card">
+      <h3>Business</h3>
+      <p class="card-desc">Control total y automatización.</p>
+      <div class="price"><span>$25.000</span>/mes</div>
+      <ul class="features">
+        <li><span class="check">✓</span> Todo lo del plan Pro</li>
+        <li><span class="check">✓</span> Múltiples sucursales</li>
+        <li><span class="check">✓</span> Reportes de facturación</li>
+        <li><span class="check">✓</span> Pixel de Meta y Analytics</li>
+        <li><span class="check">✓</span> Soporte prioritario</li>
+      </ul>
+      <button class="btn-secundario-outline">Contactar ventas</button>
+    </div>
+  </div>
+</section>
+
+<!-- SECCIÓN BENEFICIOS -->
+<section id="como-funciona" class="benefits-section">
+  <div class="benefits-header">
+    <h2>Por qué los negocios eligen Reserva2</h2>
+    <p>Todo lo que necesitás para que tu agenda se maneje sola y sin fricciones.</p>
+  </div>
+  <div class="benefits-grid">
+    <div class="benefit-card">
+      <div class="icon-box">🕒</div>
+      <h3>Tu negocio abierto 24/7</h3>
+      <p>Tus clientes pueden sacar turno en cualquier momento, incluso de madrugada. No pierdas más reservas por no poder contestar el teléfono.</p>
+    </div>
+    <div class="benefit-card">
+      <div class="icon-box">📱</div>
+      <h3>Chau inasistencias</h3>
+      <p>Enviamos recordatorios automáticos por WhatsApp. Reducí los "plantados" hasta un 80% y asegurá la facturación del día sin mover un dedo.</p>
+    </div>
+    <div class="benefit-card">
+      <div class="icon-box">💸</div>
+      <h3>Cero comisiones</h3>
+      <p>No tocamos tu plata. Pagás una suscripción fija mensual (o usás nuestro plan gratis) y el 100% de tus cobros van directo a tu bolsillo.</p>
+    </div>
+  </div>
+</section>
+
+<!-- SECCIÓN AUTOMATIZAR COBROS -->
+<section id="automatiza" class="cta-cobros">
+  <div class="cta-texto">
+    <h2>Automatizá los cobros de tus turnos</h2>
+    <p>Configurá el cobro de señas por MercadoPago y olvidate de las ausencias. Asegurá tu facturación antes de que el cliente llegue a tu local.</p>
+    <div class="cta-botones">
+      <button class="btn-naranja">Automatizar ahora</button>
+    </div>
+  </div>
+  
+  <div class="cta-imagen">
+    <!-- CALENDARIO APILADO 3D -->
+    <div class="calendario-interactivo">
+      <div class="hoja hoja-3"></div>
+      <div class="hoja hoja-2"></div>
+      <div class="hoja hoja-1">
+        <div class="cal-mes">
+          <span class="mes-texto">Noviembre</span>
+          <span class="puntos">•••</span>
         </div>
-        <div class="phone-body">
-          <div class="calendar-header-mock">
-            <h3>📅 Nails Studio & Barber</h3>
-            <span class="badge-live">En línea</span>
-          </div>
-          <div class="slot-row">
-            <div class="slot available">10:00 hs</div>
-            <div class="slot selected">11:30 hs (Seleccionado)</div>
-            <div class="slot busy">14:00 hs</div>
-          </div>
-          <div class="client-success-msg">
-            ✅ ¡Turno agendado con éxito! Recordatorio enviado por WhatsApp.
-          </div>
+        <div class="cal-dias-semana">
+          <span>Lu</span><span>Ma</span><span>Mi</span><span>Ju</span><span>Vi</span><span>Sa</span><span>Do</span>
+        </div>
+        <div class="cal-grilla">
+          <div class="dia inactivo">29</div><div class="dia inactivo">30</div>
+          <div class="dia">1</div><div class="dia">2</div><div class="dia cobrado">3</div>
+          <div class="dia">4</div><div class="dia">5</div><div class="dia">6</div>
+          <div class="dia cobrado">7</div><div class="dia">8</div><div class="dia">9</div>
+          <div class="dia">10</div><div class="dia cobrado">11</div><div class="dia">12</div>
+        </div>
+        <div class="cal-notificacion">
+          ✅ Seña de $5.000 acreditada
         </div>
       </div>
     </div>
   </div>
 </section>
+
+<!-- FOOTER CLARO Y MODERNO -->
+<footer class="footer-section">
+  <div class="footer-content">
+    <div class="footer-brand">
+      <div class="footer-logo-container">
+        <img src="/reserva2_icono_navy.png" alt="Icono Reserva2" class="footer-icon">
+        <img src="/reserva2_logo_coral.png" alt="Texto Reserva2" class="footer-logo-text">
+      </div>
+      <p>Turnos sin vueltas, confirmados al toque. La plataforma más fácil de Argentina para gestionar tus reservas.</p>
+    </div>
+    <div class="footer-links">
+      <h4>Navegación</h4>
+      <ul>
+        <li><a href="#">Funcionalidades</a></li>
+        <li><a href="#">Testimonios</a></li>
+        <li><a href="#">Planes y Precios</a></li>
+        <li><a href="#">FAQs (Preguntas Frecuentes)</a></li>
+      </ul>
+    </div>
+    <div class="footer-links">
+      <h4>Legales</h4>
+      <ul>
+        <li><a href="#">Aviso legal</a></li>
+        <li><a href="#">Política de privacidad</a></li>
+        <li><a href="#">Términos y condiciones</a></li>
+        <li><a href="#">Política de cookies</a></li>
+      </ul>
+    </div>
+    <div class="footer-links">
+      <h4>Soporte</h4>
+      <ul>
+        <li><a href="#">Centro de ayuda</a></li>
+        <li><a href="#">Contactar ventas</a></li>
+        <li><a href="#">Soporte por WhatsApp</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>Desarrollo de Software en Rosario, Santa Fe</p>
+    <p>Copyright &copy; 2026 Reserva2</p>
+  </div>
+</footer>
