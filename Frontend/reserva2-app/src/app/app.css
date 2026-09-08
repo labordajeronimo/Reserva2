@@ -1,0 +1,264 @@
+/* Estilos generales */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+  background-color: #ffffff;
+  color: #1a202c;
+}
+
+/* Navbar */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.2rem 6%;
+  background-color: #ffffff;
+  border-bottom: 1px solid #f0f0f0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+}
+
+.logo-icon {
+  height: 52px;
+  object-fit: contain;
+}
+
+.logo-text {
+  height: 30px;
+  object-fit: contain;
+}
+
+.nav-links {
+  list-style: none;
+  display: flex;
+  gap: 2.5rem;
+}
+
+.nav-links a {
+  text-decoration: none;
+  color: #4a5568;
+  font-weight: 500;
+  font-size: 1.05rem;
+  transition: color 0.2s;
+}
+
+.nav-links a:hover {
+  color: #e85d22;
+}
+
+/* HERO CENTRADO ESTILO TURNITO */
+.hero-section {
+  padding: 4rem 2% 6rem 2%;
+  background: radial-gradient(circle at top center, #fff9f6 0%, #ffffff 70%);
+  text-align: center;
+}
+
+.hero-center {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.badge-novedad {
+  background-color: #fff4ef;
+  color: #e85d22;
+  padding: 8px 18px;
+  border-radius: 30px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 1.8rem;
+  box-shadow: 0 2px 6px rgba(232, 93, 34, 0.08);
+}
+
+.hero-title {
+  font-size: 3.8rem;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #111827;
+  margin-bottom: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.texto-resaltado {
+  color: #e85d22;
+}
+
+.hero-subtitle {
+  font-size: 1.25rem;
+  color: #6b7280;
+  line-height: 1.6;
+  max-width: 700px;
+  margin-bottom: 2.5rem;
+}
+
+.hero-buttons {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 4rem;
+}
+
+/* Botones */
+.btn-naranja {
+  background-color: #e85d22;
+  color: white;
+  border: none;
+  padding: 15px 32px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 1.05rem;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(232, 93, 34, 0.35);
+  transition: all 0.2s ease;
+}
+
+.btn-naranja:hover {
+  background-color: #d1501a;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(232, 93, 34, 0.45);
+}
+
+.btn-grande {
+  font-size: 1.15rem;
+  padding: 16px 36px;
+}
+
+.btn-secundario {
+  background-color: #ffffff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  padding: 15px 32px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secundario:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+/* Mockup de Aplicación Central */
+.hero-preview-container {
+  width: 100%;
+  max-width: 750px;
+  margin-top: 1rem;
+}
+
+.phone-mockup {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+  text-align: left;
+}
+
+.phone-header {
+  background: #f3f4f6;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.dot.red { background: #ef4444; }
+.dot.yellow { background: #f59e0b; }
+.dot.green { background: #10b981; }
+
+.phone-url {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin-left: 10px;
+  font-family: monospace;
+}
+
+.phone-body {
+  padding: 2rem;
+}
+
+.calendar-header-mock {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.calendar-header-mock h3 {
+  font-size: 1.2rem;
+  color: #1f2937;
+}
+
+.badge-live {
+  background: #dcfce7;
+  color: #15803d;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.slot-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 1.5rem;
+}
+
+.slot {
+  flex: 1;
+  padding: 12px;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.slot.available {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.slot.selected {
+  background: #fff4ef;
+  color: #e85d22;
+  border: 2px solid #e85d22;
+}
+
+.slot.busy {
+  background: #fef2f2;
+  color: #9ca3af;
+  text-decoration: line-through;
+}
+
+.client-success-msg {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
