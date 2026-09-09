@@ -1,7 +1,7 @@
 import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 
 import { Api, ComercioAdmin, Metricas, SuperAdminSession } from '../../core/api';
 import { Session } from '../../core/session';
@@ -9,49 +9,28 @@ import { Session } from '../../core/session';
 @Component({
   selector: 'app-super-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule],
   templateUrl: './super-admin.html',
   styleUrls: ['./super-admin.css']
 })
 export class SuperAdmin {
   planes = ['Gratuito', 'Basico', 'Premium'];
 
-  sesion = signal<SuperAdminSession | null>(null);
-  errorAuth = signal<string | null>(null);
-  cargandoAuth = signal(false);
-
-  loginEmail = '';
-  loginPassword = '';
+  sesion: SuperAdminSession;
 
   metricas = signal<Metricas | null>(null);
   comercios = signal<ComercioAdmin[]>([]);
   actualizandoEstadoId = signal<number | null>(null);
 
-  constructor(private api: Api, private session: Session) {
-    this.sesion.set(this.session.obtenerSuperAdmin());
-    if (this.sesion()) this.cargarTodo();
-  }
-
-  login(): void {
-    this.errorAuth.set(null);
-    this.cargandoAuth.set(true);
-    this.api.superAdminLogin(this.loginEmail.trim(), this.loginPassword).subscribe({
-      next: resp => {
-        this.session.iniciarSesionSuperAdmin(resp);
-        this.sesion.set(resp);
-        this.cargandoAuth.set(false);
-        this.cargarTodo();
-      },
-      error: () => {
-        this.cargandoAuth.set(false);
-        this.errorAuth.set('Email o contraseña incorrectos.');
-      }
-    });
+  constructor(private api: Api, private session: Session, private router: Router) {
+    // El guard de la ruta ya garantiza que hay sesión antes de llegar acá.
+    this.sesion = this.session.obtenerSuperAdmin()!;
+    this.cargarTodo();
   }
 
   cerrarSesion(): void {
     this.session.cerrarSesionSuperAdmin();
-    this.sesion.set(null);
+    this.router.navigateByUrl('/super-admin/login');
   }
 
   private cargarTodo(): void {

@@ -114,6 +114,14 @@ export class Api {
     return this.http.post<SuperAdminSession>(`${API_BASE}/auth/super-admin/login`, { email, password });
   }
 
+  olvidoPassword(email: string): Observable<{ mensaje: string }> {
+    return this.http.post<{ mensaje: string }>(`${API_BASE}/auth/forgot-password`, { email });
+  }
+
+  restablecerPassword(token: string, nuevaPassword: string): Observable<{ mensaje: string }> {
+    return this.http.post<{ mensaje: string }>(`${API_BASE}/auth/reset-password`, { token, nuevaPassword });
+  }
+
   // --- Super Admin ---
   getComerciosAdmin(): Observable<ComercioAdmin[]> {
     return this.http.get<ComercioAdmin[]>(`${API_BASE}/comercios`);

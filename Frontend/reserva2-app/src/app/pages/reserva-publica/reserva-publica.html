@@ -142,15 +142,18 @@
 
       <div class="field">
         <label for="nombre">Tu nombre</label>
-        <input id="nombre" type="text" placeholder="Cómo te llamamos" [(ngModel)]="clienteNombre">
+        <input id="nombre" type="text" placeholder="Cómo te llamamos" [(ngModel)]="clienteNombre" [class.input-invalido]="errorNombre()">
+        @if (errorNombre()) { <div class="campo-error">{{ errorNombre() }}</div> }
       </div>
       <div class="field">
         <label for="whatsapp">WhatsApp</label>
-        <input id="whatsapp" type="tel" placeholder="341 000 0000" [(ngModel)]="clienteWhatsApp">
+        <input id="whatsapp" type="tel" placeholder="341 000 0000" [(ngModel)]="clienteWhatsApp" [class.input-invalido]="errorWhatsApp()">
+        @if (errorWhatsApp()) { <div class="campo-error">{{ errorWhatsApp() }}</div> }
       </div>
       <div class="field">
         <label for="email">Email</label>
-        <input id="email" type="email" placeholder="tu@email.com" [(ngModel)]="clienteEmail">
+        <input id="email" type="email" placeholder="tu@email.com" [(ngModel)]="clienteEmail" [class.input-invalido]="errorEmail()">
+        @if (errorEmail()) { <div class="campo-error">{{ errorEmail() }}</div> }
       </div>
 
       @if (errorReserva()) {

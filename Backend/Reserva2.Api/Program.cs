@@ -1,13 +1,34 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Reserva2.Api.Data;
 using Reserva2.Api.Models;
 using Reserva2.Api.Utils;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
+using System.Net.Mail;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.RateLimiting;
+
+// ==========================================
+// MODO CONSOLA: dotnet run -- hash-password "clave"
+// Genera el hash PBKDF2 de una contraseña sin levantar el servidor web.
+// Útil para cargar SuperAdmin:PasswordHash sin scripts sueltos.
+// ==========================================
+if (args.Length > 0 && args[0] == "hash-password")
+{
+    if (args.Length < 2 || string.IsNullOrWhiteSpace(args[1]))
+    {
+        Console.WriteLine("Uso: dotnet run -- hash-password \"tu-contraseña\"");
+        return;
+    }
+
+    Console.WriteLine(HashPassword(args[1]));
+    return;
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,7 +48,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             ValidateIssuer = false,
             ValidateAudience = false,
-            ValidateLifetime = false, // los tokens no expiran (MVP de un solo dueño por comercio)
+            ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = signingKey
         };
@@ -44,14 +65,43 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 // === Configuración de CORS para Angular ===
+// Lista de orígenes permitidos en Cors:AllowedOrigins (appsettings o variable de entorno
+// Cors__AllowedOrigins__1, etc.). Si no hay nada configurado, solo se permite el dev server local.
+var origenesPermitidos = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? ["http://localhost:4200"];
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngular", policy =>
     {
-        policy.WithOrigins("http://localhost:4200") // El puerto que usará Angular
+        policy.WithOrigins(origenesPermitidos)
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
+});
+
+// === Rate limiting: frena fuerza bruta en login y spam de reservas ===
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Intentos de login/registro: pocos por minuto y por IP, para dificultar fuerza bruta.
+    options.AddPolicy("login", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromMinutes(1)
+        }));
+
+    // Reservas públicas: más margen que el login, pero corta scripts que floodean turnos.
+    options.AddPolicy("turnos", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1)
+        }));
 });
 
 builder.Services.AddEndpointsApiExplorer();
@@ -68,6 +118,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("AllowAngular");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -76,6 +127,7 @@ app.UseAuthorization();
 // ==========================================
 const int HorasLimiteParaConfirmar = 2;
 const int TopeTurnosMensualesGratuito = 60;
+const int DuracionTokenHoras = 24;
 
 var PlanesValidos = new[] { "Gratuito", "Basico", "Premium" };
 
@@ -131,6 +183,40 @@ static bool VerifyPassword(string password, string stored)
 }
 
 // ==========================================
+// EMAIL (recuperación de contraseña)
+// ==========================================
+// Si no hay Smtp:Host configurado (ej. en desarrollo sin credenciales todavía), no falla:
+// simplemente no se envía el mail y queda logueado el motivo.
+async Task EnviarEmailReset(IConfiguration config, ILogger logger, string destinatario, string link)
+{
+    var host = config["Smtp:Host"];
+    if (string.IsNullOrWhiteSpace(host))
+    {
+        logger.LogWarning("Smtp:Host no está configurado; no se envió el email de restablecimiento a {Destinatario}.", destinatario);
+        return;
+    }
+
+    using var client = new SmtpClient(host, int.Parse(config["Smtp:Port"] ?? "587"))
+    {
+        Credentials = new NetworkCredential(config["Smtp:User"], config["Smtp:Password"]),
+        EnableSsl = true
+    };
+
+    using var mensaje = new MailMessage
+    {
+        From = new MailAddress(config["Smtp:From"] ?? config["Smtp:User"] ?? "no-reply@reserva2.app", "Reserva2"),
+        Subject = "Restablecer tu contraseña - Reserva2",
+        Body = $"Recibimos un pedido para restablecer la contraseña de tu panel Reserva2.\n\n" +
+               $"Hacé click en este link para elegir una nueva contraseña (válido por 1 hora):\n{link}\n\n" +
+               "Si no lo pediste vos, podés ignorar este mensaje.",
+        IsBodyHtml = false
+    };
+    mensaje.To.Add(destinatario);
+
+    await client.SendMailAsync(mensaje);
+}
+
+// ==========================================
 // JWT: emisión y lectura de claims
 // ==========================================
 string GenerarToken(string rol, int? comercioId = null)
@@ -140,7 +226,10 @@ string GenerarToken(string rol, int? comercioId = null)
         claims.Add(new Claim("comercioId", comercioId.Value.ToString()));
 
     var credenciales = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
-    var token = new JwtSecurityToken(claims: claims, signingCredentials: credenciales);
+    var token = new JwtSecurityToken(
+        claims: claims,
+        expires: DateTime.UtcNow.AddHours(DuracionTokenHoras),
+        signingCredentials: credenciales);
     return new JwtSecurityTokenHandler().WriteToken(token);
 }
 
@@ -175,7 +264,7 @@ app.MapPost("/api/auth/register", async (AppDbContext context, RegistroRequest r
 
     return Results.Created($"/api/comercios/{comercio.Id}",
         new LoginResponse(comercio.Id, comercio.Nombre, comercio.AliasUrl, GenerarToken("AdminCliente", comercio.Id)));
-});
+}).RequireRateLimiting("login");
 
 app.MapPost("/api/auth/login", async (AppDbContext context, LoginRequest req) =>
 {
@@ -184,7 +273,56 @@ app.MapPost("/api/auth/login", async (AppDbContext context, LoginRequest req) =>
         return Results.Unauthorized();
 
     return Results.Ok(new LoginResponse(comercio.Id, comercio.Nombre, comercio.AliasUrl, GenerarToken("AdminCliente", comercio.Id)));
-});
+}).RequireRateLimiting("login");
+
+app.MapPost("/api/auth/forgot-password", async (AppDbContext context, IConfiguration config, ILogger<Program> logger, ForgotPasswordRequest req) =>
+{
+    var comercio = await context.Comercios.FirstOrDefaultAsync(c => c.Email == req.Email);
+    if (comercio is not null)
+    {
+        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        context.PasswordResetTokens.Add(new PasswordResetToken
+        {
+            ComercioId = comercio.Id,
+            Token = token,
+            FechaExpiracion = DateTime.UtcNow.AddHours(1),
+            Usado = false
+        });
+        await context.SaveChangesAsync();
+
+        var baseUrl = config["Frontend:BaseUrl"] ?? "http://localhost:4200";
+        var link = $"{baseUrl}/panel/reset-password?token={token}";
+
+        try
+        {
+            await EnviarEmailReset(config, logger, comercio.Email, link);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "No se pudo enviar el email de restablecimiento de contraseña.");
+        }
+    }
+
+    // Mismo mensaje exista o no la cuenta, para no revelar qué emails están registrados.
+    return Results.Ok(new { mensaje = "Si el email existe, te enviamos un link para restablecer tu contraseña." });
+}).RequireRateLimiting("login");
+
+app.MapPost("/api/auth/reset-password", async (AppDbContext context, ResetPasswordRequest req) =>
+{
+    var tokenValido = await context.PasswordResetTokens.FirstOrDefaultAsync(t => t.Token == req.Token);
+    if (tokenValido is null || tokenValido.Usado || tokenValido.FechaExpiracion < DateTime.UtcNow)
+        return Results.BadRequest(new { mensaje = "El link para restablecer la contraseña es inválido o venció." });
+
+    var comercio = await context.Comercios.FindAsync(tokenValido.ComercioId);
+    if (comercio is null)
+        return Results.BadRequest(new { mensaje = "El link para restablecer la contraseña es inválido o venció." });
+
+    comercio.PasswordHash = HashPassword(req.NuevaPassword);
+    tokenValido.Usado = true;
+    await context.SaveChangesAsync();
+
+    return Results.Ok(new { mensaje = "Contraseña actualizada. Ya podés ingresar con tu nueva contraseña." });
+}).RequireRateLimiting("login");
 
 app.MapPost("/api/auth/super-admin/login", (IConfiguration config, SuperAdminLoginRequest req) =>
 {
@@ -194,7 +332,7 @@ app.MapPost("/api/auth/super-admin/login", (IConfiguration config, SuperAdminLog
         return Results.Unauthorized();
 
     return Results.Ok(new SuperAdminLoginResponse(GenerarToken("SuperAdmin")));
-});
+}).RequireRateLimiting("login");
 
 // ==========================================
 // ENDPOINTS PARA COMERCIOS
@@ -509,7 +647,7 @@ app.MapPost("/api/turnos", async (AppDbContext context, CrearTurnoRequest req) =
     await context.SaveChangesAsync();
 
     return Results.Created($"/api/turnos/{turno.Id}", turno);
-});
+}).RequireRateLimiting("turnos");
 
 app.MapGet("/api/comercios/{comercioId:int}/turnos", async (AppDbContext context, int comercioId, bool incluirVencidos, ClaimsPrincipal user) =>
 {
@@ -570,6 +708,8 @@ record ActualizarPlanRequest(string PlanActual);
 record MetricasDto(int TotalComercios, int ComerciosActivos, int ComerciosInactivos, int TurnosDelMes);
 record RegistroRequest(string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string DatosBancarios, string Email, string Password);
 record LoginRequest(string Email, string Password);
+record ForgotPasswordRequest(string Email);
+record ResetPasswordRequest(string Token, string NuevaPassword);
 record LoginResponse(int ComercioId, string Nombre, string AliasUrl, string Token);
 record SuperAdminLoginRequest(string Email, string Password);
 record SuperAdminLoginResponse(string Token);

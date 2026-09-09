@@ -1,0 +1,22 @@
+<div class="auth-page">
+  <div class="auth-card">
+    <a routerLink="/" class="back-link">← Volver al inicio</a>
+    <h1>Super Admin</h1>
+    <p class="sub">Acceso restringido a la administración de la plataforma.</p>
+
+    <div class="field">
+      <label>Email</label>
+      <input type="email" [(ngModel)]="loginEmail" placeholder="admin@reserva2.app">
+    </div>
+    <div class="field">
+      <label>Contraseña</label>
+      <input type="password" [(ngModel)]="loginPassword" placeholder="••••••••">
+    </div>
+
+    @if (errorAuth()) { <div class="error-msg">{{ errorAuth() }}</div> }
+
+    <button class="btn-naranja btn-full" [disabled]="cargandoAuth()" (click)="login()">
+      {{ cargandoAuth() ? 'Ingresando...' : 'Ingresar' }}
+    </button>
+  </div>
+</div>

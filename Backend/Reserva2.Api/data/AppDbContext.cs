@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Reserva2.Api.Models;
 
 namespace Reserva2.Api.Data
@@ -16,12 +17,29 @@ namespace Reserva2.Api.Data
         public DbSet<Turno> Turnos { get; set; }
         public DbSet<Horario> Horarios { get; set; }
         public DbSet<Profesional> Profesionales { get; set; }
+        public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
 
+        // Solo se usa en tiempo de diseño (ej. `dotnet ef migrations add`), cuando nadie
+        // pasó un DbContextOptions ya configurado desde Program.cs. Lee la misma
+        // configuración real (appsettings + variables de entorno + user-secrets) en vez
+        // de tener un connection string hardcodeado acá.
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             if (!optionsBuilder.IsConfigured)
             {
-                optionsBuilder.UseSqlServer("Server=LAPTOP-MB9RTSIF\\SQLEXPRESS03;Database=Reserva2Db;Trusted_Connection=True;TrustServerCertificate=True;");
+                var entorno = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development";
+                var config = new ConfigurationBuilder()
+                    .SetBasePath(Directory.GetCurrentDirectory())
+                    .AddJsonFile("appsettings.json", optional: true)
+                    .AddJsonFile($"appsettings.{entorno}.json", optional: true)
+                    .AddEnvironmentVariables()
+                    .AddUserSecrets<AppDbContext>(optional: true)
+                    .Build();
+
+                var connectionString = config.GetConnectionString("DefaultConnection")
+                    ?? throw new InvalidOperationException("Falta configurar ConnectionStrings:DefaultConnection.");
+
+                optionsBuilder.UseSqlServer(connectionString);
             }
         }
 
@@ -34,6 +52,8 @@ namespace Reserva2.Api.Data
             // hay que declararlo acá para que las filas existentes no queden en false/"" al migrar.
             modelBuilder.Entity<Comercio>().Property(c => c.Activo).HasDefaultValue(true);
             modelBuilder.Entity<Comercio>().Property(c => c.PlanActual).HasDefaultValue("Gratuito");
+
+            modelBuilder.Entity<PasswordResetToken>().HasIndex(t => t.Token).IsUnique();
         }
     }
 }

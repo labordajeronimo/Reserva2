@@ -15,6 +15,9 @@ interface DiaGrilla {
 const DIAS_CORTOS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 const DIAS_LARGOS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const WHATSAPP_REGEX = /^[0-9+()\-\s]{8,20}$/;
+
 @Component({
   selector: 'app-reserva-publica',
   standalone: true,
@@ -44,6 +47,7 @@ export class ReservaPublica implements OnInit {
   errorReserva = signal<string | null>(null);
   reservaConfirmada = signal(false);
   linkCopiado = signal(false);
+  intentoEnviar = signal(false);
 
   hostActual = typeof window !== 'undefined' ? window.location.host : 'reserva2.app';
 
@@ -57,14 +61,43 @@ export class ReservaPublica implements OnInit {
       .join('');
   });
 
-  puedeReservar = computed(() =>
-    !!this.servicioSeleccionado() &&
-    !!this.slotSeleccionado() &&
-    this.slotSeleccionado()!.disponible &&
-    this.clienteNombre.trim().length > 1 &&
-    this.clienteWhatsApp.trim().length > 5 &&
-    this.clienteEmail.trim().includes('@')
-  );
+  errorNombre(): string | null {
+    if (!this.intentoEnviar()) return null;
+    return this.clienteNombre.trim().length > 1 ? null : 'Ingresá tu nombre.';
+  }
+
+  errorWhatsApp(): string | null {
+    if (!this.intentoEnviar()) return null;
+    const valor = this.clienteWhatsApp.trim();
+    if (valor.length === 0) return 'Ingresá tu WhatsApp.';
+    const cantidadDigitos = (valor.match(/\d/g) ?? []).length;
+    if (!WHATSAPP_REGEX.test(valor) || cantidadDigitos < 8) {
+      return 'Ingresá un WhatsApp válido, con código de área (ej: 341 000 0000).';
+    }
+    return null;
+  }
+
+  errorEmail(): string | null {
+    if (!this.intentoEnviar()) return null;
+    const valor = this.clienteEmail.trim();
+    if (valor.length === 0) return 'Ingresá tu email.';
+    if (!EMAIL_REGEX.test(valor)) return 'Ingresá un email válido (ej: tu@email.com).';
+    return null;
+  }
+
+  formularioValido(): boolean {
+    return this.clienteNombre.trim().length > 1
+      && WHATSAPP_REGEX.test(this.clienteWhatsApp.trim())
+      && (this.clienteWhatsApp.trim().match(/\d/g) ?? []).length >= 8
+      && EMAIL_REGEX.test(this.clienteEmail.trim());
+  }
+
+  puedeReservar(): boolean {
+    return !!this.servicioSeleccionado() &&
+      !!this.slotSeleccionado() &&
+      this.slotSeleccionado()!.disponible &&
+      this.formularioValido();
+  }
 
   constructor(private route: ActivatedRoute, private api: Api) {}
 
@@ -147,6 +180,8 @@ export class ReservaPublica implements OnInit {
   }
 
   confirmarReserva(): void {
+    this.intentoEnviar.set(true);
+
     const comercio = this.comercio();
     const servicio = this.servicioSeleccionado();
     const slot = this.slotSeleccionado();
@@ -186,6 +221,7 @@ export class ReservaPublica implements OnInit {
     this.clienteNombre = '';
     this.clienteWhatsApp = '';
     this.clienteEmail = '';
+    this.intentoEnviar.set(false);
     this.buscarDisponibilidad();
   }
 
