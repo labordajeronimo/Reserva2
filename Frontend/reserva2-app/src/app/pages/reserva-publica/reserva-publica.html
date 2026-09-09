@@ -1,111 +1,180 @@
-<div class="reserva-wrapper">
-  
-  <div class="loading-state" *ngIf="cargandoComercio()">
-    <div class="spinner"></div>
-    <p>Cargando agenda...</p>
-  </div>
-
-  <div class="not-found" *ngIf="!cargandoComercio() && !comercio()">
-    <h2>Negocio no encontrado</h2>
-    <p>Revisá el enlace que te compartieron.</p>
-  </div>
-
-  <div class="reserva-card" *ngIf="comercio()">
-    <!-- Header Perfil -->
-    <div class="perfil-header">
-      <div class="avatar">{{ iniciales() }}</div>
-      <h2>{{ comercio()!.nombre }}</h2>
-      <p>Seleccioná servicio, día y horario para tu turno.</p>
-    </div>
-
-    <!-- PANTALLA DE ÉXITO -->
-    <div class="success-screen" *ngIf="reservaConfirmada()">
-      <div class="icon-success">✅</div>
-      <h2>¡Pre-reserva guardada!</h2>
-      <p>Tu turno fue agendado. Contactate por WhatsApp para enviar el comprobante de la seña dentro de las próximas 2 horas y confirmarlo.</p>
-      <div class="success-actions">
-        <a [href]="'https://wa.me/' + comercio()!.telefonoNotificaciones" target="_blank" class="btn-whatsapp">Enviar comprobante</a>
-        <button class="btn-secundario-chico" (click)="reservarOtroTurno()">Reservar otro turno</button>
-      </div>
-    </div>
-
-    <!-- PANTALLA DE RESERVA (Flujo normal) -->
-    <div *ngIf="!reservaConfirmada()">
-      
-      <!-- Paso 1: Servicios -->
-      <div class="paso-seccion">
-        <h3>1. ¿Qué te querés hacer?</h3>
-        <div class="servicios-grid">
-          <div class="servicio-card" 
-               *ngFor="let s of servicios()" 
-               [class.seleccionado]="servicioSeleccionado()?.id === s.id"
-               (click)="elegirServicio(s)">
-            <h4>{{ s.nombre }}</h4>
-            <span>⏱️ {{ s.duracionMinutos }} min</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Paso 2: Días -->
-      <div class="paso-seccion" *ngIf="servicioSeleccionado()">
-        <h3>2. ¿Qué día?</h3>
-        <div class="dias-scroll">
-          <div class="dia-card" 
-               *ngFor="let d of diasDisponibles"
-               [class.seleccionado]="diaSeleccionado()?.fecha === d.fecha"
-               (click)="elegirDia(d)">
-            <span class="dia-nombre">{{ d.etiquetaDia }}</span>
-            <span class="dia-numero">{{ d.numeroDia }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Paso 3: Horarios (Slots) -->
-      <div class="paso-seccion" *ngIf="diaSeleccionado()">
-        <h3>3. ¿A qué hora? <span *ngIf="cargandoSlots()" class="mini-spinner"></span></h3>
-        
-        <div class="empty-state" *ngIf="!cargandoSlots() && slots().length === 0">
-          No hay horarios disponibles para este día.
-        </div>
-
-        <div class="slots-grid" *ngIf="slots().length > 0">
-          <button class="slot-btn" 
-                  *ngFor="let slot of slots()"
-                  [class.ocupado]="!slot.disponible"
-                  [class.seleccionado]="slotSeleccionado() === slot"
-                  [disabled]="!slot.disponible"
-                  (click)="elegirSlot(slot)">
-            {{ formatearHora(slot.inicio) }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Paso 4: Confirmación (Formulario) -->
-      <div class="paso-seccion final-box" *ngIf="slotSeleccionado()">
-        <h3>Último paso</h3>
-        <p class="resumen">Vas a reservar <strong>{{ servicioSeleccionado()?.nombre }}</strong> el <strong>{{ diaSeleccionado()?.etiquetaCompleta }}</strong> a las <strong>{{ formatearHora(slotSeleccionado()!.inicio) }}</strong>.</p>
-        
-        <div class="form-group">
-          <input type="text" [(ngModel)]="clienteNombre" placeholder="Tu Nombre y Apellido" required>
-        </div>
-        <div class="form-group">
-          <input type="text" [(ngModel)]="clienteWhatsApp" placeholder="Tu WhatsApp (Ej: 341...)" required>
-        </div>
-
-        <div class="alert-error" *ngIf="errorReserva()">{{ errorReserva() }}</div>
-
-        <button class="btn-naranja btn-full" 
-                [disabled]="!puedeReservar() || reservando()"
-                (click)="confirmarReserva()">
-          {{ reservando() ? 'Guardando...' : 'Confirmar Reserva' }}
-        </button>
-      </div>
-
+@if (cargandoComercio()) {
+  <div class="state-page">
+    <div>
+      <h2>Cargando...</h2>
+      <p>Buscando el negocio.</p>
     </div>
   </div>
+} @else if (comercioInactivo()) {
+  <div class="state-page">
+    <div>
+      <h2>Esta agenda no está disponible temporalmente</h2>
+      <p>Volvé a intentarlo más tarde o contactá al negocio directamente.</p>
+    </div>
+  </div>
+} @else if (!comercio()) {
+  <div class="state-page">
+    <div>
+      <h2>No encontramos este negocio</h2>
+      <p>Revisá que el link esté bien escrito.</p>
+    </div>
+  </div>
+} @else {
 
-  <div class="powered-by">
-    <span (click)="copiarLink()">{{ linkCopiado() ? '¡Link copiado!' : '🔗 Copiar link de esta agenda' }}</span>
-    <p>Powered by <strong>Reserva2</strong></p>
+<div class="platform-bar">
+  <div class="wrap">
+    <div class="left">
+      <img src="/reserva2_icono_navy.png" alt="Reserva2" class="platform-icon">
+      <span>Este es el link público de reservas de {{ comercio()!.nombre }}, hecho con Reserva2</span>
+    </div>
+    <a class="link" routerLink="/panel">Quiero un link como este →</a>
   </div>
 </div>
+
+<header class="biz-header">
+  <div class="wrap">
+    <div class="biz-avatar">{{ iniciales() }}</div>
+    <div class="biz-info">
+      <h1>{{ comercio()!.nombre }}</h1>
+      <div class="biz-meta">
+        <span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.1 7-11a7 7 0 0 0-14 0c0 4.9 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+          {{ comercio()!.tipoPlantilla }}
+        </span>
+      </div>
+    </div>
+    <div class="share-box">
+      <span><strong>{{ hostActual }}/</strong>{{ comercio()!.aliasUrl }}</span>
+      <button type="button" (click)="copiarLink()">{{ linkCopiado() ? '¡Copiado!' : 'Copiar link' }}</button>
+    </div>
+  </div>
+</header>
+
+@if (reservaConfirmada()) {
+
+<main>
+  <div class="wrap" style="max-width:520px;">
+    <div class="card confirm-panel">
+      <div class="check-circle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+      </div>
+      <h2>¡Turno pre-reservado!</h2>
+      <p>Te vamos a escribir por WhatsApp al {{ clienteWhatsApp }} con el alias para la seña.</p>
+      <p>Tenés 2 horas para transferir antes de que el horario se libere.</p>
+      <button class="again" type="button" (click)="reservarOtroTurno()">Reservar otro turno</button>
+    </div>
+  </div>
+</main>
+
+} @else {
+
+<main>
+  <div class="wrap layout">
+    <div>
+      <div class="card" style="margin-bottom:22px;">
+        <h2>Elegí el servicio</h2>
+        <p class="sub">Los horarios se ajustan según la duración de cada uno.</p>
+
+        @if (servicios().length === 0) {
+          <p class="sub">Este negocio todavía no cargó servicios.</p>
+        }
+
+        <div class="services">
+          @for (s of servicios(); track s.id) {
+            <div class="service" [class.active]="servicioSeleccionado()?.id === s.id" (click)="elegirServicio(s)">
+              <div>
+                <div class="name">{{ s.nombre }}</div>
+                <div class="dur">{{ s.duracionMinutos }} min</div>
+              </div>
+              <div>
+                <div class="price">{{ s.precio | currency:'ARS':'$' }}</div>
+                @if (s['montoSeña']) { <div class="senia">{{ s['montoSeña'] | currency:'ARS':'$' }} seña</div> }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Elegí día y horario</h2>
+        <p class="sub">Los bloques en gris ya fueron reservados por otra persona.</p>
+
+        <div class="day-tabs">
+          @for (d of diasDisponibles; track d.fecha) {
+            <div class="day-tab" [class.active]="diaSeleccionado()?.fecha === d.fecha" (click)="elegirDia(d)">
+              <div class="d">{{ d.etiquetaDia }}</div>
+              <div class="n">{{ d.numeroDia }}</div>
+            </div>
+          }
+        </div>
+
+        @if (cargandoSlots()) {
+          <div class="empty-slots">Buscando horarios libres...</div>
+        } @else if (slots().length === 0) {
+          <div class="empty-slots">No hay horarios cargados para este día.</div>
+        } @else {
+          <div class="slot-grid">
+            @for (slot of slots(); track slot.inicio) {
+              <div
+                class="slot"
+                [class.taken]="!slot.disponible"
+                [class.selected]="slotSeleccionado()?.inicio === slot.inicio"
+                (click)="elegirSlot(slot)">
+                {{ formatearHora(slot.inicio) }}
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="card form-card">
+      <h2>Confirmá tu turno</h2>
+      <p class="sub">{{ comercio()!.nombre }} recibe tu reserva al instante.</p>
+
+      <div class="summary-row"><span class="label">Servicio</span><span class="val">{{ servicioSeleccionado()?.nombre ?? '—' }}</span></div>
+      <div class="summary-row"><span class="label">Día</span><span class="val">{{ diaSeleccionado()?.etiquetaCompleta ?? '—' }}</span></div>
+      <div class="summary-row"><span class="label">Horario</span><span class="val">{{ slotSeleccionado() ? formatearHora(slotSeleccionado()!.inicio) + 'hs' : '—' }}</span></div>
+      <div class="summary-row"><span class="label">Precio</span><span class="val">{{ servicioSeleccionado() ? (servicioSeleccionado()!.precio | currency:'ARS':'$') : '—' }}</span></div>
+      @if (servicioSeleccionado()?.['montoSeña']) {
+        <div class="summary-row"><span class="label">Seña</span><span class="val">{{ servicioSeleccionado()!['montoSeña'] | currency:'ARS':'$' }}</span></div>
+      }
+
+      <div class="field">
+        <label for="nombre">Tu nombre</label>
+        <input id="nombre" type="text" placeholder="Cómo te llamamos" [(ngModel)]="clienteNombre">
+      </div>
+      <div class="field">
+        <label for="whatsapp">WhatsApp</label>
+        <input id="whatsapp" type="tel" placeholder="341 000 0000" [(ngModel)]="clienteWhatsApp">
+      </div>
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" type="email" placeholder="tu@email.com" [(ngModel)]="clienteEmail">
+      </div>
+
+      @if (errorReserva()) {
+        <div class="error-msg">{{ errorReserva() }}</div>
+      }
+
+      <button class="confirm-btn" type="button" [disabled]="!puedeReservar() || reservando()" (click)="confirmarReserva()">
+        {{ reservando() ? 'Reservando...' : 'Reservar este turno' }}
+      </button>
+      <p class="note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="display:inline"><path d="M4 12c0-4.4 3.6-8 8-8s8 3.6 8 8-3.6 8-8 8c-1.2 0-2.3-.25-3.3-.7L4 20l1.1-4.4A7.9 7.9 0 0 1 4 12Z"/></svg>
+        Te vamos a escribir por WhatsApp con el alias para la seña. Tenés 2 horas para transferir antes de que el turno se libere.
+      </p>
+    </div>
+  </div>
+</main>
+
+}
+
+<footer class="powered">
+  <a routerLink="/panel">
+    <img src="/reserva2_icono_navy.png" alt="Reserva2" class="powered-icon">
+    Reservas gestionadas con Reserva2
+  </a>
+</footer>
+
+}

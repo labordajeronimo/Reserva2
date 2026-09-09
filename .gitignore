@@ -1,0 +1,12 @@
+# .NET build output
+Backend/Reserva2.Api/bin/
+Backend/Reserva2.Api/obj/
+*.user
+
+# Visual Studio / Rider
+.vs/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db

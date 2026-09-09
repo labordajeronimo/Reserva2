@@ -12,10 +12,16 @@ namespace Reserva2.Api.Models
         
         public string TelefonoNotificaciones { get; set; } = string.Empty;
         public string DatosBancarios { get; set; } = string.Empty;
-        public bool PagoAlDia { get; set; } = true;
 
         // Login del dueño del comercio para entrar al panel
         public string Email { get; set; } = string.Empty;
         public string PasswordHash { get; set; } = string.Empty;
+
+        // El Super Admin apaga esto si el comercio no paga; bloquea el link público
+        public bool Activo { get; set; } = true;
+
+        // "Gratuito" | "Basico" | "Premium"
+        public string PlanActual { get; set; } = "Gratuito";
+        public DateTime? FechaProximoPago { get; set; }
     }
 }

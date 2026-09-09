@@ -1,178 +1,249 @@
-<div class="panel-container">
-  
-  <!-- Topbar -->
-  <div class="panel-topbar">
-    <a routerLink="/" class="btn-volver">← Volver al inicio</a>
-  </div>
+@if (!sesion()) {
 
-  <!-- ESTADO 1: NO LOGUEADO -->
-  <div class="auth-box" *ngIf="!sesion()">
-    <div class="auth-header">
-      <img src="/reserva2_icono_navy.png" alt="Reserva2" class="auth-logo">
-      <h2>{{ modoRegistro() ? 'Crear mi negocio' : 'Iniciar Sesión' }}</h2>
-      <p>{{ modoRegistro() ? 'Comenzá a automatizar tus turnos gratis.' : 'Bienvenido de nuevo a tu panel.' }}</p>
-    </div>
+<div class="auth-page">
+  <div class="auth-card">
+    <a routerLink="/" class="back-link">← Volver al inicio</a>
 
-    <div class="alert-error" *ngIf="errorAuth()">{{ errorAuth() }}</div>
+    @if (!modoRegistro()) {
+      <h1>Ingresá a tu panel</h1>
+      <p class="sub">Gestioná los turnos de tu negocio.</p>
 
-    <!-- FORMULARIO LOGIN -->
-    <form (submit)="login(); $event.preventDefault()" *ngIf="!modoRegistro()">
-      <div class="form-group">
+      <div class="field">
         <label>Email</label>
-        <input type="email" [(ngModel)]="loginEmail" name="email" required placeholder="tu@email.com">
+        <input type="email" [(ngModel)]="loginEmail" placeholder="tu@negocio.com">
       </div>
-      <div class="form-group">
+      <div class="field">
         <label>Contraseña</label>
-        <input type="password" [(ngModel)]="loginPassword" name="password" required placeholder="••••••••">
+        <input type="password" [(ngModel)]="loginPassword" placeholder="••••••••">
       </div>
-      <button type="submit" class="btn-naranja btn-full" [disabled]="cargandoAuth()">
-        {{ cargandoAuth() ? 'Cargando...' : 'Entrar a mi panel' }}
+
+      @if (errorAuth()) { <div class="error-msg">{{ errorAuth() }}</div> }
+
+      <button class="btn-naranja btn-full" [disabled]="cargandoAuth()" (click)="login()">
+        {{ cargandoAuth() ? 'Ingresando...' : 'Ingresar' }}
       </button>
-      <p class="auth-switch">¿No tenés cuenta? <a href="#" (click)="modoRegistro.set(true); $event.preventDefault()">Registrate gratis</a></p>
-    </form>
+      <p class="switch">¿Todavía no tenés cuenta? <a (click)="modoRegistro.set(true)">Registrá tu negocio</a></p>
+    } @else {
+      <h1>Registrá tu negocio</h1>
+      <p class="sub">Armá tu link de reservas en un minuto.</p>
 
-    <!-- FORMULARIO REGISTRO -->
-    <form (submit)="registrar(); $event.preventDefault()" *ngIf="modoRegistro()">
-      <div class="form-row">
-        <div class="form-group">
-          <label>Nombre del Negocio</label>
-          <input type="text" [(ngModel)]="regNombre" name="regNombre" required placeholder="Ej: Barbería Pepe">
-        </div>
-        <div class="form-group">
-          <label>Alias URL</label>
-          <input type="text" [(ngModel)]="regAliasUrl" name="regAlias" required placeholder="barberia-pepe">
-        </div>
+      <div class="field">
+        <label>Nombre del negocio</label>
+        <input type="text" [(ngModel)]="regNombre" placeholder="Peluquería Bella">
       </div>
-      
-      <div class="form-row">
-        <div class="form-group">
-          <label>WhatsApp</label>
-          <input type="text" [(ngModel)]="regTelefono" name="regTel" required placeholder="341...">
-        </div>
-        <div class="form-group">
-          <label>Email de acceso</label>
-          <input type="email" [(ngModel)]="regEmail" name="regEmail" required placeholder="tu@email.com">
-        </div>
+      <div class="field">
+        <label>Link público (sin espacios)</label>
+        <input type="text" [(ngModel)]="regAliasUrl" placeholder="peluqueria-bella">
       </div>
-
-      <div class="form-group">
-        <label>CVU / Alias MercadoPago</label>
-        <input type="text" [(ngModel)]="regDatosBancarios" name="regBanco" placeholder="pepe.mp">
-      </div>
-
-      <div class="form-group">
-        <label>Contraseña</label>
-        <input type="password" [(ngModel)]="regPassword" name="regPass" required placeholder="Mínimo 6 caracteres">
-      </div>
-
-      <button type="submit" class="btn-naranja btn-full" [disabled]="cargandoAuth()">
-        {{ cargandoAuth() ? 'Creando cuenta...' : 'Crear cuenta gratis' }}
-      </button>
-      <p class="auth-switch">¿Ya tenés cuenta? <a href="#" (click)="modoRegistro.set(false); $event.preventDefault()">Iniciar sesión</a></p>
-    </form>
-  </div>
-
-  <!-- ESTADO 2: LOGUEADO (DASHBOARD SEGURO) -->
-  <div class="dashboard" *ngIf="sesion()">
-    <header class="dash-header">
-      <div class="dash-brand">
-        <img src="/reserva2_icono_navy.png" alt="Reserva2" height="30">
-        <h3>Panel de Administración</h3>
-      </div>
-      <div class="dash-actions">
-        <button (click)="cerrarSesion()" class="btn-peligro-outline">Cerrar Sesión</button>
-      </div>
-    </header>
-
-    <!-- Menú de pestañas -->
-    <nav class="dash-tabs">
-      <button [class.active]="tabActiva() === 'turnos'" (click)="tabActiva.set('turnos')">📋 Mis Turnos</button>
-      <button [class.active]="tabActiva() === 'servicios'" (click)="tabActiva.set('servicios')">⭐ Servicios</button>
-      <button [class.active]="tabActiva() === 'horarios'" (click)="tabActiva.set('horarios')">🕒 Horarios</button>
-    </nav>
-
-    <!-- PESTAÑA: TURNOS -->
-    <div class="tab-content" *ngIf="tabActiva() === 'turnos'">
-      <div class="tab-header">
-        <h2>Próximos Turnos</h2>
-        <button class="btn-naranja" (click)="cargarTurnos()">Actualizar</button>
-      </div>
-      <div class="list-cards">
-        <div class="empty-state" *ngIf="turnos().length === 0">No tenés turnos próximos registrados.</div>
-        <div class="card-item" *ngFor="let t of turnos()">
-          <div class="item-info">
-            <h4>{{ t.clienteNombre }} <span class="badge" [ngClass]="'estado-' + t.estadoReserva">{{ etiquetaEstado(t.estadoReserva) }}</span></h4>
-            <p>📅 {{ t.fechaHoraInicio | date:'dd/MM/yyyy HH:mm' }} | 📱 {{ t.clienteWhatsApp }}</p>
-          </div>
-          <div class="item-actions" *ngIf="t.estadoReserva === 1">
-            <button class="btn-ok" (click)="confirmar(t)">✅ Confirmar</button>
-            <button class="btn-peligro" (click)="cancelar(t)">❌ Cancelar</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-<!-- PESTAÑA: SERVICIOS -->
-    <div class="tab-content" *ngIf="tabActiva() === 'servicios'">
-      <div class="tab-header"><h2>Mis Servicios</h2></div>
-      
-      <!-- Formulario nuevo servicio ampliado -->
-      <form class="inline-form" (submit)="agregarServicio(); $event.preventDefault()">
-        <div class="input-field-group">
-          <label>Nombre</label>
-          <input type="text" [(ngModel)]="nuevoServicioNombre" name="sNom" placeholder="Ej: Corte / Consulta" required>
-        </div>
-        <div class="input-field-group">
-          <label>Duración (min)</label>
-          <input type="number" [(ngModel)]="nuevoServicioDuracion" name="sDur" placeholder="30" required>
-        </div>
-        <div class="input-field-group">
-          <label>Precio ($)</label>
-          <input type="number" [(ngModel)]="nuevoServicioPrecio" name="sPre" placeholder="5000" required>
-        </div>
-        <div class="input-field-group">
-          <label>Seña opcional ($)</label>
-          <input type="number" [(ngModel)]="nuevoServicioSena" name="sSen" placeholder="1000">
-        </div>
-        <button type="submit" class="btn-naranja btn-align-bottom">Agregar</button>
-      </form>
-
-      <div class="list-cards mt-3">
-        <div class="empty-state" *ngIf="servicios().length === 0">Aún no agregaste servicios.</div>
-        <div class="card-item" *ngFor="let s of servicios()">
-          <div class="item-info">
-            <h4>{{ s.nombre }}</h4>
-            <p>⏱️ {{ s.duracionMinutos }} min | 💵 Precio: ${{ getPrecio(s) }} <span *ngIf="getSena(s) > 0">| 💳 Seña: ${{ getSena(s) }}</span></p>
-          </div>
-          <button class="btn-peligro-outline" (click)="quitarServicio(s)">Eliminar</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- PESTAÑA: HORARIOS -->
-    <div class="tab-content" *ngIf="tabActiva() === 'horarios'">
-      <div class="tab-header"><h2>Horarios de Atención</h2></div>
-      
-      <form class="inline-form" (submit)="agregarHorario(); $event.preventDefault()">
-        <select [(ngModel)]="nuevoHorarioDia" name="hDia">
-          <option *ngFor="let d of dias; let i = index" [ngValue]="i">{{ d }}</option>
+      <div class="field">
+        <label>Rubro</label>
+        <select [(ngModel)]="regTipoPlantilla">
+          <option>Peluquería</option>
+          <option>Barbería</option>
+          <option>Estudio de tatuajes</option>
+          <option>Cancha de fútbol 5</option>
+          <option>Otro</option>
         </select>
-        <input type="time" [(ngModel)]="nuevoHorarioInicio" name="hIni" required>
-        <input type="time" [(ngModel)]="nuevoHorarioFin" name="hFin" required>
-        <button type="submit" class="btn-naranja">Agregar Bloque</button>
-      </form>
-
-      <div class="list-cards mt-3">
-        <div class="empty-state" *ngIf="horarios().length === 0">Configurá tus horarios de atención.</div>
-        <div class="card-item" *ngFor="let h of horarios()">
-          <div class="item-info">
-            <h4>{{ dias[h.diaSemana] }}</h4>
-            <p>De {{ h.horaInicio.substring(0,5) }} a {{ h.horaFin.substring(0,5) }}</p>
-          </div>
-          <button class="btn-peligro-outline" (click)="quitarHorario(h)">Quitar</button>
-        </div>
       </div>
-    </div>
+      <div class="field">
+        <label>WhatsApp de notificaciones</label>
+        <input type="tel" [(ngModel)]="regTelefono" placeholder="341 000 0000">
+      </div>
+      <div class="field">
+        <label>Alias o CBU para la seña</label>
+        <input type="text" [(ngModel)]="regDatosBancarios" placeholder="negocio.alias">
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" [(ngModel)]="regEmail" placeholder="tu@negocio.com">
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input type="password" [(ngModel)]="regPassword" placeholder="••••••••">
+      </div>
 
+      @if (errorAuth()) { <div class="error-msg">{{ errorAuth() }}</div> }
+
+      <button class="btn-naranja btn-full" [disabled]="cargandoAuth()" (click)="registrar()">
+        {{ cargandoAuth() ? 'Creando cuenta...' : 'Crear mi cuenta' }}
+      </button>
+      <p class="switch">¿Ya tenés cuenta? <a (click)="modoRegistro.set(false)">Ingresá</a></p>
+    }
   </div>
 </div>
+
+} @else {
+
+<div class="panel-shell">
+  <header class="panel-header">
+    <div class="brand">{{ sesion()!.nombre }}</div>
+    <div class="header-actions">
+      <a [routerLink]="['/', sesion()!.aliasUrl]" target="_blank">Ver mi página pública ↗</a>
+      <button class="btn-outline" (click)="cerrarSesion()">Cerrar sesión</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button [class.active]="tabActiva() === 'turnos'" (click)="tabActiva.set('turnos')">Turnos</button>
+    <button [class.active]="tabActiva() === 'servicios'" (click)="tabActiva.set('servicios')">Servicios</button>
+    <button [class.active]="tabActiva() === 'horarios'" (click)="tabActiva.set('horarios')">Horarios</button>
+    <button [class.active]="tabActiva() === 'profesionales'" (click)="tabActiva.set('profesionales')">Profesionales</button>
+  </nav>
+
+  <main class="panel-main">
+
+    @if (tabActiva() === 'turnos') {
+      <div class="panel-card">
+        <h2>Turnos</h2>
+        @if (turnos().length === 0) {
+          <p class="empty">Todavía no tenés turnos reservados.</p>
+        } @else {
+          <table class="tabla">
+            <thead>
+              <tr><th>Cliente</th><th>WhatsApp</th><th>Fecha</th><th>Estado</th><th></th></tr>
+            </thead>
+            <tbody>
+              @for (t of turnos(); track t.id) {
+                <tr>
+                  <td>{{ t.clienteNombre }}</td>
+                  <td>{{ t.clienteWhatsApp }}</td>
+                  <td>{{ t.fechaHoraInicio | date:'dd/MM HH:mm' }}</td>
+                  <td><span class="badge" [class]="'estado-' + t.estadoReserva">{{ etiquetaEstado(t.estadoReserva) }}</span></td>
+                  <td class="acciones">
+                    @if (t.estadoReserva === 1) {
+                      <button class="mini ok" (click)="confirmar(t)">Confirmar</button>
+                      <button class="mini danger" (click)="cancelar(t)">Cancelar</button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    }
+
+    @if (tabActiva() === 'servicios') {
+      <div class="panel-card">
+        <h2>Servicios</h2>
+        @if (servicios().length === 0) {
+          <p class="empty">Todavía no cargaste servicios.</p>
+        } @else {
+          <ul class="lista">
+            @for (s of servicios(); track s.id) {
+              <li>
+                <div>
+                  <strong>{{ s.nombre }}</strong>
+                  <span class="detalle">
+                    {{ s.duracionMinutos }} min · {{ s.precio | currency:'ARS':'$' }}
+                    @if (s['montoSeña']) { · seña {{ s['montoSeña'] | currency:'ARS':'$' }} }
+                  </span>
+                </div>
+                <button class="mini danger" (click)="quitarServicio(s)">Quitar</button>
+              </li>
+            }
+          </ul>
+        }
+
+        <div class="form-inline form-inline-servicios">
+          <input type="text" [(ngModel)]="nuevoServicioNombre" placeholder="Nombre del servicio">
+          <input type="number" [(ngModel)]="nuevoServicioDuracion" placeholder="Minutos" min="5" step="5">
+          <input type="number" [(ngModel)]="nuevoServicioPrecio" placeholder="Precio $" min="0">
+          <input type="number" [(ngModel)]="nuevoServicioSenia" placeholder="Seña $ (opcional)" min="0">
+          <button class="btn-naranja" (click)="agregarServicio()">Agregar</button>
+        </div>
+      </div>
+    }
+
+    @if (tabActiva() === 'horarios') {
+      <div class="panel-card">
+        <h2>Horarios de atención</h2>
+        @if (horarios().length === 0) {
+          <p class="empty">Todavía no cargaste horarios. Sin esto, tu grilla pública va a aparecer vacía.</p>
+        } @else {
+          <ul class="lista">
+            @for (h of horarios(); track h.id) {
+              <li>
+                <div>{{ dias[h.diaSemana] }} de {{ h.horaInicio.substring(0,5) }} a {{ h.horaFin.substring(0,5) }}</div>
+                <button class="mini danger" (click)="quitarHorario(h)">Quitar</button>
+              </li>
+            }
+          </ul>
+        }
+
+        <div class="form-inline">
+          <select [(ngModel)]="nuevoHorarioDia">
+            @for (d of dias; track d; let i = $index) {
+              <option [ngValue]="i">{{ d }}</option>
+            }
+          </select>
+          <input type="time" [(ngModel)]="nuevoHorarioInicio">
+          <input type="time" [(ngModel)]="nuevoHorarioFin">
+          <button class="btn-naranja" (click)="agregarHorario()">Agregar</button>
+        </div>
+      </div>
+    }
+
+    @if (tabActiva() === 'profesionales') {
+      <div class="panel-card">
+        <h2>Profesionales</h2>
+        <p class="sub-info">Cada profesional puede tener sus propios horarios de atención. Si no cargás ninguno, tu negocio funciona con un solo horario general (pestaña "Horarios").</p>
+
+        @if (profesionales().length === 0) {
+          <p class="empty">Todavía no cargaste profesionales.</p>
+        } @else {
+          <ul class="lista">
+            @for (p of profesionales(); track p.id) {
+              <li class="profesional-item">
+                <div class="profesional-row">
+                  <button class="link-toggle" (click)="seleccionarProfesional(p)">
+                    {{ p.nombre }} {{ profesionalSeleccionado()?.id === p.id ? '▲' : '▼' }}
+                  </button>
+                  <button class="mini danger" (click)="quitarProfesional(p)">Quitar</button>
+                </div>
+
+                @if (profesionalSeleccionado()?.id === p.id) {
+                  <div class="sub-horarios">
+                    @if (horariosDelProfesional().length === 0) {
+                      <p class="empty">{{ p.nombre }} todavía no tiene horarios cargados.</p>
+                    } @else {
+                      <ul class="lista">
+                        @for (h of horariosDelProfesional(); track h.id) {
+                          <li>
+                            <div>{{ dias[h.diaSemana] }} de {{ h.horaInicio.substring(0,5) }} a {{ h.horaFin.substring(0,5) }}</div>
+                            <button class="mini danger" (click)="quitarHorarioProfesional(h)">Quitar</button>
+                          </li>
+                        }
+                      </ul>
+                    }
+
+                    <div class="form-inline">
+                      <select [(ngModel)]="nuevoHorarioDia">
+                        @for (d of dias; track d; let i = $index) {
+                          <option [ngValue]="i">{{ d }}</option>
+                        }
+                      </select>
+                      <input type="time" [(ngModel)]="nuevoHorarioInicio">
+                      <input type="time" [(ngModel)]="nuevoHorarioFin">
+                      <button class="btn-naranja" (click)="agregarHorarioProfesional()">Agregar</button>
+                    </div>
+                  </div>
+                }
+              </li>
+            }
+          </ul>
+        }
+
+        @if (errorProfesional()) { <div class="error-msg">{{ errorProfesional() }}</div> }
+
+        <div class="form-inline form-inline-2">
+          <input type="text" [(ngModel)]="nuevoProfesionalNombre" placeholder="Nombre del profesional">
+          <button class="btn-naranja" (click)="agregarProfesional()">Agregar</button>
+        </div>
+      </div>
+    }
+
+  </main>
+</div>
+
+}

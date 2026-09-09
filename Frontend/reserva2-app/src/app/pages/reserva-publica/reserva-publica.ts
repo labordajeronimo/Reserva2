@@ -25,6 +25,7 @@ const DIAS_LARGOS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Vier
 export class ReservaPublica implements OnInit {
   comercio = signal<ComercioPublico | null>(null);
   cargandoComercio = signal(true);
+  comercioInactivo = signal(false);
 
   servicios = signal<Servicio[]>([]);
   servicioSeleccionado = signal<Servicio | null>(null);
@@ -38,6 +39,7 @@ export class ReservaPublica implements OnInit {
 
   clienteNombre = '';
   clienteWhatsApp = '';
+  clienteEmail = '';
   reservando = signal(false);
   errorReserva = signal<string | null>(null);
   reservaConfirmada = signal(false);
@@ -60,7 +62,8 @@ export class ReservaPublica implements OnInit {
     !!this.slotSeleccionado() &&
     this.slotSeleccionado()!.disponible &&
     this.clienteNombre.trim().length > 1 &&
-    this.clienteWhatsApp.trim().length > 5
+    this.clienteWhatsApp.trim().length > 5 &&
+    this.clienteEmail.trim().includes('@')
   );
 
   constructor(private route: ActivatedRoute, private api: Api) {}
@@ -79,7 +82,10 @@ export class ReservaPublica implements OnInit {
         this.cargarServicios(comercio.id);
         this.elegirDia(this.diasDisponibles[0]);
       },
-      error: () => this.cargandoComercio.set(false)
+      error: err => {
+        if (err.status === 403) this.comercioInactivo.set(true);
+        this.cargandoComercio.set(false);
+      }
     });
   }
 
@@ -154,7 +160,8 @@ export class ReservaPublica implements OnInit {
       servicioId: servicio.id,
       fechaHoraInicio: slot.inicio,
       clienteNombre: this.clienteNombre.trim(),
-      clienteWhatsApp: this.clienteWhatsApp.trim()
+      clienteWhatsApp: this.clienteWhatsApp.trim(),
+      clienteEmail: this.clienteEmail.trim()
     }).subscribe({
       next: () => {
         this.reservando.set(false);
@@ -178,6 +185,7 @@ export class ReservaPublica implements OnInit {
     this.slotSeleccionado.set(null);
     this.clienteNombre = '';
     this.clienteWhatsApp = '';
+    this.clienteEmail = '';
     this.buscarDisponibilidad();
   }
 

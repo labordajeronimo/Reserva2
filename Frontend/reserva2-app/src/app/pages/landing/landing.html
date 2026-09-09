@@ -1,6 +1,7 @@
 <!-- FRANJA SUPERIOR NAVY -->
 <div class="top-bar">
-  <p>🚀 ¡Lanzamiento especial! Probá Reserva2 con 0% de comisiones para siempre.</p>
+  <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></svg>
+  <p>¡Lanzamiento especial! Probá Reserva2 con 0% de comisiones para siempre.</p>
 </div>
 
 <!-- FONDO ANIMADO (EFECTO AURORA) -->
@@ -20,21 +21,62 @@
     <li><a href="#como-funciona">Cómo funciona</a></li>
     <li><a href="#automatiza">Automatizá</a></li>
   </ul>
-<div class="nav-actions">
+  <div class="nav-actions">
     <a routerLink="/panel" class="nav-login">Iniciar sesión</a>
-    <button routerLink="/panel" class="btn-naranja">Registrar mi negocio</button>
+    <button class="btn-naranja" (click)="irAlPanel()">Registrar mi negocio</button>
   </div>
-</nav>  
+</nav>
 
 <!-- SECCIÓN HERO LIMPIA Y CON BOTÓN LARGO -->
 <section class="hero-section">
   <div class="hero-center">
-    <div class="badge-novedad">✨ Gestioná tus turnos en segundos</div>
+    <div class="badge-novedad">
+      <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3M12 18v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M3 12h3M18 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+      Gestioná tus turnos en segundos
+    </div>
     <h1 class="hero-title">Tu agenda de turnos online <span class="texto-resaltado">gratis</span></h1>
     <p class="hero-subtitle">Centralizá tus reservas, automatizá recordatorios por WhatsApp y cobrá señas sin pagar comisiones extra. Tu negocio, tus reglas.</p>
     
-<div class="hero-buttons">
-      <button routerLink="/panel" class="btn-naranja btn-largo">Creá tu cuenta hoy</button>
+    <div class="hero-buttons">
+      <button class="btn-naranja btn-largo" (click)="irAlPanel()">
+        Creá tu cuenta hoy
+        <svg class="arrow-icon" style="width:18px;height:18px;vertical-align:-3px;margin-left:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+
+    <div class="hero-phone-wrap">
+      <div class="phone-mock">
+        <div class="phone-bezel">
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <div class="ph-header">
+              <div class="ph-avatar">TN</div>
+              <div>
+                <div class="ph-name">Tu Negocio</div>
+                <div class="ph-sub">Elegí tu horario</div>
+              </div>
+            </div>
+            <div class="ph-body">
+              <div class="ph-service">
+                <span>Corte clásico</span>
+                <span>$5.000</span>
+              </div>
+              <div class="ph-slots">
+                <div class="ph-slot">10:00</div>
+                <div class="ph-slot selected">10:30</div>
+                <div class="ph-slot taken">11:00</div>
+              </div>
+              <div class="ph-cta">Reservar este turno</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="hero-toast">
+        <div class="toast-icon">
+          <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+        </div>
+        <span>Turno confirmado, sin llamadas ni WhatsApp cruzado.</span>
+      </div>
     </div>
   </div>
 </section>
@@ -52,41 +94,39 @@
       <p class="card-desc">Ideal para empezar a digitalizarte.</p>
       <div class="price"><span>$0</span>/mes</div>
       <ul class="features">
-        <li><span class="check">✓</span> 1 agenda / profesional</li>
-        <li><span class="check">✓</span> Hasta 100 reservas al mes</li>
-        <li><span class="check">✓</span> Link web personalizado</li>
-        <li><span class="check">✓</span> 0% de comisión por cobro</li>
+        <li><span class="check"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> 1 profesional</li>
+        <li><span class="check"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Hasta 60 turnos al mes</li>
+        <li><span class="check"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Link web personalizado</li>
+        <li><span class="check"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> 0% de comisión por cobro</li>
       </ul>
-      <button class="btn-secundario-outline">Empezar gratis</button>
+      <button class="btn-secundario-outline" (click)="irAlPanel()">Empezar gratis</button>
     </div>
 
     <div class="card pro-card">
       <div class="badge-recomendado">Más elegido</div>
-      <h3 class="pro-text">Pro</h3>
-      <p class="card-desc pro-text-muted">Para negocios en crecimiento.</p>
+      <h3 class="pro-text">Básico</h3>
+      <p class="card-desc pro-text-muted">Para negocios con más de un profesional.</p>
       <div class="price pro-text"><span>$15.000</span>/mes</div>
       <ul class="features pro-text">
-        <li><span class="check-orange">✓</span> Agendas ilimitadas</li>
-        <li><span class="check-orange">✓</span> Reservas ilimitadas</li>
-        <li><span class="check-orange">✓</span> Recordatorios WhatsApp</li>
-        <li><span class="check-orange">✓</span> Historial de clientes</li>
-        <li><span class="check-orange">✓</span> 0% de comisión por cobro</li>
+        <li><span class="check-orange"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Hasta 2 profesionales</li>
+        <li><span class="check-orange"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Turnos ilimitados</li>
+        <li><span class="check-orange"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Agenda propia por profesional</li>
+        <li><span class="check-orange"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> 0% de comisión por cobro</li>
       </ul>
-      <button class="btn-naranja btn-full">Probar 14 días gratis</button>
+      <button class="btn-naranja btn-full" (click)="irAlPanel()">Probar 14 días gratis</button>
     </div>
 
     <div class="card business-card">
-      <h3>Business</h3>
-      <p class="card-desc">Control total y automatización.</p>
+      <h3>Premium</h3>
+      <p class="card-desc">Para negocios que quieren automatizar todo.</p>
       <div class="price"><span>$25.000</span>/mes</div>
       <ul class="features">
-        <li><span class="check">✓</span> Todo lo del plan Pro</li>
-        <li><span class="check">✓</span> Múltiples sucursales</li>
-        <li><span class="check">✓</span> Reportes de facturación</li>
-        <li><span class="check">✓</span> Pixel de Meta y Analytics</li>
-        <li><span class="check">✓</span> Soporte prioritario</li>
+        <li><span class="check"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Todo lo del plan Básico</li>
+        <li><span class="check"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Profesionales ilimitados</li>
+        <li><span class="check"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Recordatorios por WhatsApp</li>
+        <li><span class="check"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> 0% de comisión por cobro</li>
       </ul>
-      <button class="btn-secundario-outline">Contactar ventas</button>
+      <button class="btn-secundario-outline" (click)="irAlPanel()">Contactar ventas</button>
     </div>
   </div>
 </section>
@@ -99,17 +139,23 @@
   </div>
   <div class="benefits-grid">
     <div class="benefit-card">
-      <div class="icon-box">🕒</div>
+      <div class="icon-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+      </div>
       <h3>Tu negocio abierto 24/7</h3>
       <p>Tus clientes pueden sacar turno en cualquier momento, incluso de madrugada. No pierdas más reservas por no poder contestar el teléfono.</p>
     </div>
     <div class="benefit-card">
-      <div class="icon-box">📱</div>
+      <div class="icon-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12c0-4.4 3.6-8 8-8s8 3.6 8 8-3.6 8-8 8c-1.2 0-2.3-.25-3.3-.7L4 20l1.1-4.4A7.9 7.9 0 0 1 4 12Z"/></svg>
+      </div>
       <h3>Chau inasistencias</h3>
       <p>Enviamos recordatorios automáticos por WhatsApp. Reducí los "plantados" hasta un 80% y asegurá la facturación del día sin mover un dedo.</p>
     </div>
     <div class="benefit-card">
-      <div class="icon-box">💸</div>
+      <div class="icon-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      </div>
       <h3>Cero comisiones</h3>
       <p>No tocamos tu plata. Pagás una suscripción fija mensual (o usás nuestro plan gratis) y el 100% de tus cobros van directo a tu bolsillo.</p>
     </div>
@@ -119,10 +165,11 @@
 <!-- SECCIÓN AUTOMATIZAR COBROS -->
 <section id="automatiza" class="cta-cobros">
   <div class="cta-texto">
-    <h2>Automatizá los cobros de tus turnos</h2>
-    <p>Configurá el cobro de señas por MercadoPago y olvidate de las ausencias. Asegurá tu facturación antes de que el cliente llegue a tu local.</p>
-<div class="cta-botones">
-      <button routerLink="/panel" class="btn-naranja">Automatizar ahora</button>
+    <span class="tag-opcional">Add-on opcional</span>
+    <h2>Sumale cobro automático a tu plan</h2>
+    <p>Activá el cobro de señas por MercadoPago sobre cualquiera de los planes de arriba y olvidate de las ausencias. Asegurá tu facturación antes de que el cliente llegue a tu local.</p>
+    <div class="cta-botones">
+      <button class="btn-naranja" (click)="irAlPanel()">Sumar a mi plan</button>
     </div>
   </div>
   
@@ -147,7 +194,8 @@
           <div class="dia">10</div><div class="dia cobrado">11</div><div class="dia">12</div>
         </div>
         <div class="cal-notificacion">
-          ✅ Seña de $5.000 acreditada
+          <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+          Seña de $5.000 acreditada
         </div>
       </div>
     </div>

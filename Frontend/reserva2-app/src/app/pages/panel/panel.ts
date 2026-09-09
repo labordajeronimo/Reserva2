@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
-import { Api, Turno, Servicio, Horario } from '../../core/api';
+import { Api, Turno, Servicio, Horario, Profesional, LoginResponse } from '../../core/api';
 import { Session } from '../../core/session';
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -18,10 +18,9 @@ const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', '
 export class Panel {
   dias = DIAS;
 
-  // Iniciamos vacío y lo llenamos en el constructor
-  sesion = signal<any>(null);
+  sesion = signal<LoginResponse | null>(null);
   modoRegistro = signal(false);
-  tabActiva = signal<'turnos' | 'servicios' | 'horarios'>('turnos');
+  tabActiva = signal<'turnos' | 'servicios' | 'horarios' | 'profesionales'>('turnos');
   errorAuth = signal<string | null>(null);
   cargandoAuth = signal(false);
 
@@ -40,12 +39,12 @@ export class Panel {
   // --- Turnos ---
   turnos = signal<Turno[]>([]);
 
-// --- Servicios ---
+  // --- Servicios ---
   servicios = signal<Servicio[]>([]);
   nuevoServicioNombre = '';
   nuevoServicioDuracion = 30;
-  nuevoServicioPrecio = 0;   // Precio total
-  nuevoServicioSena = 0;     // Seña
+  nuevoServicioPrecio = 0;
+  nuevoServicioSenia = 0;
 
   // --- Horarios ---
   horarios = signal<Horario[]>([]);
@@ -53,28 +52,31 @@ export class Panel {
   nuevoHorarioInicio = '10:00';
   nuevoHorarioFin = '19:00';
 
+  // --- Profesionales ---
+  profesionales = signal<Profesional[]>([]);
+  nuevoProfesionalNombre = '';
+  errorProfesional = signal<string | null>(null);
+  profesionalSeleccionado = signal<Profesional | null>(null);
+  horariosDelProfesional = signal<Horario[]>([]);
+
   constructor(private api: Api, private session: Session) {
-    // Leemos la sesión ACÁ adentro, que es seguro
     this.sesion.set(this.session.obtenerUsuario());
     if (this.sesion()) this.cargarTodo();
   }
 
-// ================= AUTH =================
+  // ================= AUTH =================
   login(): void {
     this.errorAuth.set(null);
     this.cargandoAuth.set(true);
     this.api.login(this.loginEmail.trim(), this.loginPassword).subscribe({
       next: resp => {
-        // Aseguramos que guarde y actualice la señal correctamente
-        const datosSesion = resp;
-        this.session.iniciarSesion(datosSesion);
-        this.sesion.set(datosSesion);
+        this.session.iniciarSesion(resp);
+        this.sesion.set(resp);
         this.cargandoAuth.set(false);
         this.cargarTodo();
       },
-      error: (err) => {
+      error: () => {
         this.cargandoAuth.set(false);
-        console.error('Error en login:', err);
         this.errorAuth.set('Email o contraseña incorrectos.');
       }
     });
@@ -114,6 +116,7 @@ export class Panel {
     this.cargarTurnos();
     this.cargarServicios();
     this.cargarHorarios();
+    this.cargarProfesionales();
   }
 
   // ================= TURNOS =================
@@ -150,13 +153,14 @@ export class Panel {
       comercioId: s.comercioId,
       nombre: this.nuevoServicioNombre.trim(),
       duracionMinutos: this.nuevoServicioDuracion,
-      precio: this.nuevoServicioPrecio,     // Enviamos el precio
-      montoSeña: this.nuevoServicioSena,  // Enviamos la seña
+      precio: this.nuevoServicioPrecio,
+      montoSeña: this.nuevoServicioSenia,
       activo: true
     }).subscribe(() => {
       this.nuevoServicioNombre = '';
       this.nuevoServicioDuracion = 30;
-      this.nuevoServicioSena = 0;
+      this.nuevoServicioPrecio = 0;
+      this.nuevoServicioSenia = 0;
       this.cargarServicios();
     });
   }
@@ -186,14 +190,71 @@ export class Panel {
   quitarHorario(h: Horario): void {
     this.api.eliminarHorario(h.id).subscribe(() => this.cargarHorarios());
   }
- 
-  getPrecio(s: any): number {
-    return s.precio || 0;
+
+  // ================= PROFESIONALES =================
+  cargarProfesionales(): void {
+    const s = this.sesion();
+    if (!s) return;
+    this.api.getProfesionales(s.comercioId).subscribe(profesionales => this.profesionales.set(profesionales));
   }
 
-  getSena(s: any): number {
-    return s['montoSeña'] || 0;
+  agregarProfesional(): void {
+    const s = this.sesion();
+    if (!s || !this.nuevoProfesionalNombre.trim()) return;
+
+    this.errorProfesional.set(null);
+    this.api.crearProfesional(s.comercioId, this.nuevoProfesionalNombre.trim()).subscribe({
+      next: () => {
+        this.nuevoProfesionalNombre = '';
+        this.cargarProfesionales();
+      },
+      error: err => {
+        this.errorProfesional.set(err.error?.mensaje ?? 'No pudimos agregar el profesional.');
+      }
+    });
+  }
+
+  quitarProfesional(p: Profesional): void {
+    this.api.eliminarProfesional(p.id).subscribe(() => {
+      if (this.profesionalSeleccionado()?.id === p.id) this.cerrarHorariosDeProfesional();
+      this.cargarProfesionales();
+    });
+  }
+
+  seleccionarProfesional(p: Profesional): void {
+    if (this.profesionalSeleccionado()?.id === p.id) {
+      this.cerrarHorariosDeProfesional();
+      return;
+    }
+    this.profesionalSeleccionado.set(p);
+    this.api.getHorarios(p.comercioId, p.id).subscribe(horarios => this.horariosDelProfesional.set(horarios));
+  }
+
+  private cerrarHorariosDeProfesional(): void {
+    this.profesionalSeleccionado.set(null);
+    this.horariosDelProfesional.set([]);
+  }
+
+  agregarHorarioProfesional(): void {
+    const s = this.sesion();
+    const p = this.profesionalSeleccionado();
+    if (!s || !p) return;
+
+    this.api.crearHorario(s.comercioId, {
+      diaSemana: this.nuevoHorarioDia,
+      horaInicio: this.nuevoHorarioInicio,
+      horaFin: this.nuevoHorarioFin,
+      profesionalId: p.id
+    }).subscribe(() => this.seleccionarProfesionalDeNuevo(p));
+  }
+
+  quitarHorarioProfesional(h: Horario): void {
+    const p = this.profesionalSeleccionado();
+    if (!p) return;
+    this.api.eliminarHorario(h.id).subscribe(() => this.seleccionarProfesionalDeNuevo(p));
+  }
+
+  private seleccionarProfesionalDeNuevo(p: Profesional): void {
+    this.api.getHorarios(p.comercioId, p.id).subscribe(horarios => this.horariosDelProfesional.set(horarios));
   }
 }
-
-

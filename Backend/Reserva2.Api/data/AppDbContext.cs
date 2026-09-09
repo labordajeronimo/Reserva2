@@ -15,6 +15,7 @@ namespace Reserva2.Api.Data
         public DbSet<Servicio> Servicios { get; set; }
         public DbSet<Turno> Turnos { get; set; }
         public DbSet<Horario> Horarios { get; set; }
+        public DbSet<Profesional> Profesionales { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -22,6 +23,17 @@ namespace Reserva2.Api.Data
             {
                 optionsBuilder.UseSqlServer("Server=LAPTOP-MB9RTSIF\\SQLEXPRESS03;Database=Reserva2Db;Trusted_Connection=True;TrustServerCertificate=True;");
             }
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Servicio>().Property(s => s.Precio).HasPrecision(18, 2);
+            modelBuilder.Entity<Servicio>().Property(s => s.MontoSeña).HasPrecision(18, 2);
+
+            // Los inicializadores de C# (= true, = "Gratuito") no generan un DEFAULT en SQL;
+            // hay que declararlo acá para que las filas existentes no queden en false/"" al migrar.
+            modelBuilder.Entity<Comercio>().Property(c => c.Activo).HasDefaultValue(true);
+            modelBuilder.Entity<Comercio>().Property(c => c.PlanActual).HasDefaultValue("Gratuito");
         }
     }
 }

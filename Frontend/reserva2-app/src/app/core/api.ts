@@ -19,16 +19,23 @@ export interface Servicio {
   nombre: string;
   duracionMinutos: number;
   precio: number;
-  montoSeña: number;
+  montoSeña: number | null;
   activo: boolean;
 }
 
 export interface Horario {
   id: number;
   comercioId: number;
+  profesionalId: number | null;
   diaSemana: number; // 0 = Domingo ... 6 = Sábado, igual que Date.getDay()
   horaInicio: string; // "HH:mm:ss"
   horaFin: string;
+}
+
+export interface Profesional {
+  id: number;
+  comercioId: number;
+  nombre: string;
 }
 
 export interface SlotDisponibilidad {
@@ -53,6 +60,7 @@ export interface LoginResponse {
   comercioId: number;
   nombre: string;
   aliasUrl: string;
+  token: string;
 }
 
 export interface RegistroRequest {
@@ -63,6 +71,30 @@ export interface RegistroRequest {
   datosBancarios: string;
   email: string;
   password: string;
+}
+
+export interface SuperAdminSession {
+  token: string;
+}
+
+export interface ComercioAdmin {
+  id: number;
+  nombre: string;
+  aliasUrl: string;
+  tipoPlantilla: string;
+  telefonoNotificaciones: string;
+  datosBancarios: string;
+  email: string;
+  activo: boolean;
+  planActual: string;
+  fechaProximoPago: string | null;
+}
+
+export interface Metricas {
+  totalComercios: number;
+  comerciosActivos: number;
+  comerciosInactivos: number;
+  turnosDelMes: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -76,6 +108,27 @@ export class Api {
 
   registrar(datos: RegistroRequest): Observable<LoginResponse> {
     return this.http.post<LoginResponse>(`${API_BASE}/auth/register`, datos);
+  }
+
+  superAdminLogin(email: string, password: string): Observable<SuperAdminSession> {
+    return this.http.post<SuperAdminSession>(`${API_BASE}/auth/super-admin/login`, { email, password });
+  }
+
+  // --- Super Admin ---
+  getComerciosAdmin(): Observable<ComercioAdmin[]> {
+    return this.http.get<ComercioAdmin[]>(`${API_BASE}/comercios`);
+  }
+
+  actualizarEstadoComercio(id: number, activo: boolean): Observable<ComercioAdmin> {
+    return this.http.patch<ComercioAdmin>(`${API_BASE}/comercios/${id}/estado`, { activo });
+  }
+
+  actualizarPlanComercio(id: number, planActual: string): Observable<ComercioAdmin> {
+    return this.http.patch<ComercioAdmin>(`${API_BASE}/comercios/${id}/plan`, { planActual });
+  }
+
+  getMetricas(): Observable<Metricas> {
+    return this.http.get<Metricas>(`${API_BASE}/admin/metricas`);
   }
 
   // --- Comercios ---
@@ -97,16 +150,31 @@ export class Api {
   }
 
   // --- Horarios ---
-  getHorarios(comercioId: number): Observable<Horario[]> {
-    return this.http.get<Horario[]>(`${API_BASE}/comercios/${comercioId}/horarios`);
+  getHorarios(comercioId: number, profesionalId?: number): Observable<Horario[]> {
+    return this.http.get<Horario[]>(`${API_BASE}/comercios/${comercioId}/horarios`, {
+      params: profesionalId ? { profesionalId } : {}
+    });
   }
 
-  crearHorario(comercioId: number, horario: { diaSemana: number; horaInicio: string; horaFin: string }): Observable<Horario> {
+  crearHorario(comercioId: number, horario: { diaSemana: number; horaInicio: string; horaFin: string; profesionalId?: number }): Observable<Horario> {
     return this.http.post<Horario>(`${API_BASE}/comercios/${comercioId}/horarios`, horario);
   }
 
   eliminarHorario(id: number): Observable<void> {
     return this.http.delete<void>(`${API_BASE}/horarios/${id}`);
+  }
+
+  // --- Profesionales ---
+  getProfesionales(comercioId: number): Observable<Profesional[]> {
+    return this.http.get<Profesional[]>(`${API_BASE}/comercios/${comercioId}/profesionales`);
+  }
+
+  crearProfesional(comercioId: number, nombre: string): Observable<Profesional> {
+    return this.http.post<Profesional>(`${API_BASE}/comercios/${comercioId}/profesionales`, { nombre });
+  }
+
+  eliminarProfesional(id: number): Observable<void> {
+    return this.http.delete<void>(`${API_BASE}/profesionales/${id}`);
   }
 
   // --- Disponibilidad y turnos ---
@@ -122,6 +190,7 @@ export class Api {
     fechaHoraInicio: string;
     clienteNombre: string;
     clienteWhatsApp: string;
+    clienteEmail: string;
   }): Observable<Turno> {
     return this.http.post<Turno>(`${API_BASE}/turnos`, turno);
   }

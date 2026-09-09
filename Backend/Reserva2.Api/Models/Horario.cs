@@ -9,6 +9,9 @@ namespace Reserva2.Api.Models
         public int Id { get; set; }
         public int ComercioId { get; set; }
 
+        // Nulo en comercios de un solo profesional: horario general del comercio
+        public int? ProfesionalId { get; set; }
+
         // Usa los mismos valores que System.DayOfWeek:
         // 0 = Domingo, 1 = Lunes, 2 = Martes ... 6 = Sábado
         public int DiaSemana { get; set; }
