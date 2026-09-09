@@ -14,5 +14,9 @@ namespace Reserva2.Api.Models
         // Datos del cliente final (sin fricción, no necesitan cuenta)
         public string ClienteNombre { get; set; } = string.Empty;
         public string ClienteWhatsApp { get; set; } = string.Empty;
+
+        // Momento en que se creó la pre-reserva. Si pasan 2hs sin pasar a
+        // EstadoReserva = 2 (Confirmado), el horario se considera liberado.
+        public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
     }
 }

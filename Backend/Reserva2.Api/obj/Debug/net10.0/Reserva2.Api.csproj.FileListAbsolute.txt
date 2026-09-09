@@ -166,3 +166,4 @@ C:\Users\labor\Reserva2\Backend\Reserva2.Api\bin\Debug\net10.0\ru\Microsoft.Code
 C:\Users\labor\Reserva2\Backend\Reserva2.Api\bin\Debug\net10.0\tr\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll
 C:\Users\labor\Reserva2\Backend\Reserva2.Api\bin\Debug\net10.0\zh-Hans\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll
 C:\Users\labor\Reserva2\Backend\Reserva2.Api\bin\Debug\net10.0\zh-Hant\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll
+C:\Users\labor\Reserva2\Backend\Reserva2.Api\obj\Debug\net10.0\Reserva2.Api.sourcelink.json

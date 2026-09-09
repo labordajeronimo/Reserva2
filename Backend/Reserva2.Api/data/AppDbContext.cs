@@ -14,6 +14,7 @@ namespace Reserva2.Api.Data
         public DbSet<Comercio> Comercios { get; set; }
         public DbSet<Servicio> Servicios { get; set; }
         public DbSet<Turno> Turnos { get; set; }
+        public DbSet<Horario> Horarios { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {

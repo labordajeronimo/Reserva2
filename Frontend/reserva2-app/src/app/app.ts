@@ -1,20 +1,12 @@
-import { Component, HostListener } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule],
-  templateUrl: './app.html',
-  styleUrls: ['./app.css']
+  imports: [RouterOutlet],
+  template: '<router-outlet></router-outlet>' // Acá Angular va a inyectar las distintas páginas
 })
 export class App {
-  title = 'reserva2-app';
-  isScrolled = false; // Variable que nos dice si bajamos
-
-  // Esta función detecta el scroll
-  @HostListener('window:scroll', [])
-  onWindowScroll() {
-    this.isScrolled = window.scrollY > 50;
-  }
+  // Ya no necesitamos lógica acá, todo lo manejan las rutas
 }

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Reserva2.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ede9e0eccf85fb0fcecdc17865e9c5700ee5d96d")]
 [assembly: System.Reflection.AssemblyProductAttribute("Reserva2.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Reserva2.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

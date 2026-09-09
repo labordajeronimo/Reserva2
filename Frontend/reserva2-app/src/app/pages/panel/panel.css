@@ -1,0 +1,89 @@
+/* Header superior para Login/Registro */
+.panel-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: 0.6rem 4%;
+  display: flex;
+  justify-content: flex-start;
+  background-color: #1a2b4c
+}
+
+.btn-volver {
+  color: #ffffff;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-volver:hover {
+  color: #1a2b4c;
+}
+
+.panel-container { min-height: 100vh; background-color: #f1f5f9; padding: 4rem 2rem 2rem 2rem; display: flex; justify-content: center; }
+/* Auth Box */
+.auth-box { 
+  background: white; 
+  padding: 3rem; 
+  border-radius: 20px; 
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05); 
+  width: 100%; 
+  max-width: 500px; 
+  margin: auto; 
+  border: 2px solid #e85d22; 
+}
+.auth-box.reg-mode { max-width: 600px; }
+.auth-header { text-align: center; margin-bottom: 2rem; }
+.auth-logo { height: 65px; margin-bottom: 1rem; mix-blend-mode: multiply; }
+.auth-header h2 { color: #1a2b4c; margin-bottom: 0.5rem; }
+.auth-header p { color: #64748b; }
+.form-group { margin-bottom: 1.5rem; }
+.form-row { display: flex; gap: 1rem; }
+.form-row .form-group { flex: 1; }
+label { display: block; font-size: 0.9rem; font-weight: 600; color: #475569; margin-bottom: 0.5rem; }
+input, select { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1rem; outline: none; transition: border 0.2s; }
+input:focus, select:focus { border-color: #e85d22; }
+.btn-full { width: 100%; padding: 14px; font-size: 1.1rem; border-radius: 10px; margin-top: 1rem; }
+.auth-switch { text-align: center; margin-top: 1.5rem; font-size: 0.95rem; color: #64748b; }
+.auth-switch a { color: #e85d22; font-weight: 600; text-decoration: none; }
+.alert-error { background: #fee2e2; color: #b91c1c; padding: 12px; border-radius: 8px; margin-bottom: 1.5rem; font-size: 0.9rem; text-align: center; }
+
+/* Dashboard */
+.dashboard { width: 100%; max-width: 1000px; }
+.dash-header { display: flex; justify-content: space-between; align-items: center; background: white; padding: 1.5rem 2rem; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); margin-bottom: 2rem; }
+.dash-brand { display: flex; align-items: center; gap: 15px; }
+.dash-brand h3 { margin: 0; color: #1a2b4c; }
+.dash-brand span { color: #e85d22; }
+.dash-actions { display: flex; gap: 1rem; }
+.dash-tabs { display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 2px solid #e2e8f0; }
+.dash-tabs button { background: none; border: none; padding: 10px 20px; font-size: 1.1rem; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
+.dash-tabs button.active { color: #e85d22; border-bottom-color: #e85d22; }
+
+/* Cards & Forms internos */
+.tab-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+.tab-header h2 { color: #1a2b4c; }
+.inline-form { display: flex; gap: 1rem; background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
+.inline-form input, .inline-form select { flex: 1; }
+.list-cards { display: flex; flex-direction: column; gap: 1rem; }
+.card-item { background: white; padding: 1.5rem; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.02); border: 1px solid #e2e8f0; }
+.item-info h4 { margin: 0 0 5px 0; color: #1e293b; font-size: 1.1rem; }
+.item-info p { margin: 0; color: #64748b; font-size: 0.95rem; }
+.badge { font-size: 0.8rem; padding: 3px 8px; border-radius: 12px; margin-left: 10px; }
+.estado-1 { background: #fef3c7; color: #d97706; }
+.estado-2 { background: #dcfce7; color: #15803d; }
+.estado-3 { background: #fee2e2; color: #b91c1c; }
+.item-actions { display: flex; gap: 10px; }
+
+/* Botones genéricos */
+.btn-naranja { background: #e85d22; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+.btn-secundario-chico { background: #f1f5f9; color: #334155; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.9rem; }
+.btn-ok { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+.btn-peligro { background: #ef4444; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+.btn-peligro-outline { background: transparent; color: #ef4444; border: 1px solid #ef4444; padding: 8px 15px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+.empty-state { text-align: center; padding: 3rem; color: #94a3b8; background: white; border-radius: 12px; border: 2px dashed #cbd5e1; }
+.mt-3 { margin-top: 1.5rem; }

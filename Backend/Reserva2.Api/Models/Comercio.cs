@@ -13,5 +13,9 @@ namespace Reserva2.Api.Models
         public string TelefonoNotificaciones { get; set; } = string.Empty;
         public string DatosBancarios { get; set; } = string.Empty;
         public bool PagoAlDia { get; set; } = true;
+
+        // Login del dueño del comercio para entrar al panel
+        public string Email { get; set; } = string.Empty;
+        public string PasswordHash { get; set; } = string.Empty;
     }
 }
