@@ -640,7 +640,8 @@ app.MapPost("/api/turnos", async (AppDbContext context, CrearTurnoRequest req) =
         ClienteWhatsApp = req.ClienteWhatsApp,
         ClienteEmail = req.ClienteEmail,
         EstadoReserva = 1,
-        FechaCreacion = DateTime.UtcNow
+        FechaCreacion = DateTime.UtcNow,
+        MontoCobrado = servicio.Precio
     };
 
     context.Turnos.Add(turno);
@@ -648,6 +649,109 @@ app.MapPost("/api/turnos", async (AppDbContext context, CrearTurnoRequest req) =
 
     return Results.Created($"/api/turnos/{turno.Id}", turno);
 }).RequireRateLimiting("turnos");
+
+// Carga manual de un turno por parte del dueño del comercio (ej. un cliente que pidió
+// el turno de forma presencial). Queda directamente Confirmado: el dueño ya acordó
+// con el cliente, no pasa por el flujo de pre-reserva de 2hs.
+app.MapPost("/api/comercios/{comercioId:int}/turnos", async (AppDbContext context, int comercioId, AdminCrearTurnoRequest req, ClaimsPrincipal user) =>
+{
+    if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
+
+    if (string.IsNullOrWhiteSpace(req.ClienteNombre))
+        return Results.BadRequest(new { mensaje = "Ingresá el nombre del cliente." });
+
+    var comercio = await context.Comercios.FindAsync(comercioId);
+    if (comercio is null) return Results.NotFound();
+
+    var servicio = await context.Servicios.FindAsync(req.ServicioId);
+    if (servicio is null || servicio.ComercioId != comercioId)
+        return Results.NotFound(new { mensaje = "El servicio no pertenece a este comercio." });
+
+    if (req.ProfesionalId is not null && !await context.Profesionales.AnyAsync(p => p.Id == req.ProfesionalId && p.ComercioId == comercioId))
+        return Results.NotFound(new { mensaje = "El profesional no pertenece a este comercio." });
+
+    var finTurno = req.FechaHoraInicio + TimeSpan.FromMinutes(servicio.DuracionMinutos);
+
+    var turnosQueChocan = await context.Turnos
+        .Where(t => t.ComercioId == comercioId
+                 && t.ProfesionalId == req.ProfesionalId
+                 && t.FechaHoraInicio < finTurno
+                 && t.FechaHoraFin > req.FechaHoraInicio)
+        .ToListAsync();
+
+    if (turnosQueChocan.Any(OcupaHorario))
+        return Results.Conflict(new { mensaje = "Ya tenés un turno cargado en ese horario." });
+
+    if (comercio.PlanActual == "Gratuito")
+    {
+        var inicioMes = new DateTime(req.FechaHoraInicio.Year, req.FechaHoraInicio.Month, 1);
+        var inicioMesSiguiente = inicioMes.AddMonths(1);
+        var turnosDelMes = await context.Turnos.CountAsync(t =>
+            t.ComercioId == comercioId
+            && t.EstadoReserva != 3
+            && t.FechaHoraInicio >= inicioMes && t.FechaHoraInicio < inicioMesSiguiente);
+
+        if (turnosDelMes >= TopeTurnosMensualesGratuito)
+            return Results.Conflict(new { mensaje = $"Este comercio alcanzó el límite de {TopeTurnosMensualesGratuito} turnos de ese mes en el plan Gratuito." });
+    }
+
+    var turno = new Turno
+    {
+        ComercioId = comercioId,
+        ServicioId = servicio.Id,
+        ProfesionalId = req.ProfesionalId,
+        FechaHoraInicio = req.FechaHoraInicio,
+        FechaHoraFin = finTurno,
+        ClienteNombre = req.ClienteNombre.Trim(),
+        ClienteWhatsApp = req.ClienteWhatsApp?.Trim() ?? string.Empty,
+        ClienteEmail = req.ClienteEmail?.Trim() ?? string.Empty,
+        EstadoReserva = 2,
+        FechaCreacion = DateTime.UtcNow,
+        MontoCobrado = servicio.Precio
+    };
+
+    context.Turnos.Add(turno);
+    await context.SaveChangesAsync();
+
+    return Results.Created($"/api/turnos/{turno.Id}", turno);
+}).RequireAuthorization("AdminCliente");
+
+// ==========================================
+// HISTORIAL (cortes realizados + control de ingresos)
+// ==========================================
+// Un turno "realizado" es un Confirmado cuya fecha ya pasó: no hace falta un estado
+// nuevo ni un job en segundo plano, se calcula al consultar.
+app.MapGet("/api/comercios/{comercioId:int}/historial", async (AppDbContext context, int comercioId, int? anio, int? mes, ClaimsPrincipal user) =>
+{
+    if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
+
+    var ahora = DateTime.UtcNow;
+    var inicioHoy = ahora.Date;
+    var inicioSemana = inicioHoy.AddDays(-(int)inicioHoy.DayOfWeek);
+    var inicioMesActual = new DateTime(ahora.Year, ahora.Month, 1);
+
+    var realizados = context.Turnos.Where(t => t.ComercioId == comercioId && t.EstadoReserva == 2 && t.FechaHoraInicio <= ahora);
+
+    var totalHoy = await realizados.Where(t => t.FechaHoraInicio >= inicioHoy).SumAsync(t => (decimal?)t.MontoCobrado) ?? 0;
+    var totalSemana = await realizados.Where(t => t.FechaHoraInicio >= inicioSemana).SumAsync(t => (decimal?)t.MontoCobrado) ?? 0;
+    var totalMes = await realizados.Where(t => t.FechaHoraInicio >= inicioMesActual).SumAsync(t => (decimal?)t.MontoCobrado) ?? 0;
+
+    var anioFiltro = anio ?? ahora.Year;
+    var mesFiltro = mes ?? ahora.Month;
+    var inicioFiltro = new DateTime(anioFiltro, mesFiltro, 1);
+    var finFiltro = inicioFiltro.AddMonths(1);
+
+    var items = await (
+        from t in realizados
+        where t.FechaHoraInicio >= inicioFiltro && t.FechaHoraInicio < finFiltro
+        join s in context.Servicios on t.ServicioId equals s.Id into servicioJoin
+        from s in servicioJoin.DefaultIfEmpty()
+        orderby t.FechaHoraInicio descending
+        select new HistorialItemDto(t.Id, t.FechaHoraInicio, t.ClienteNombre, s != null ? s.Nombre : "—", t.MontoCobrado ?? 0)
+    ).ToListAsync();
+
+    return Results.Ok(new HistorialDto(items, totalHoy, totalSemana, totalMes));
+}).RequireAuthorization("AdminCliente");
 
 app.MapGet("/api/comercios/{comercioId:int}/turnos", async (AppDbContext context, int comercioId, bool incluirVencidos, ClaimsPrincipal user) =>
 {
@@ -717,3 +821,6 @@ record ProfesionalRequest(string Nombre);
 record HorarioRequest(int DiaSemana, TimeSpan HoraInicio, TimeSpan HoraFin, int? ProfesionalId = null);
 record SlotDisponibilidad(DateTime Inicio, DateTime Fin, bool Disponible);
 record CrearTurnoRequest(int ComercioId, int ServicioId, DateTime FechaHoraInicio, string ClienteNombre, string ClienteWhatsApp, string ClienteEmail, int? ProfesionalId = null);
+record AdminCrearTurnoRequest(int ServicioId, DateTime FechaHoraInicio, string ClienteNombre, string? ClienteWhatsApp, string? ClienteEmail, int? ProfesionalId = null);
+record HistorialItemDto(int Id, DateTime FechaHoraInicio, string ClienteNombre, string ServicioNombre, decimal Monto);
+record HistorialDto(List<HistorialItemDto> Items, decimal TotalHoy, decimal TotalSemana, decimal TotalMes);

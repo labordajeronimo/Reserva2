@@ -47,6 +47,7 @@ namespace Reserva2.Api.Data
         {
             modelBuilder.Entity<Servicio>().Property(s => s.Precio).HasPrecision(18, 2);
             modelBuilder.Entity<Servicio>().Property(s => s.MontoSeña).HasPrecision(18, 2);
+            modelBuilder.Entity<Turno>().Property(t => t.MontoCobrado).HasPrecision(18, 2);
 
             // Los inicializadores de C# (= true, = "Gratuito") no generan un DEFAULT en SQL;
             // hay que declararlo acá para que las filas existentes no queden en false/"" al migrar.

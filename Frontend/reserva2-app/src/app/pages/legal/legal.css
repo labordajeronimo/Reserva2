@@ -1,10 +1,10 @@
 * { box-sizing: border-box; }
 
-.legal-page { min-height: 100vh; background: #FBF9F6; }
+.legal-page { min-height: 100vh; background: #0C1122; color: #E8ECF6; }
 
 .legal-bar {
-  background: #ffffff;
-  border-bottom: 1px solid #E7E2DA;
+  background: #10172B;
+  border-bottom: 1px solid rgba(232, 236, 246, 0.09);
   padding: 18px 32px;
 }
 .legal-bar .wrap {
@@ -14,8 +14,8 @@
   align-items: center;
   gap: 10px;
 }
-.legal-bar img { width: 28px; height: 28px; border-radius: 8px; display: block; }
-.legal-bar span { font-family: 'Poppins', sans-serif; font-weight: 700; color: #16213E; }
+.legal-bar img { width: 30px; height: 30px; border-radius: 8px; display: block; background: #FFFFFF; padding: 4px; }
+.legal-bar span { font-family: 'Sora', sans-serif; font-weight: 700; color: #E8ECF6; }
 
 .legal-main {
   max-width: 760px;
@@ -23,23 +23,23 @@
   padding: 48px 24px 80px;
 }
 
-.legal-main h1 { font-size: 1.8rem; font-weight: 800; color: #16213E; margin: 0 0 6px; }
-.legal-main .actualizado { color: #6B6455; font-size: 0.85rem; margin: 0 0 32px; }
+.legal-main h1 { font-family: 'Sora', sans-serif; font-size: 1.9rem; font-weight: 800; color: #E8ECF6; margin: 0 0 6px; letter-spacing: -0.03em; }
+.legal-main .actualizado { color: #7C879E; font-size: 0.85rem; margin: 0 0 32px; }
 
-.legal-main h2 { font-size: 1.1rem; font-weight: 700; color: #16213E; margin: 32px 0 10px; }
-.legal-main p, .legal-main li { color: #4A4438; font-size: 0.95rem; line-height: 1.7; }
+.legal-main h2 { font-family: 'Sora', sans-serif; font-size: 1.1rem; font-weight: 700; color: #E8ECF6; margin: 32px 0 10px; }
+.legal-main p, .legal-main li { color: #A6AFC6; font-size: 0.95rem; line-height: 1.75; }
 .legal-main ul { padding-left: 20px; margin: 8px 0; }
 .legal-main li { margin-bottom: 6px; }
 
 .legal-main a.volver {
   display: inline-block;
-  color: #EA580C;
+  color: #FB923C;
   font-weight: 600;
   text-decoration: none;
   margin-bottom: 24px;
   font-size: 0.9rem;
 }
-.legal-main a.volver:hover { text-decoration: underline; }
+.legal-main a.volver:hover { text-decoration: underline; color: #FFB98F; }
 
-.legal-main a.inline { color: #EA580C; text-decoration: none; }
-.legal-main a.inline:hover { text-decoration: underline; }
+.legal-main a.inline { color: #FB923C; text-decoration: none; }
+.legal-main a.inline:hover { text-decoration: underline; color: #FFB98F; }

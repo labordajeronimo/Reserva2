@@ -9,6 +9,7 @@
 
   <nav class="tabs">
     <button [class.active]="tabActiva() === 'turnos'" (click)="tabActiva.set('turnos')">Turnos</button>
+    <button [class.active]="tabActiva() === 'historial'" (click)="tabActiva.set('historial')">Historial</button>
     <button [class.active]="tabActiva() === 'servicios'" (click)="tabActiva.set('servicios')">Servicios</button>
     <button [class.active]="tabActiva() === 'horarios'" (click)="tabActiva.set('horarios')">Horarios</button>
     <button [class.active]="tabActiva() === 'profesionales'" (click)="tabActiva.set('profesionales')">Profesionales</button>
@@ -39,6 +40,90 @@
                       <button class="mini danger" (click)="cancelar(t)">Cancelar</button>
                     }
                   </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+
+      <div class="panel-card" style="margin-top:20px;">
+        <h2>Cargar turno presencial</h2>
+        <p class="sub-info">Para un cliente que te pidió el turno en persona o por teléfono. Queda confirmado directamente.</p>
+
+        @if (servicios().length === 0) {
+          <p class="empty">Cargá al menos un servicio antes de poder registrar un turno.</p>
+        } @else {
+          @if (errorTurnoManual()) { <div class="error-msg">{{ errorTurnoManual() }}</div> }
+
+          <div class="form-inline form-inline-turno-manual">
+            <select [(ngModel)]="nuevoTurnoServicioId">
+              @for (s of servicios(); track s.id) {
+                <option [ngValue]="s.id">{{ s.nombre }}</option>
+              }
+            </select>
+            @if (profesionales().length > 0) {
+              <select [(ngModel)]="nuevoTurnoProfesionalId">
+                <option [ngValue]="null">Sin profesional</option>
+                @for (p of profesionales(); track p.id) {
+                  <option [ngValue]="p.id">{{ p.nombre }}</option>
+                }
+              </select>
+            }
+            <input type="date" [(ngModel)]="nuevoTurnoFecha">
+            <input type="time" [(ngModel)]="nuevoTurnoHora">
+            <input type="text" [(ngModel)]="nuevoTurnoClienteNombre" placeholder="Nombre del cliente">
+            <input type="tel" [(ngModel)]="nuevoTurnoClienteWhatsApp" placeholder="WhatsApp (opcional)">
+            <button class="btn-naranja" [disabled]="cargandoTurnoManual()" (click)="agregarTurnoManual()">
+              {{ cargandoTurnoManual() ? 'Cargando...' : 'Cargar turno' }}
+            </button>
+          </div>
+        }
+      </div>
+    }
+
+    @if (tabActiva() === 'historial') {
+      <div class="metricas metricas-historial">
+        <div class="metrica-card">
+          <div class="valor ok">{{ historial()?.totalHoy ?? 0 | currency:'ARS':'$' }}</div>
+          <div class="etiqueta">Hoy</div>
+        </div>
+        <div class="metrica-card">
+          <div class="valor ok">{{ historial()?.totalSemana ?? 0 | currency:'ARS':'$' }}</div>
+          <div class="etiqueta">Esta semana</div>
+        </div>
+        <div class="metrica-card">
+          <div class="valor ok">{{ historial()?.totalMes ?? 0 | currency:'ARS':'$' }}</div>
+          <div class="etiqueta">Este mes</div>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <div class="historial-header">
+          <h2>Cortes realizados</h2>
+          <div class="mes-selector">
+            <button class="mini" (click)="mesHistorialAnterior()">←</button>
+            <span>{{ meses[mesHistorial().mes - 1] }} {{ mesHistorial().anio }}</span>
+            <button class="mini" (click)="mesHistorialSiguiente()">→</button>
+          </div>
+        </div>
+
+        @if (cargandoHistorial()) {
+          <p class="empty">Cargando...</p>
+        } @else if (!historial() || historial()!.items.length === 0) {
+          <p class="empty">No hay cortes realizados en este mes.</p>
+        } @else {
+          <table class="tabla">
+            <thead>
+              <tr><th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Monto</th></tr>
+            </thead>
+            <tbody>
+              @for (i of historial()!.items; track i.id) {
+                <tr>
+                  <td>{{ i.fechaHoraInicio | date:'dd/MM HH:mm' }}</td>
+                  <td>{{ i.clienteNombre }}</td>
+                  <td>{{ i.servicioNombre }}</td>
+                  <td>{{ i.monto | currency:'ARS':'$' }}</td>
                 </tr>
               }
             </tbody>

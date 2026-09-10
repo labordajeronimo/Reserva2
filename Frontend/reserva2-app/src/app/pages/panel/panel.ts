@@ -3,10 +3,11 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 
-import { Api, Turno, Servicio, Horario, Profesional, LoginResponse } from '../../core/api';
+import { Api, Turno, Servicio, Horario, Profesional, LoginResponse, Historial } from '../../core/api';
 import { Session } from '../../core/session';
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
 @Component({
   selector: 'app-panel',
@@ -17,12 +18,28 @@ const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', '
 })
 export class Panel {
   dias = DIAS;
+  meses = MESES;
 
   sesion: LoginResponse;
-  tabActiva = signal<'turnos' | 'servicios' | 'horarios' | 'profesionales'>('turnos');
+  tabActiva = signal<'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'historial'>('turnos');
 
   // --- Turnos ---
   turnos = signal<Turno[]>([]);
+
+  // --- Carga manual de turno presencial ---
+  nuevoTurnoServicioId = 0;
+  nuevoTurnoProfesionalId: number | null = null;
+  nuevoTurnoFecha = '';
+  nuevoTurnoHora = '';
+  nuevoTurnoClienteNombre = '';
+  nuevoTurnoClienteWhatsApp = '';
+  errorTurnoManual = signal<string | null>(null);
+  cargandoTurnoManual = signal(false);
+
+  // --- Historial (cortes realizados + control de ingresos) ---
+  historial = signal<Historial | null>(null);
+  cargandoHistorial = signal(false);
+  mesHistorial = signal<{ anio: number; mes: number }>(this.mesActual());
 
   // --- Servicios ---
   servicios = signal<Servicio[]>([]);
@@ -47,6 +64,11 @@ export class Panel {
   constructor(private api: Api, private session: Session, private router: Router) {
     // El guard de la ruta ya garantiza que hay sesión antes de llegar acá.
     this.sesion = this.session.obtenerUsuario()!;
+
+    const ahora = new Date();
+    this.nuevoTurnoFecha = this.formatearFecha(ahora);
+    this.nuevoTurnoHora = `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
+
     this.cargarTodo();
   }
 
@@ -60,6 +82,16 @@ export class Panel {
     this.cargarServicios();
     this.cargarHorarios();
     this.cargarProfesionales();
+    this.cargarHistorial();
+  }
+
+  private mesActual(): { anio: number; mes: number } {
+    const ahora = new Date();
+    return { anio: ahora.getFullYear(), mes: ahora.getMonth() + 1 };
+  }
+
+  private formatearFecha(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
   // ================= TURNOS =================
@@ -79,9 +111,76 @@ export class Panel {
     return estado === 1 ? 'Pre-reservado' : estado === 2 ? 'Confirmado' : 'Cancelado';
   }
 
+  // ================= TURNO PRESENCIAL (carga manual) =================
+  agregarTurnoManual(): void {
+    this.errorTurnoManual.set(null);
+
+    if (!this.nuevoTurnoServicioId) {
+      this.errorTurnoManual.set('Elegí un servicio.');
+      return;
+    }
+    if (!this.nuevoTurnoClienteNombre.trim()) {
+      this.errorTurnoManual.set('Ingresá el nombre del cliente.');
+      return;
+    }
+    if (!this.nuevoTurnoFecha || !this.nuevoTurnoHora) {
+      this.errorTurnoManual.set('Elegí la fecha y la hora del turno.');
+      return;
+    }
+
+    this.cargandoTurnoManual.set(true);
+    this.api.crearTurnoManual(this.sesion.comercioId, {
+      servicioId: this.nuevoTurnoServicioId,
+      fechaHoraInicio: `${this.nuevoTurnoFecha}T${this.nuevoTurnoHora}:00`,
+      clienteNombre: this.nuevoTurnoClienteNombre.trim(),
+      clienteWhatsApp: this.nuevoTurnoClienteWhatsApp.trim(),
+      profesionalId: this.nuevoTurnoProfesionalId ?? undefined
+    }).subscribe({
+      next: () => {
+        this.cargandoTurnoManual.set(false);
+        this.nuevoTurnoClienteNombre = '';
+        this.nuevoTurnoClienteWhatsApp = '';
+        this.cargarTurnos();
+        this.cargarHistorial();
+      },
+      error: err => {
+        this.cargandoTurnoManual.set(false);
+        this.errorTurnoManual.set(err.error?.mensaje ?? 'No pudimos cargar el turno.');
+      }
+    });
+  }
+
+  // ================= HISTORIAL (cortes realizados + ingresos) =================
+  cargarHistorial(): void {
+    const { anio, mes } = this.mesHistorial();
+    this.cargandoHistorial.set(true);
+    this.api.getHistorial(this.sesion.comercioId, anio, mes).subscribe({
+      next: h => {
+        this.historial.set(h);
+        this.cargandoHistorial.set(false);
+      },
+      error: () => this.cargandoHistorial.set(false)
+    });
+  }
+
+  mesHistorialAnterior(): void {
+    const { anio, mes } = this.mesHistorial();
+    this.mesHistorial.set(mes === 1 ? { anio: anio - 1, mes: 12 } : { anio, mes: mes - 1 });
+    this.cargarHistorial();
+  }
+
+  mesHistorialSiguiente(): void {
+    const { anio, mes } = this.mesHistorial();
+    this.mesHistorial.set(mes === 12 ? { anio: anio + 1, mes: 1 } : { anio, mes: mes + 1 });
+    this.cargarHistorial();
+  }
+
   // ================= SERVICIOS =================
   cargarServicios(): void {
-    this.api.getServiciosPorComercio(this.sesion.comercioId).subscribe(servicios => this.servicios.set(servicios));
+    this.api.getServiciosPorComercio(this.sesion.comercioId).subscribe(servicios => {
+      this.servicios.set(servicios);
+      if (!this.nuevoTurnoServicioId && servicios.length > 0) this.nuevoTurnoServicioId = servicios[0].id;
+    });
   }
 
   agregarServicio(): void {

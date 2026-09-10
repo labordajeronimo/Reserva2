@@ -54,6 +54,22 @@ export interface Turno {
   clienteNombre: string;
   clienteWhatsApp: string;
   fechaCreacion: string;
+  montoCobrado: number | null;
+}
+
+export interface HistorialItem {
+  id: number;
+  fechaHoraInicio: string;
+  clienteNombre: string;
+  servicioNombre: string;
+  monto: number;
+}
+
+export interface Historial {
+  items: HistorialItem[];
+  totalHoy: number;
+  totalSemana: number;
+  totalMes: number;
 }
 
 export interface LoginResponse {
@@ -215,5 +231,24 @@ export class Api {
 
   cancelarTurno(id: number): Observable<Turno> {
     return this.http.patch<Turno>(`${API_BASE}/turnos/${id}/cancelar`, {});
+  }
+
+  crearTurnoManual(comercioId: number, turno: {
+    servicioId: number;
+    fechaHoraInicio: string;
+    clienteNombre: string;
+    clienteWhatsApp?: string;
+    clienteEmail?: string;
+    profesionalId?: number;
+  }): Observable<Turno> {
+    return this.http.post<Turno>(`${API_BASE}/comercios/${comercioId}/turnos`, turno);
+  }
+
+  // --- Historial (cortes realizados + control de ingresos) ---
+  getHistorial(comercioId: number, anio?: number, mes?: number): Observable<Historial> {
+    const params: Record<string, number> = {};
+    if (anio) params['anio'] = anio;
+    if (mes) params['mes'] = mes;
+    return this.http.get<Historial>(`${API_BASE}/comercios/${comercioId}/historial`, { params });
   }
 }

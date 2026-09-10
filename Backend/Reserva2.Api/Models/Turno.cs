@@ -15,6 +15,10 @@ namespace Reserva2.Api.Models
         // 1 = Pre-Reservado, 2 = Confirmado, 3 = Cancelado
         public int EstadoReserva { get; set; } = 1;
 
+        // Precio del servicio al momento de la reserva/carga, para que el historial de
+        // ingresos no cambie retroactivamente si después se edita el precio del servicio.
+        public decimal? MontoCobrado { get; set; }
+
         // Datos del cliente final (sin fricción, no necesitan cuenta)
         public string ClienteNombre { get; set; } = string.Empty;
         public string ClienteWhatsApp { get; set; } = string.Empty;

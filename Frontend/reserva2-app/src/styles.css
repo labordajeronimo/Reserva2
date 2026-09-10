@@ -1,11 +1,42 @@
-/* Reseteo global para que la web ocupe todo el ancho */
+/* Reseteo global + tokens de la identidad Premium (dark) */
+:root {
+  --bg: #0C1122;
+  --surface: #131A2E;
+  --surface-2: #10172B;
+  --deep: #0F1526;
+  --border: rgba(232, 236, 246, 0.13);
+  --border-soft: rgba(232, 236, 246, 0.09);
+  --text: #E8ECF6;
+  --muted: #A6AFC6;
+  --faint: #7C879E;
+  --accent: #EA580C;
+  --accent-soft: #FB923C;
+  --accent-grad: linear-gradient(180deg, #F97316, #EA580C);
+  --ok-bg: rgba(52, 211, 153, 0.16);
+  --ok: #6EE7B7;
+  --warn-bg: rgba(251, 191, 36, 0.16);
+  --warn: #FBBF24;
+  --danger-bg: rgba(248, 113, 113, 0.16);
+  --danger: #FCA5A5;
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Manrope', system-ui, sans-serif;
 }
 
 body {
-  background-color: #fcfcfc;
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+*:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(249, 115, 22, 0.3);
 }
