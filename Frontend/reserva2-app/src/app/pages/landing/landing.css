@@ -426,6 +426,83 @@ body {
 .price { font-size: 1rem; color: #A6AFC6; margin-bottom: 2rem; font-weight: 500; }
 .price span { font-family: 'Sora', sans-serif; font-size: 2.8rem; font-weight: 800; color: #FFFFFF; }
 
+.price-multi { margin-bottom: 1.8rem; }
+.price-linea { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 8px; margin-bottom: 0.4rem; }
+.price-monto { font-family: 'Sora', sans-serif; font-size: 1.9rem; font-weight: 800; color: #FFFFFF; }
+.price-periodo { font-size: 0.95rem; color: #A6AFC6; }
+.price-detalle { flex-basis: 100%; font-size: 0.85rem; color: #A6AFC6; margin-top: -2px; }
+.pro-text .price-periodo, .pro-text .price-detalle { color: #C5B3A6; }
+
+.price-nota { flex-basis: 100%; font-size: 0.75rem; color: #6EE7B7; margin-top: 2px; }
+.pro-text .price-nota { color: #FBBF24; }
+
+.billing-toggle {
+  display: inline-flex;
+  margin: 0 auto 3rem;
+  padding: 4px;
+  background: #131A2E;
+  border: 1px solid rgba(232, 236, 246, 0.13);
+  border-radius: 999px;
+  gap: 4px;
+}
+.billing-opcion {
+  border: none;
+  background: transparent;
+  color: #A6AFC6;
+  font-family: 'Sora', sans-serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 10px 20px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.billing-opcion:hover { color: #E8ECF6; }
+.billing-opcion.active {
+  background-image: linear-gradient(180deg, #F97316, #EA580C);
+  color: #fff;
+}
+.billing-badge {
+  background: rgba(52, 211, 153, 0.18);
+  color: #6EE7B7;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.billing-opcion.active .billing-badge { background: rgba(255, 255, 255, 0.22); color: #fff; }
+
+.price-anual {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: #A6AFC6;
+  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  border-radius: 10px;
+  padding: 10px 12px;
+  line-height: 1.5;
+}
+.price-anual strong { color: #6EE7B7; font-family: 'Sora', sans-serif; }
+.pro-text .price-anual { color: #E8D9C9; }
+.pro-text .price-anual strong { color: #FBBF24; }
+
+.price-anual-badge {
+  display: inline-block;
+  background-image: linear-gradient(90deg, #34D399, #6EE7B7);
+  color: #062B1C;
+  font-family: 'Sora', sans-serif;
+  font-weight: 800;
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-right: 4px;
+}
+
 .features { list-style: none; margin-bottom: 2.4rem; }
 .features li { margin-bottom: 0.9rem; font-size: 1rem; color: #D3D9E8; display: flex; align-items: center; gap: 10px; }
 .check { color: #6EE7B7; font-weight: bold; }

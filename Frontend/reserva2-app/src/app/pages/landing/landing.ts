@@ -11,6 +11,7 @@ import { Router, RouterLink } from '@angular/router';
 })
 export class Landing {
   isScrolled = false;
+  facturacionAnual = false;
 
   constructor(private router: Router) {}
 

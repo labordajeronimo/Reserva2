@@ -72,11 +72,29 @@ export interface Historial {
   totalMes: number;
 }
 
+export interface GananciaPorProfesional {
+  profesionalId: number | null;
+  nombreProfesional: string;
+  cantidadTurnos: number;
+  ingresos: number;
+}
+
+export interface Ganancias {
+  porProfesional: GananciaPorProfesional[];
+  cantidadTotal: number;
+  ingresosTotal: number;
+}
+
+export interface WhatsAppConfig {
+  activado: boolean;
+}
+
 export interface LoginResponse {
   comercioId: number;
   nombre: string;
   aliasUrl: string;
   token: string;
+  planActual: string;
 }
 
 export interface RegistroRequest {
@@ -104,6 +122,8 @@ export interface ComercioAdmin {
   activo: boolean;
   planActual: string;
   fechaProximoPago: string | null;
+  montoMensualAcordado: number | null;
+  cicloFacturacion: string;
 }
 
 export interface Metricas {
@@ -149,6 +169,14 @@ export class Api {
 
   actualizarPlanComercio(id: number, planActual: string): Observable<ComercioAdmin> {
     return this.http.patch<ComercioAdmin>(`${API_BASE}/comercios/${id}/plan`, { planActual });
+  }
+
+  actualizarMontoAcordado(id: number, montoMensualAcordado: number | null): Observable<ComercioAdmin> {
+    return this.http.patch<ComercioAdmin>(`${API_BASE}/comercios/${id}/monto-acordado`, { montoMensualAcordado });
+  }
+
+  actualizarCicloFacturacion(id: number, cicloFacturacion: string): Observable<ComercioAdmin> {
+    return this.http.patch<ComercioAdmin>(`${API_BASE}/comercios/${id}/ciclo-facturacion`, { cicloFacturacion });
   }
 
   getMetricas(): Observable<Metricas> {
@@ -250,5 +278,19 @@ export class Api {
     if (anio) params['anio'] = anio;
     if (mes) params['mes'] = mes;
     return this.http.get<Historial>(`${API_BASE}/comercios/${comercioId}/historial`, { params });
+  }
+
+  // --- Ganancias (exclusivo Premium) ---
+  getGanancias(comercioId: number, desde: string, hasta: string): Observable<Ganancias> {
+    return this.http.get<Ganancias>(`${API_BASE}/comercios/${comercioId}/ganancias`, { params: { desde, hasta } });
+  }
+
+  // --- WhatsApp (placeholder, exclusivo Premium) ---
+  getWhatsAppConfig(comercioId: number): Observable<WhatsAppConfig> {
+    return this.http.get<WhatsAppConfig>(`${API_BASE}/comercios/${comercioId}/whatsapp-config`);
+  }
+
+  actualizarWhatsAppConfig(comercioId: number, activado: boolean): Observable<WhatsAppConfig> {
+    return this.http.post<WhatsAppConfig>(`${API_BASE}/comercios/${comercioId}/whatsapp-config`, { activado });
   }
 }

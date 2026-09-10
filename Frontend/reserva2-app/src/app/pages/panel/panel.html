@@ -8,11 +8,15 @@
   </header>
 
   <nav class="tabs">
-    <button [class.active]="tabActiva() === 'turnos'" (click)="tabActiva.set('turnos')">Turnos</button>
-    <button [class.active]="tabActiva() === 'historial'" (click)="tabActiva.set('historial')">Historial</button>
-    <button [class.active]="tabActiva() === 'servicios'" (click)="tabActiva.set('servicios')">Servicios</button>
-    <button [class.active]="tabActiva() === 'horarios'" (click)="tabActiva.set('horarios')">Horarios</button>
-    <button [class.active]="tabActiva() === 'profesionales'" (click)="tabActiva.set('profesionales')">Profesionales</button>
+    <button [class.active]="tabActiva() === 'turnos'" (click)="abrirTab('turnos')">Turnos</button>
+    <button [class.active]="tabActiva() === 'historial'" (click)="abrirTab('historial')">Historial</button>
+    <button [class.active]="tabActiva() === 'servicios'" (click)="abrirTab('servicios')">Servicios</button>
+    <button [class.active]="tabActiva() === 'horarios'" (click)="abrirTab('horarios')">Horarios</button>
+    <button [class.active]="tabActiva() === 'profesionales'" (click)="abrirTab('profesionales')">Profesionales</button>
+    @if (esPremium()) {
+      <button [class.active]="tabActiva() === 'ganancias'" (click)="abrirTab('ganancias')">Ganancias</button>
+      <button [class.active]="tabActiva() === 'whatsapp'" (click)="abrirTab('whatsapp')">WhatsApp</button>
+    }
   </nav>
 
   <main class="panel-main">
@@ -130,6 +134,90 @@
           </table>
         }
       </div>
+    }
+
+    @if (tabActiva() === 'ganancias') {
+      @if (!esPremium()) {
+        <div class="panel-card upsell-premium">
+          <h2>Panel de ganancias</h2>
+          <p class="sub-info">Esto es parte del plan Premium. Actualizá tu plan para ver los ingresos por profesional y por período.</p>
+        </div>
+      } @else {
+        <div class="panel-card">
+          <div class="historial-header">
+            <h2>Ganancias</h2>
+            <div class="rango-fechas">
+              <input type="date" [(ngModel)]="gananciasDesde">
+              <span>a</span>
+              <input type="date" [(ngModel)]="gananciasHasta">
+              <button class="mini" (click)="cargarGanancias()">Aplicar</button>
+            </div>
+          </div>
+
+          @if (errorGanancias()) { <div class="error-msg">{{ errorGanancias() }}</div> }
+
+          @if (cargandoGanancias()) {
+            <p class="empty">Cargando...</p>
+          } @else if (ganancias(); as g) {
+            <div class="metricas metricas-ganancias">
+              <div class="metrica-card">
+                <div class="valor">{{ g.cantidadTotal }}</div>
+                <div class="etiqueta">Turnos confirmados</div>
+              </div>
+              <div class="metrica-card">
+                <div class="valor ok">{{ g.ingresosTotal | currency:'ARS':'$' }}</div>
+                <div class="etiqueta">Ingresos totales</div>
+              </div>
+            </div>
+
+            @if (g.porProfesional.length === 0) {
+              <p class="empty">No hay turnos confirmados en ese rango.</p>
+            } @else {
+              <table class="tabla">
+                <thead>
+                  <tr><th>Profesional</th><th>Turnos</th><th>Ingresos</th></tr>
+                </thead>
+                <tbody>
+                  @for (p of g.porProfesional; track p.profesionalId) {
+                    <tr>
+                      <td>{{ p.nombreProfesional }}</td>
+                      <td>{{ p.cantidadTurnos }}</td>
+                      <td>{{ p.ingresos | currency:'ARS':'$' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          }
+        </div>
+      }
+    }
+
+    @if (tabActiva() === 'whatsapp') {
+      @if (!esPremium()) {
+        <div class="panel-card upsell-premium">
+          <h2>Bot de WhatsApp</h2>
+          <p class="sub-info">Esto es parte del plan Premium. Actualizá tu plan para activar los recordatorios y confirmaciones automáticas por WhatsApp.</p>
+        </div>
+      } @else {
+        <div class="panel-card">
+          <h2>Bot de WhatsApp</h2>
+          <p class="sub-info">La integración completa con WhatsApp está en camino. Por ahora podés activar o desactivar el bot; cuando esté conectado, va a mandar recordatorios y confirmaciones automáticas a tus clientes.</p>
+
+          @if (errorWhatsApp()) { <div class="error-msg">{{ errorWhatsApp() }}</div> }
+
+          @if (whatsappConfig(); as w) {
+            <div class="whatsapp-estado">
+              <span class="badge" [class.badge-ok]="w.activado" [class.badge-danger]="!w.activado">{{ w.activado ? 'Activado' : 'Desactivado' }}</span>
+              <button class="btn-naranja" [disabled]="cargandoWhatsApp()" (click)="toggleWhatsApp()">
+                {{ w.activado ? 'Desactivar' : 'Activar' }}
+              </button>
+            </div>
+          } @else if (cargandoWhatsApp()) {
+            <p class="empty">Cargando...</p>
+          }
+        </div>
+      }
     }
 
     @if (tabActiva() === 'servicios') {

@@ -263,7 +263,7 @@ app.MapPost("/api/auth/register", async (AppDbContext context, RegistroRequest r
     await context.SaveChangesAsync();
 
     return Results.Created($"/api/comercios/{comercio.Id}",
-        new LoginResponse(comercio.Id, comercio.Nombre, comercio.AliasUrl, GenerarToken("AdminCliente", comercio.Id)));
+        new LoginResponse(comercio.Id, comercio.Nombre, comercio.AliasUrl, GenerarToken("AdminCliente", comercio.Id), comercio.PlanActual));
 }).RequireRateLimiting("login");
 
 app.MapPost("/api/auth/login", async (AppDbContext context, LoginRequest req) =>
@@ -272,7 +272,7 @@ app.MapPost("/api/auth/login", async (AppDbContext context, LoginRequest req) =>
     if (comercio is null || !VerifyPassword(req.Password, comercio.PasswordHash))
         return Results.Unauthorized();
 
-    return Results.Ok(new LoginResponse(comercio.Id, comercio.Nombre, comercio.AliasUrl, GenerarToken("AdminCliente", comercio.Id)));
+    return Results.Ok(new LoginResponse(comercio.Id, comercio.Nombre, comercio.AliasUrl, GenerarToken("AdminCliente", comercio.Id), comercio.PlanActual));
 }).RequireRateLimiting("login");
 
 app.MapPost("/api/auth/forgot-password", async (AppDbContext context, IConfiguration config, ILogger<Program> logger, ForgotPasswordRequest req) =>
@@ -341,7 +341,7 @@ app.MapGet("/api/comercios", async (AppDbContext context) =>
 {
     var comercios = await context.Comercios
         .Select(c => new ComercioDto(c.Id, c.Nombre, c.AliasUrl, c.TipoPlantilla, c.TelefonoNotificaciones,
-            c.DatosBancarios, c.Email, c.Activo, c.PlanActual, c.FechaProximoPago))
+            c.DatosBancarios, c.Email, c.Activo, c.PlanActual, c.FechaProximoPago, c.MontoMensualAcordado, c.CicloFacturacion))
         .ToListAsync();
     return Results.Ok(comercios);
 }).RequireAuthorization("SuperAdmin");
@@ -351,7 +351,7 @@ app.MapGet("/api/comercios/{id:int}", async (AppDbContext context, int id) =>
     var comercio = await context.Comercios
         .Where(c => c.Id == id)
         .Select(c => new ComercioDto(c.Id, c.Nombre, c.AliasUrl, c.TipoPlantilla, c.TelefonoNotificaciones,
-            c.DatosBancarios, c.Email, c.Activo, c.PlanActual, c.FechaProximoPago))
+            c.DatosBancarios, c.Email, c.Activo, c.PlanActual, c.FechaProximoPago, c.MontoMensualAcordado, c.CicloFacturacion))
         .FirstOrDefaultAsync();
     return comercio is null ? Results.NotFound() : Results.Ok(comercio);
 }).RequireAuthorization("SuperAdmin");
@@ -365,7 +365,7 @@ app.MapPatch("/api/comercios/{id:int}/estado", async (AppDbContext context, int 
     await context.SaveChangesAsync();
 
     return Results.Ok(new ComercioDto(comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla,
-        comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.Email, comercio.Activo, comercio.PlanActual, comercio.FechaProximoPago));
+        comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.Email, comercio.Activo, comercio.PlanActual, comercio.FechaProximoPago, comercio.MontoMensualAcordado, comercio.CicloFacturacion));
 }).RequireAuthorization("SuperAdmin");
 
 app.MapPatch("/api/comercios/{id:int}/plan", async (AppDbContext context, int id, ActualizarPlanRequest req) =>
@@ -380,7 +380,34 @@ app.MapPatch("/api/comercios/{id:int}/plan", async (AppDbContext context, int id
     await context.SaveChangesAsync();
 
     return Results.Ok(new ComercioDto(comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla,
-        comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.Email, comercio.Activo, comercio.PlanActual, comercio.FechaProximoPago));
+        comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.Email, comercio.Activo, comercio.PlanActual, comercio.FechaProximoPago, comercio.MontoMensualAcordado, comercio.CicloFacturacion));
+}).RequireAuthorization("SuperAdmin");
+
+app.MapPatch("/api/comercios/{id:int}/monto-acordado", async (AppDbContext context, int id, ActualizarMontoAcordadoRequest req) =>
+{
+    var comercio = await context.Comercios.FindAsync(id);
+    if (comercio is null) return Results.NotFound();
+
+    comercio.MontoMensualAcordado = req.MontoMensualAcordado;
+    await context.SaveChangesAsync();
+
+    return Results.Ok(new ComercioDto(comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla,
+        comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.Email, comercio.Activo, comercio.PlanActual, comercio.FechaProximoPago, comercio.MontoMensualAcordado, comercio.CicloFacturacion));
+}).RequireAuthorization("SuperAdmin");
+
+app.MapPatch("/api/comercios/{id:int}/ciclo-facturacion", async (AppDbContext context, int id, ActualizarCicloFacturacionRequest req) =>
+{
+    if (req.CicloFacturacion != "Mensual" && req.CicloFacturacion != "Anual")
+        return Results.BadRequest(new { mensaje = "El ciclo de facturación tiene que ser Mensual o Anual." });
+
+    var comercio = await context.Comercios.FindAsync(id);
+    if (comercio is null) return Results.NotFound();
+
+    comercio.CicloFacturacion = req.CicloFacturacion;
+    await context.SaveChangesAsync();
+
+    return Results.Ok(new ComercioDto(comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla,
+        comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.Email, comercio.Activo, comercio.PlanActual, comercio.FechaProximoPago, comercio.MontoMensualAcordado, comercio.CicloFacturacion));
 }).RequireAuthorization("SuperAdmin");
 
 app.MapGet("/api/admin/metricas", async (AppDbContext context) =>
@@ -753,6 +780,91 @@ app.MapGet("/api/comercios/{comercioId:int}/historial", async (AppDbContext cont
     return Results.Ok(new HistorialDto(items, totalHoy, totalSemana, totalMes));
 }).RequireAuthorization("AdminCliente");
 
+// ==========================================
+// GANANCIAS (exclusivo plan Premium)
+// ==========================================
+app.MapGet("/api/comercios/{comercioId:int}/ganancias", async (AppDbContext context, int comercioId, DateOnly? desde, DateOnly? hasta, ClaimsPrincipal user) =>
+{
+    if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
+
+    var comercio = await context.Comercios.FindAsync(comercioId);
+    if (comercio is null) return Results.NotFound();
+
+    if (comercio.PlanActual != "Premium")
+        return Results.Json(new { mensaje = "El panel de ganancias es exclusivo del plan Premium." }, statusCode: StatusCodes.Status403Forbidden);
+
+    var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
+    var fechaDesde = desde ?? new DateOnly(hoy.Year, hoy.Month, 1);
+    var fechaHasta = hasta ?? hoy;
+
+    var inicio = fechaDesde.ToDateTime(TimeOnly.MinValue);
+    var fin = fechaHasta.ToDateTime(TimeOnly.MaxValue);
+
+    var turnosDelPeriodo = await context.Turnos
+        .Where(t => t.ComercioId == comercioId && t.EstadoReserva == 2 && t.FechaHoraInicio >= inicio && t.FechaHoraInicio <= fin)
+        .ToListAsync();
+
+    var nombresPorId = await context.Profesionales
+        .Where(p => p.ComercioId == comercioId)
+        .ToDictionaryAsync(p => p.Id, p => p.Nombre);
+
+    var porProfesional = turnosDelPeriodo
+        .GroupBy(t => t.ProfesionalId)
+        .Select(g => new GananciaPorProfesionalDto(
+            g.Key,
+            g.Key is not null && nombresPorId.TryGetValue(g.Key.Value, out var nombre) ? nombre : "Sin profesional asignado",
+            g.Count(),
+            g.Sum(t => t.MontoCobrado ?? 0)))
+        .OrderByDescending(x => x.Ingresos)
+        .ToList();
+
+    return Results.Ok(new GananciasDto(porProfesional, turnosDelPeriodo.Count, turnosDelPeriodo.Sum(t => t.MontoCobrado ?? 0)));
+}).RequireAuthorization("AdminCliente");
+
+// ==========================================
+// WHATSAPP (placeholder — exclusivo plan Premium)
+// Todavía no conecta a la Cloud API real de Meta: solo guarda si el comercio
+// activó o no el bot. La integración real se hace aparte con las credenciales.
+// ==========================================
+app.MapGet("/api/comercios/{comercioId:int}/whatsapp-config", async (AppDbContext context, int comercioId, ClaimsPrincipal user) =>
+{
+    if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
+
+    var comercio = await context.Comercios.FindAsync(comercioId);
+    if (comercio is null) return Results.NotFound();
+
+    if (comercio.PlanActual != "Premium")
+        return Results.Json(new { mensaje = "El bot de WhatsApp es exclusivo del plan Premium." }, statusCode: StatusCodes.Status403Forbidden);
+
+    var config = await context.WhatsAppConfigs.FirstOrDefaultAsync(w => w.ComercioId == comercioId);
+    return Results.Ok(new WhatsAppConfigDto(config?.Activado ?? false));
+}).RequireAuthorization("AdminCliente");
+
+app.MapPost("/api/comercios/{comercioId:int}/whatsapp-config", async (AppDbContext context, int comercioId, WhatsAppConfigDto req, ClaimsPrincipal user) =>
+{
+    if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
+
+    var comercio = await context.Comercios.FindAsync(comercioId);
+    if (comercio is null) return Results.NotFound();
+
+    if (comercio.PlanActual != "Premium")
+        return Results.Json(new { mensaje = "El bot de WhatsApp es exclusivo del plan Premium." }, statusCode: StatusCodes.Status403Forbidden);
+
+    var config = await context.WhatsAppConfigs.FirstOrDefaultAsync(w => w.ComercioId == comercioId);
+    if (config is null)
+    {
+        config = new WhatsAppConfig { ComercioId = comercioId, Activado = req.Activado };
+        context.WhatsAppConfigs.Add(config);
+    }
+    else
+    {
+        config.Activado = req.Activado;
+    }
+    await context.SaveChangesAsync();
+
+    return Results.Ok(new WhatsAppConfigDto(config.Activado));
+}).RequireAuthorization("AdminCliente");
+
 app.MapGet("/api/comercios/{comercioId:int}/turnos", async (AppDbContext context, int comercioId, bool incluirVencidos, ClaimsPrincipal user) =>
 {
     if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
@@ -806,15 +918,17 @@ app.Run();
 // ==========================================
 record ComercioPublicoDto(int Id, string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones);
 record ComercioDto(int Id, string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones,
-    string DatosBancarios, string Email, bool Activo, string PlanActual, DateTime? FechaProximoPago);
+    string DatosBancarios, string Email, bool Activo, string PlanActual, DateTime? FechaProximoPago, decimal? MontoMensualAcordado, string CicloFacturacion);
 record ActualizarEstadoRequest(bool Activo);
 record ActualizarPlanRequest(string PlanActual);
+record ActualizarMontoAcordadoRequest(decimal? MontoMensualAcordado);
+record ActualizarCicloFacturacionRequest(string CicloFacturacion);
 record MetricasDto(int TotalComercios, int ComerciosActivos, int ComerciosInactivos, int TurnosDelMes);
 record RegistroRequest(string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string DatosBancarios, string Email, string Password);
 record LoginRequest(string Email, string Password);
 record ForgotPasswordRequest(string Email);
 record ResetPasswordRequest(string Token, string NuevaPassword);
-record LoginResponse(int ComercioId, string Nombre, string AliasUrl, string Token);
+record LoginResponse(int ComercioId, string Nombre, string AliasUrl, string Token, string PlanActual);
 record SuperAdminLoginRequest(string Email, string Password);
 record SuperAdminLoginResponse(string Token);
 record ProfesionalRequest(string Nombre);
@@ -824,3 +938,6 @@ record CrearTurnoRequest(int ComercioId, int ServicioId, DateTime FechaHoraInici
 record AdminCrearTurnoRequest(int ServicioId, DateTime FechaHoraInicio, string ClienteNombre, string? ClienteWhatsApp, string? ClienteEmail, int? ProfesionalId = null);
 record HistorialItemDto(int Id, DateTime FechaHoraInicio, string ClienteNombre, string ServicioNombre, decimal Monto);
 record HistorialDto(List<HistorialItemDto> Items, decimal TotalHoy, decimal TotalSemana, decimal TotalMes);
+record GananciaPorProfesionalDto(int? ProfesionalId, string NombreProfesional, int CantidadTurnos, decimal Ingresos);
+record GananciasDto(List<GananciaPorProfesionalDto> PorProfesional, int CantidadTotal, decimal IngresosTotal);
+record WhatsAppConfigDto(bool Activado);

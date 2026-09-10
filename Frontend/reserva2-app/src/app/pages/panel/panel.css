@@ -109,6 +109,27 @@
 
 .form-inline-turno-manual { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 
+.rango-fechas { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rango-fechas input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(232, 236, 246, 0.16);
+  background: #10172B;
+  color: #E8ECF6;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+.rango-fechas input:focus { outline: 2px solid #FB923C; outline-offset: 1px; }
+.rango-fechas span { color: #A6AFC6; font-size: 0.85rem; }
+
+.metricas-ganancias { grid-template-columns: repeat(2, 1fr); margin-bottom: 20px; }
+
+.upsell-premium { text-align: center; padding: 48px 28px; }
+.upsell-premium h2 { margin-bottom: 10px; }
+.upsell-premium .sub-info { margin: 0; font-size: 0.95rem; }
+
+.whatsapp-estado { display: flex; align-items: center; gap: 14px; margin-top: 20px; }
+
 .panel-card {
   background: #131A2E;
   border: 1px solid rgba(232, 236, 246, 0.09);

@@ -87,7 +87,14 @@
     <h2>Elegí el plan perfecto para tu negocio</h2>
     <p>Sin comisiones por reserva. Cambiá de plan o cancelá cuando quieras, sin letra chica.</p>
   </div>
-  
+
+  <div class="billing-toggle" role="group" aria-label="Ciclo de facturación">
+    <button type="button" class="billing-opcion" [class.active]="!facturacionAnual" (click)="facturacionAnual = false">Mensual</button>
+    <button type="button" class="billing-opcion" [class.active]="facturacionAnual" (click)="facturacionAnual = true">
+      Anual <span class="billing-badge">Ahorrá 25%</span>
+    </button>
+  </div>
+
   <div class="pricing-cards">
     <div class="card basic-card">
       <h3>Gratuito</h3>
@@ -105,12 +112,39 @@
     <div class="card pro-card">
       <div class="badge-recomendado">Más elegido</div>
       <h3 class="pro-text">Básico</h3>
-      <p class="card-desc pro-text-muted">Para negocios con más de un profesional.</p>
-      <div class="price pro-text"><span>$15.000</span>/mes</div>
+      <p class="card-desc pro-text-muted">Turnos ilimitados, sin los topes del plan Gratuito.</p>
+
+      <div class="price-multi pro-text">
+        @if (!facturacionAnual) {
+          <div class="price-linea">
+            <span class="price-monto">$7.000</span><span class="price-periodo">/mes</span>
+            <span class="price-detalle">con 1 solo profesional</span>
+          </div>
+          <div class="price-linea">
+            <span class="price-monto">$4.800</span><span class="price-periodo">/mes</span>
+            <span class="price-detalle">por profesional, si tenés más de uno</span>
+          </div>
+          <div class="price-anual">
+            <span class="price-anual-badge">-25%</span> pagando el año completo: desde <strong>$43.200</strong>/año por profesional
+          </div>
+        } @else {
+          <div class="price-linea">
+            <span class="price-monto">$63.000</span><span class="price-periodo">/año</span>
+            <span class="price-detalle">con 1 solo profesional</span>
+            <span class="price-nota">equivale a $5.250/mes · ahorrás $21.000/año</span>
+          </div>
+          <div class="price-linea">
+            <span class="price-monto">$43.200</span><span class="price-periodo">/año</span>
+            <span class="price-detalle">por profesional, si tenés más de uno</span>
+            <span class="price-nota">equivale a $3.600/mes · ahorrás $14.400/año</span>
+          </div>
+        }
+      </div>
+
       <ul class="features pro-text">
-        <li><span class="check-orange"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Hasta 2 profesionales</li>
         <li><span class="check-orange"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Turnos ilimitados</li>
-        <li><span class="check-orange"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Agenda propia por profesional</li>
+        <li><span class="check-orange"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Hasta 2 profesionales, agenda propia por cada uno</li>
+        <li><span class="check-orange"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Avisos por email</li>
         <li><span class="check-orange"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> 0% de comisión por cobro</li>
       </ul>
       <button class="btn-naranja btn-full" (click)="irAlPanel()">Probar 14 días gratis</button>
@@ -119,11 +153,38 @@
     <div class="card business-card">
       <h3>Premium</h3>
       <p class="card-desc">Para negocios que quieren automatizar todo.</p>
-      <div class="price"><span>$25.000</span>/mes</div>
+
+      <div class="price-multi">
+        @if (!facturacionAnual) {
+          <div class="price-linea">
+            <span class="price-monto">$10.000</span><span class="price-periodo">/mes</span>
+            <span class="price-detalle">con 1 solo profesional</span>
+          </div>
+          <div class="price-linea">
+            <span class="price-monto">$8.000</span><span class="price-periodo">/mes</span>
+            <span class="price-detalle">por profesional, si tenés más de uno</span>
+          </div>
+          <div class="price-anual">
+            <span class="price-anual-badge">-25%</span> pagando el año completo: desde <strong>$72.000</strong>/año por profesional
+          </div>
+        } @else {
+          <div class="price-linea">
+            <span class="price-monto">$90.000</span><span class="price-periodo">/año</span>
+            <span class="price-detalle">con 1 solo profesional</span>
+            <span class="price-nota">equivale a $7.500/mes · ahorrás $30.000/año</span>
+          </div>
+          <div class="price-linea">
+            <span class="price-monto">$72.000</span><span class="price-periodo">/año</span>
+            <span class="price-detalle">por profesional, si tenés más de uno</span>
+            <span class="price-nota">equivale a $6.000/mes · ahorrás $24.000/año</span>
+          </div>
+        }
+      </div>
+
       <ul class="features">
         <li><span class="check"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Todo lo del plan Básico</li>
-        <li><span class="check"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Profesionales ilimitados</li>
-        <li><span class="check"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Recordatorios por WhatsApp</li>
+        <li><span class="check"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Bot de recordatorios y confirmación por WhatsApp</li>
+        <li><span class="check"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Panel de ganancias: ingresos por profesional y por período</li>
         <li><span class="check"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> 0% de comisión por cobro</li>
       </ul>
       <button class="btn-secundario-outline" (click)="irAlPanel()">Contactar ventas</button>

@@ -23,5 +23,14 @@ namespace Reserva2.Api.Models
         // "Gratuito" | "Basico" | "Premium"
         public string PlanActual { get; set; } = "Gratuito";
         public DateTime? FechaProximoPago { get; set; }
+
+        // Monto mensual que el Super Admin acordó puntualmente con este comercio (Básico y
+        // Premium se cobran distinto según cantidad de profesionales o pago anual con
+        // descuento, así que no hay un precio único por plan: lo carga el Super Admin a mano).
+        public decimal? MontoMensualAcordado { get; set; }
+
+        // "Mensual" | "Anual". Solo registro informativo para que el Super Admin sepa cómo
+        // cobrarle a cada comercio; no dispara ninguna renovación ni cobro automático todavía.
+        public string CicloFacturacion { get; set; } = "Mensual";
     }
 }

@@ -18,6 +18,7 @@ namespace Reserva2.Api.Data
         public DbSet<Horario> Horarios { get; set; }
         public DbSet<Profesional> Profesionales { get; set; }
         public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
+        public DbSet<WhatsAppConfig> WhatsAppConfigs { get; set; }
 
         // Solo se usa en tiempo de diseño (ej. `dotnet ef migrations add`), cuando nadie
         // pasó un DbContextOptions ya configurado desde Program.cs. Lee la misma
@@ -48,13 +49,16 @@ namespace Reserva2.Api.Data
             modelBuilder.Entity<Servicio>().Property(s => s.Precio).HasPrecision(18, 2);
             modelBuilder.Entity<Servicio>().Property(s => s.MontoSeña).HasPrecision(18, 2);
             modelBuilder.Entity<Turno>().Property(t => t.MontoCobrado).HasPrecision(18, 2);
+            modelBuilder.Entity<Comercio>().Property(c => c.MontoMensualAcordado).HasPrecision(18, 2);
 
             // Los inicializadores de C# (= true, = "Gratuito") no generan un DEFAULT en SQL;
             // hay que declararlo acá para que las filas existentes no queden en false/"" al migrar.
             modelBuilder.Entity<Comercio>().Property(c => c.Activo).HasDefaultValue(true);
             modelBuilder.Entity<Comercio>().Property(c => c.PlanActual).HasDefaultValue("Gratuito");
+            modelBuilder.Entity<Comercio>().Property(c => c.CicloFacturacion).HasDefaultValue("Mensual");
 
             modelBuilder.Entity<PasswordResetToken>().HasIndex(t => t.Token).IsUnique();
+            modelBuilder.Entity<WhatsAppConfig>().HasIndex(w => w.ComercioId).IsUnique();
         }
     }
 }

@@ -37,7 +37,7 @@
       } @else {
         <table class="tabla">
           <thead>
-            <tr><th>Nombre</th><th>Link</th><th>Plan</th><th>Estado</th><th></th></tr>
+            <tr><th>Nombre</th><th>Link</th><th>Plan</th><th>Ciclo</th><th>Monto mensual acordado</th><th>Estado</th><th></th></tr>
           </thead>
           <tbody>
             @for (c of comercios(); track c.id) {
@@ -50,6 +50,23 @@
                       <option [value]="p">{{ p }}</option>
                     }
                   </select>
+                </td>
+                <td>
+                  <select class="plan-select" [ngModel]="c.cicloFacturacion" (ngModelChange)="cambiarCicloFacturacion(c, $event)">
+                    @for (ci of ciclos; track ci) {
+                      <option [value]="ci">{{ ci }}</option>
+                    }
+                  </select>
+                </td>
+                <td class="monto-acordado">
+                  <span class="monto-prefijo">$</span>
+                  <input type="number" class="monto-input" min="0" [(ngModel)]="c.montoMensualAcordado" placeholder="Sin definir">
+                  <button
+                    class="mini"
+                    [disabled]="actualizandoMontoId() === c.id"
+                    (click)="guardarMontoAcordado(c)">
+                    {{ actualizandoMontoId() === c.id ? '...' : 'Guardar' }}
+                  </button>
                 </td>
                 <td><span class="badge" [class.badge-ok]="c.activo" [class.badge-danger]="!c.activo">{{ c.activo ? 'Activo' : 'Pausado' }}</span></td>
                 <td class="acciones">

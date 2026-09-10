@@ -1,9 +1,9 @@
 import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
-import { Api, Turno, Servicio, Horario, Profesional, LoginResponse, Historial } from '../../core/api';
+import { Api, Turno, Servicio, Horario, Profesional, LoginResponse, Historial, Ganancias, WhatsAppConfig } from '../../core/api';
 import { Session } from '../../core/session';
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -21,7 +21,7 @@ export class Panel {
   meses = MESES;
 
   sesion: LoginResponse;
-  tabActiva = signal<'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'historial'>('turnos');
+  tabActiva = signal<'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'historial' | 'ganancias' | 'whatsapp'>('turnos');
 
   // --- Turnos ---
   turnos = signal<Turno[]>([]);
@@ -40,6 +40,20 @@ export class Panel {
   historial = signal<Historial | null>(null);
   cargandoHistorial = signal(false);
   mesHistorial = signal<{ anio: number; mes: number }>(this.mesActual());
+
+  // --- Ganancias (exclusivo Premium) ---
+  ganancias = signal<Ganancias | null>(null);
+  cargandoGanancias = signal(false);
+  errorGanancias = signal<string | null>(null);
+  gananciasDesde = '';
+  gananciasHasta = '';
+  private gananciasCargadaAlMenosUnaVez = false;
+
+  // --- WhatsApp (placeholder, exclusivo Premium) ---
+  whatsappConfig = signal<WhatsAppConfig | null>(null);
+  cargandoWhatsApp = signal(false);
+  errorWhatsApp = signal<string | null>(null);
+  private whatsAppCargadoAlMenosUnaVez = false;
 
   // --- Servicios ---
   servicios = signal<Servicio[]>([]);
@@ -61,7 +75,7 @@ export class Panel {
   profesionalSeleccionado = signal<Profesional | null>(null);
   horariosDelProfesional = signal<Horario[]>([]);
 
-  constructor(private api: Api, private session: Session, private router: Router) {
+  constructor(private api: Api, private session: Session, private router: Router, private route: ActivatedRoute) {
     // El guard de la ruta ya garantiza que hay sesión antes de llegar acá.
     this.sesion = this.session.obtenerUsuario()!;
 
@@ -69,12 +83,31 @@ export class Panel {
     this.nuevoTurnoFecha = this.formatearFecha(ahora);
     this.nuevoTurnoHora = `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
 
+    const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+    this.gananciasDesde = this.formatearFecha(inicioMes);
+    this.gananciasHasta = this.formatearFecha(ahora);
+
     this.cargarTodo();
+
+    // Permite entrar directo a /panel?tab=ganancias o ?tab=whatsapp (ej. un link guardado);
+    // si el comercio no es Premium, la pestaña igual se abre pero muestra el aviso del plan.
+    const tabPorUrl = this.route.snapshot.queryParamMap.get('tab');
+    if (tabPorUrl === 'ganancias' || tabPorUrl === 'whatsapp') this.abrirTab(tabPorUrl);
+  }
+
+  esPremium(): boolean {
+    return this.sesion.planActual === 'Premium';
   }
 
   cerrarSesion(): void {
     this.session.cerrarSesion();
     this.router.navigateByUrl('/panel/login');
+  }
+
+  abrirTab(tab: 'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'historial' | 'ganancias' | 'whatsapp'): void {
+    this.tabActiva.set(tab);
+    if (tab === 'ganancias' && !this.gananciasCargadaAlMenosUnaVez) this.cargarGanancias();
+    if (tab === 'whatsapp' && !this.whatsAppCargadoAlMenosUnaVez) this.cargarWhatsAppConfig();
   }
 
   private cargarTodo(): void {
@@ -173,6 +206,56 @@ export class Panel {
     const { anio, mes } = this.mesHistorial();
     this.mesHistorial.set(mes === 12 ? { anio: anio + 1, mes: 1 } : { anio, mes: mes + 1 });
     this.cargarHistorial();
+  }
+
+  // ================= GANANCIAS (exclusivo Premium) =================
+  cargarGanancias(): void {
+    if (!this.gananciasDesde || !this.gananciasHasta) return;
+
+    this.gananciasCargadaAlMenosUnaVez = true;
+    this.errorGanancias.set(null);
+    this.cargandoGanancias.set(true);
+    this.api.getGanancias(this.sesion.comercioId, this.gananciasDesde, this.gananciasHasta).subscribe({
+      next: g => {
+        this.ganancias.set(g);
+        this.cargandoGanancias.set(false);
+      },
+      error: err => {
+        this.cargandoGanancias.set(false);
+        this.errorGanancias.set(err.error?.mensaje ?? 'No pudimos cargar el reporte de ganancias.');
+      }
+    });
+  }
+
+  // ================= WHATSAPP (placeholder, exclusivo Premium) =================
+  cargarWhatsAppConfig(): void {
+    this.whatsAppCargadoAlMenosUnaVez = true;
+    this.errorWhatsApp.set(null);
+    this.cargandoWhatsApp.set(true);
+    this.api.getWhatsAppConfig(this.sesion.comercioId).subscribe({
+      next: c => {
+        this.whatsappConfig.set(c);
+        this.cargandoWhatsApp.set(false);
+      },
+      error: err => {
+        this.cargandoWhatsApp.set(false);
+        this.errorWhatsApp.set(err.error?.mensaje ?? 'No pudimos cargar la configuración de WhatsApp.');
+      }
+    });
+  }
+
+  toggleWhatsApp(): void {
+    const actual = this.whatsappConfig();
+    if (!actual) return;
+
+    this.cargandoWhatsApp.set(true);
+    this.api.actualizarWhatsAppConfig(this.sesion.comercioId, !actual.activado).subscribe({
+      next: c => {
+        this.whatsappConfig.set(c);
+        this.cargandoWhatsApp.set(false);
+      },
+      error: () => this.cargandoWhatsApp.set(false)
+    });
   }
 
   // ================= SERVICIOS =================
