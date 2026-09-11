@@ -59,11 +59,12 @@
 
 .metricas {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
 .metrica-card {
+  min-width: 0;
   background: #131A2E;
   border: 1px solid rgba(232, 236, 246, 0.09);
   border-radius: 18px;
@@ -159,6 +160,6 @@
 @media (max-width: 720px) {
   .panel-header { padding: 16px 20px; }
   .panel-main { padding: 24px 16px 60px; }
-  .metricas { grid-template-columns: repeat(2, 1fr); }
+  .metricas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tabla { display: block; overflow-x: auto; }
 }

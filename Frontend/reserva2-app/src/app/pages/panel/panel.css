@@ -54,7 +54,7 @@
   justify-content: space-between;
 }
 .panel-header .brand { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 1.1rem; color: #E8ECF6; }
-.header-actions { display: flex; align-items: center; gap: 18px; }
+.header-actions { display: flex; align-items: center; gap: 12px 18px; flex-wrap: wrap; }
 .header-actions a { color: #A6AFC6; text-decoration: none; font-size: 0.9rem; }
 .header-actions a:hover { color: #FB923C; }
 
@@ -64,6 +64,11 @@
   padding: 16px 32px 0;
   background: #10172B;
   border-bottom: 1px solid rgba(232, 236, 246, 0.09);
+  /* Son 9 pestañas: no siempre entran en una fila, así que este contenedor scrollea
+     horizontalmente por su cuenta en vez de forzar overflow en toda la página. */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 .tabs button {
   background: none;
@@ -76,6 +81,8 @@
   cursor: pointer;
   border-bottom: 2px solid transparent;
   transition: color 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .tabs button.active { color: #FFFFFF; border-bottom-color: #F97316; }
 .tabs button:hover { color: #E8ECF6; }
@@ -84,10 +91,12 @@
 
 .metricas {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 20px;
 }
+.metrica-card { min-width: 0; }
+.metrica-card .valor { overflow-wrap: break-word; }
 .metrica-card {
   background: #131A2E;
   border: 1px solid rgba(232, 236, 246, 0.09);
@@ -122,7 +131,7 @@
 .rango-fechas input:focus { outline: 2px solid #FB923C; outline-offset: 1px; }
 .rango-fechas span { color: #A6AFC6; font-size: 0.85rem; }
 
-.metricas-ganancias { grid-template-columns: repeat(2, 1fr); margin-bottom: 20px; }
+.metricas-ganancias { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 20px; }
 
 .upsell-premium { text-align: center; padding: 48px 28px; }
 .upsell-premium h2 { margin-bottom: 10px; }
@@ -293,8 +302,9 @@
 
 @media (max-width: 720px) {
   .panel-header { padding: 16px 20px; flex-direction: column; gap: 12px; align-items: flex-start; }
-  .tabs { padding: 12px 20px 0; overflow-x: auto; }
+  .tabs { padding: 12px 20px 0; }
   .panel-main { padding: 24px 16px 60px; }
   .tabla { display: block; overflow-x: auto; }
-  .form-inline, .form-inline-servicios { grid-template-columns: 1fr; }
+  .form-inline, .form-inline-servicios { grid-template-columns: minmax(0, 1fr); }
+  .metricas, .metricas-ganancias { grid-template-columns: minmax(0, 1fr); }
 }

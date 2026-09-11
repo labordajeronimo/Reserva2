@@ -27,9 +27,14 @@
   font-family: 'Manrope', system-ui, sans-serif;
 }
 
-body {
+html, body {
   background-color: var(--bg);
   color: var(--text);
+  /* Red de seguridad: ningún elemento individual debería desbordar el ancho de la
+     pantalla, pero si algo se escapa, que quede recortado en vez de generar scroll
+     horizontal en toda la página. */
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 *:focus-visible {
