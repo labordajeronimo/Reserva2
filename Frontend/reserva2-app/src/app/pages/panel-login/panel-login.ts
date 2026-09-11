@@ -5,11 +5,12 @@ import { Router, RouterLink } from '@angular/router';
 
 import { Api } from '../../core/api';
 import { Session } from '../../core/session';
+import { PlanSelector } from '../../shared/plan-selector/plan-selector';
 
 @Component({
   selector: 'app-panel-login',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, PlanSelector],
   templateUrl: './panel-login.html',
   styleUrls: ['./panel-login.css']
 })
@@ -28,6 +29,8 @@ export class PanelLogin {
   regDatosBancarios = '';
   regEmail = '';
   regPassword = '';
+  regPlan = 'Gratuito';
+  regCiclo = 'Mensual';
 
   constructor(private api: Api, private session: Session, private router: Router) {
     if (this.session.estaLogueado()) this.router.navigateByUrl('/panel');
@@ -59,7 +62,9 @@ export class PanelLogin {
       telefonoNotificaciones: this.regTelefono.trim(),
       datosBancarios: this.regDatosBancarios.trim(),
       email: this.regEmail.trim(),
-      password: this.regPassword
+      password: this.regPassword,
+      planActual: this.regPlan,
+      cicloFacturacion: this.regCiclo
     }).subscribe({
       next: resp => {
         this.session.iniciarSesion(resp);

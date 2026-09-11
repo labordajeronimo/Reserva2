@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
-import { Api, ComercioPublico, Servicio, SlotDisponibilidad } from '../../core/api';
+import { Api, ComercioPublico, Servicio, SlotDisponibilidad, urlArchivo } from '../../core/api';
 
 interface DiaGrilla {
   fecha: string; // yyyy-MM-dd, lo que le mandamos a la API
@@ -35,6 +35,8 @@ export class ReservaPublica implements OnInit {
 
   diasDisponibles: DiaGrilla[] = this.generarProximosDias(6);
   diaSeleccionado = signal<DiaGrilla | null>(null);
+  fechaManual = '';
+  fechaMinima = this.formatearFechaISO(new Date());
 
   slots = signal<SlotDisponibilidad[]>([]);
   slotSeleccionado = signal<SlotDisponibilidad | null>(null);
@@ -50,6 +52,8 @@ export class ReservaPublica implements OnInit {
   intentoEnviar = signal(false);
 
   hostActual = typeof window !== 'undefined' ? window.location.host : 'reserva2.app';
+
+  logoUrl = computed(() => urlArchivo(this.comercio()?.logoUrl ?? null));
 
   iniciales = computed(() => {
     const nombre = this.comercio()?.nombre ?? '';
@@ -139,6 +143,27 @@ export class ReservaPublica implements OnInit {
     this.diaSeleccionado.set(dia);
     this.slotSeleccionado.set(null);
     this.buscarDisponibilidad();
+  }
+
+  elegirFechaManual(): void {
+    if (!this.fechaManual) return;
+    this.elegirDia(this.crearDiaGrilla(this.fechaManual));
+  }
+
+  private crearDiaGrilla(fechaIso: string): DiaGrilla {
+    const [yyyy, mm, dd] = fechaIso.split('-').map(Number);
+    const fecha = new Date(yyyy, mm - 1, dd);
+    const diaSemana = fecha.getDay();
+    return {
+      fecha: fechaIso,
+      etiquetaDia: DIAS_CORTOS[diaSemana],
+      numeroDia: dd,
+      etiquetaCompleta: `${DIAS_LARGOS[diaSemana]} ${dd}`
+    };
+  }
+
+  private formatearFechaISO(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
   elegirSlot(slot: SlotDisponibilidad): void {

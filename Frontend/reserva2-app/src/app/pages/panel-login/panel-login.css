@@ -36,6 +36,10 @@
   border-radius: 22px;
   padding: 40px 36px;
   box-shadow: 0 30px 70px rgba(0, 0, 0, 0.5);
+  transition: max-width 0.2s ease;
+}
+.auth-card.auth-card-ancho {
+  max-width: 640px;
 }
 
 .back-link {
@@ -51,6 +55,7 @@
 .auth-card .sub { color: #A6AFC6; font-size: 0.9rem; margin: 0 0 24px; }
 
 .field { margin-bottom: 16px; }
+.field-ayuda { font-size: 0.75rem; color: #7C879E; margin: 6px 0 0; }
 .field label { display: block; font-family: 'Sora', sans-serif; font-size: 0.8rem; font-weight: 600; color: #A6AFC6; margin-bottom: 6px; }
 .field input, .field select {
   width: 100%;

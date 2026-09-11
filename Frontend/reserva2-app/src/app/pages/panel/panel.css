@@ -126,7 +126,43 @@
 
 .upsell-premium { text-align: center; padding: 48px 28px; }
 .upsell-premium h2 { margin-bottom: 10px; }
-.upsell-premium .sub-info { margin: 0; font-size: 0.95rem; }
+.upsell-premium .sub-info { margin: 0 0 20px; font-size: 0.95rem; }
+
+.field { margin-bottom: 16px; }
+.field label { display: block; font-family: 'Sora', sans-serif; font-size: 0.8rem; font-weight: 600; color: #A6AFC6; margin-bottom: 6px; }
+.field input {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: 10px;
+  border: 1px solid rgba(232, 236, 246, 0.16);
+  font-size: 0.9rem;
+  background: #10172B;
+  color: #E8ECF6;
+  font-family: inherit;
+}
+.field input::placeholder { color: #6B748A; }
+.field input:focus { outline: 2px solid #FB923C; outline-offset: 1px; border-color: rgba(249, 115, 22, 0.6); }
+
+.perfil-logo-row { display: flex; align-items: center; gap: 18px; margin-bottom: 24px; }
+.perfil-logo-preview {
+  width: 72px; height: 72px; border-radius: 16px; object-fit: cover;
+  border: 1px solid rgba(232, 236, 246, 0.13); flex-shrink: 0;
+}
+.perfil-logo-vacio {
+  display: flex; align-items: center; justify-content: center;
+  background: #10172B; color: #6B748A; font-size: 0.72rem; text-align: center;
+}
+.perfil-logo-btn { display: inline-block; cursor: pointer; }
+
+.ok-msg {
+  background: rgba(52, 211, 153, 0.14);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  color: #6EE7B7;
+  font-size: 0.85rem;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-top: 14px;
+}
 
 .whatsapp-estado { display: flex; align-items: center; gap: 14px; margin-top: 20px; }
 
@@ -198,6 +234,8 @@
   color: #E8ECF6;
 }
 .lista .detalle { display: block; color: #A6AFC6; font-size: 0.8rem; margin-top: 2px; }
+.lista li.lista-item-editando { display: block; }
+.form-inline-edicion { padding-top: 0; border-top: none; }
 
 .form-inline {
   display: grid;

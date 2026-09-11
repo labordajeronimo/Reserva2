@@ -4,6 +4,13 @@ import { Observable } from 'rxjs';
 
 // Ajustá esto si corrés el backend en otro puerto (ver Properties/launchSettings.json).
 const API_BASE = 'http://localhost:5267/api';
+const API_ROOT = API_BASE.replace(/\/api$/, '');
+
+// Las rutas de archivos (ej. LogoUrl) vienen relativas al backend ("/uploads/logos/1.png"),
+// no al frontend, así que hay que anteponerles el host del backend para poder mostrarlas.
+export function urlArchivo(ruta: string | null): string | null {
+  return ruta ? `${API_ROOT}${ruta}` : null;
+}
 
 export interface ComercioPublico {
   id: number;
@@ -11,6 +18,7 @@ export interface ComercioPublico {
   aliasUrl: string;
   tipoPlantilla: string;
   telefonoNotificaciones: string;
+  logoUrl: string | null;
 }
 
 export interface Servicio {
@@ -89,12 +97,36 @@ export interface WhatsAppConfig {
   activado: boolean;
 }
 
+export interface TurnoPorToken {
+  id: number;
+  nombreComercio: string;
+  nombreServicio: string;
+  fechaHoraInicio: string;
+  estadoReserva: number;
+}
+
 export interface LoginResponse {
   comercioId: number;
   nombre: string;
   aliasUrl: string;
   token: string;
   planActual: string;
+  cicloFacturacion: string;
+  telefonoNotificaciones: string;
+  datosBancarios: string;
+  logoUrl: string | null;
+}
+
+export interface MiPlan {
+  planActual: string;
+  cicloFacturacion: string;
+}
+
+export interface Perfil {
+  nombre: string;
+  telefonoNotificaciones: string;
+  datosBancarios: string;
+  logoUrl: string | null;
 }
 
 export interface RegistroRequest {
@@ -105,6 +137,8 @@ export interface RegistroRequest {
   datosBancarios: string;
   email: string;
   password: string;
+  planActual?: string;
+  cicloFacturacion?: string;
 }
 
 export interface SuperAdminSession {
@@ -148,6 +182,24 @@ export class Api {
 
   superAdminLogin(email: string, password: string): Observable<SuperAdminSession> {
     return this.http.post<SuperAdminSession>(`${API_BASE}/auth/super-admin/login`, { email, password });
+  }
+
+  actualizarMiPlan(comercioId: number, planActual: string, cicloFacturacion: string): Observable<MiPlan> {
+    return this.http.patch<MiPlan>(`${API_BASE}/comercios/${comercioId}/mi-plan`, { planActual, cicloFacturacion });
+  }
+
+  subirLogo(comercioId: number, archivo: File): Observable<{ logoUrl: string }> {
+    const formData = new FormData();
+    formData.append('archivo', archivo);
+    return this.http.post<{ logoUrl: string }>(`${API_BASE}/comercios/${comercioId}/logo`, formData);
+  }
+
+  actualizarPerfil(comercioId: number, datos: { nombre: string; telefonoNotificaciones: string; datosBancarios: string }): Observable<Perfil> {
+    return this.http.patch<Perfil>(`${API_BASE}/comercios/${comercioId}/perfil`, datos);
+  }
+
+  cambiarPassword(comercioId: number, passwordActual: string, passwordNueva: string): Observable<{ mensaje: string }> {
+    return this.http.post<{ mensaje: string }>(`${API_BASE}/comercios/${comercioId}/cambiar-password`, { passwordActual, passwordNueva });
   }
 
   olvidoPassword(email: string): Observable<{ mensaje: string }> {
@@ -197,6 +249,10 @@ export class Api {
     return this.http.post<Servicio>(`${API_BASE}/servicios`, servicio);
   }
 
+  editarServicio(id: number, datos: { nombre: string; duracionMinutos: number; precio: number; montoSeña: number | null }): Observable<Servicio> {
+    return this.http.put<Servicio>(`${API_BASE}/servicios/${id}`, datos);
+  }
+
   eliminarServicio(id: number): Observable<void> {
     return this.http.delete<void>(`${API_BASE}/servicios/${id}`);
   }
@@ -212,6 +268,10 @@ export class Api {
     return this.http.post<Horario>(`${API_BASE}/comercios/${comercioId}/horarios`, horario);
   }
 
+  editarHorario(id: number, horario: { diaSemana: number; horaInicio: string; horaFin: string; profesionalId?: number }): Observable<Horario> {
+    return this.http.put<Horario>(`${API_BASE}/horarios/${id}`, horario);
+  }
+
   eliminarHorario(id: number): Observable<void> {
     return this.http.delete<void>(`${API_BASE}/horarios/${id}`);
   }
@@ -223,6 +283,10 @@ export class Api {
 
   crearProfesional(comercioId: number, nombre: string): Observable<Profesional> {
     return this.http.post<Profesional>(`${API_BASE}/comercios/${comercioId}/profesionales`, { nombre });
+  }
+
+  editarProfesional(id: number, nombre: string): Observable<Profesional> {
+    return this.http.put<Profesional>(`${API_BASE}/profesionales/${id}`, { nombre });
   }
 
   eliminarProfesional(id: number): Observable<void> {
@@ -259,6 +323,14 @@ export class Api {
 
   cancelarTurno(id: number): Observable<Turno> {
     return this.http.patch<Turno>(`${API_BASE}/turnos/${id}/cancelar`, {});
+  }
+
+  getTurnoPorToken(token: string): Observable<TurnoPorToken> {
+    return this.http.get<TurnoPorToken>(`${API_BASE}/turnos/por-token/${token}`);
+  }
+
+  cancelarTurnoPorToken(token: string): Observable<{ mensaje: string }> {
+    return this.http.post<{ mensaje: string }>(`${API_BASE}/turnos/por-token/${token}/cancelar`, {});
   }
 
   crearTurnoManual(comercioId: number, turno: {

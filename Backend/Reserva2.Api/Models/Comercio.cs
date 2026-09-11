@@ -13,6 +13,10 @@ namespace Reserva2.Api.Models
         public string TelefonoNotificaciones { get; set; } = string.Empty;
         public string DatosBancarios { get; set; } = string.Empty;
 
+        // Ruta relativa al logo subido (ej. "/uploads/logos/12.png"). Null si no cargó uno,
+        // en cuyo caso la página pública sigue mostrando las iniciales del negocio.
+        public string? LogoUrl { get; set; }
+
         // Login del dueño del comercio para entrar al panel
         public string Email { get; set; } = string.Empty;
         public string PasswordHash { get; set; } = string.Empty;

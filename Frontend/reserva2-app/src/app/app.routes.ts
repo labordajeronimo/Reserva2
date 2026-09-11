@@ -28,6 +28,10 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/panel-reset-password/panel-reset-password').then(m => m.PanelResetPassword)
   },
   {
+    path: 'cancelar-turno',
+    loadComponent: () => import('./pages/cancelar-turno/cancelar-turno').then(m => m.CancelarTurno)
+  },
+  {
     path: 'panel',
     canActivate: [adminClienteGuard],
     loadComponent: () => import('./pages/panel/panel').then(m => m.Panel)
@@ -45,5 +49,10 @@ export const routes: Routes = [
     // Página pública de cada comercio: reserva2.app/peluqueria-bella
     path: ':alias',
     loadComponent: () => import('./pages/reserva-publica/reserva-publica').then(m => m.ReservaPublica)
+  },
+  {
+    // Cualquier ruta de más de un segmento que no matcheó nada arriba (ej. /foo/bar).
+    path: '**',
+    loadComponent: () => import('./pages/not-found/not-found').then(m => m.NotFound)
   }
 ];

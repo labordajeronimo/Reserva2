@@ -3,8 +3,9 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
-import { Api, Turno, Servicio, Horario, Profesional, LoginResponse, Historial, Ganancias, WhatsAppConfig } from '../../core/api';
+import { Api, Turno, Servicio, Horario, Profesional, LoginResponse, Historial, Ganancias, WhatsAppConfig, urlArchivo } from '../../core/api';
 import { Session } from '../../core/session';
+import { PlanSelector } from '../../shared/plan-selector/plan-selector';
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -12,7 +13,7 @@ const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', '
 @Component({
   selector: 'app-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, PlanSelector],
   templateUrl: './panel.html',
   styleUrls: ['./panel.css']
 })
@@ -21,10 +22,35 @@ export class Panel {
   meses = MESES;
 
   sesion: LoginResponse;
-  tabActiva = signal<'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'historial' | 'ganancias' | 'whatsapp'>('turnos');
+  tabActiva = signal<'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'historial' | 'ganancias' | 'whatsapp' | 'plan' | 'perfil'>('turnos');
+
+  // --- Perfil del comercio ---
+  perfilNombre = '';
+  perfilTelefono = '';
+  perfilDatosBancarios = '';
+  guardandoPerfil = signal(false);
+  errorPerfil = signal<string | null>(null);
+  perfilGuardadoOk = signal(false);
+  subiendoLogo = signal(false);
+  errorLogo = signal<string | null>(null);
+
+  passwordActual = '';
+  passwordNueva = '';
+  passwordNuevaRepetida = '';
+  cambiandoPassword = signal(false);
+  errorPassword = signal<string | null>(null);
+  passwordCambiadaOk = signal(false);
+
+  // --- Mi Plan ---
+  planSeleccionado = '';
+  cicloSeleccionado = '';
+  guardandoPlan = signal(false);
+  errorPlan = signal<string | null>(null);
+  planGuardadoOk = signal(false);
 
   // --- Turnos ---
   turnos = signal<Turno[]>([]);
+  linkCopiado = signal(false);
 
   // --- Carga manual de turno presencial ---
   nuevoTurnoServicioId = 0;
@@ -58,9 +84,17 @@ export class Panel {
   // --- Servicios ---
   servicios = signal<Servicio[]>([]);
   nuevoServicioNombre = '';
-  nuevoServicioDuracion = 30;
-  nuevoServicioPrecio = 0;
-  nuevoServicioSenia = 0;
+  nuevoServicioDuracion: number | null = null;
+  nuevoServicioPrecio: number | null = null;
+  nuevoServicioSenia: number | null = null;
+  errorServicio = signal<string | null>(null);
+
+  servicioEditandoId = signal<number | null>(null);
+  editServicioNombre = '';
+  editServicioDuracion: number | null = null;
+  editServicioPrecio: number | null = null;
+  editServicioSenia: number | null = null;
+  errorEditServicio = signal<string | null>(null);
 
   // --- Horarios ---
   horarios = signal<Horario[]>([]);
@@ -68,12 +102,21 @@ export class Panel {
   nuevoHorarioInicio = '10:00';
   nuevoHorarioFin = '19:00';
 
+  horarioEditandoId = signal<number | null>(null);
+  editHorarioDia = 1;
+  editHorarioInicio = '10:00';
+  editHorarioFin = '19:00';
+  errorEditHorario = signal<string | null>(null);
+
   // --- Profesionales ---
   profesionales = signal<Profesional[]>([]);
   nuevoProfesionalNombre = '';
   errorProfesional = signal<string | null>(null);
   profesionalSeleccionado = signal<Profesional | null>(null);
   horariosDelProfesional = signal<Horario[]>([]);
+  profesionalEditandoId = signal<number | null>(null);
+  editProfesionalNombre = '';
+  errorEditProfesional = signal<string | null>(null);
 
   constructor(private api: Api, private session: Session, private router: Router, private route: ActivatedRoute) {
     // El guard de la ruta ya garantiza que hay sesión antes de llegar acá.
@@ -87,16 +130,31 @@ export class Panel {
     this.gananciasDesde = this.formatearFecha(inicioMes);
     this.gananciasHasta = this.formatearFecha(ahora);
 
+    this.planSeleccionado = this.sesion.planActual;
+    this.cicloSeleccionado = this.sesion.cicloFacturacion;
+
+    this.perfilNombre = this.sesion.nombre;
+    this.perfilTelefono = this.sesion.telefonoNotificaciones;
+    this.perfilDatosBancarios = this.sesion.datosBancarios;
+
     this.cargarTodo();
 
-    // Permite entrar directo a /panel?tab=ganancias o ?tab=whatsapp (ej. un link guardado);
-    // si el comercio no es Premium, la pestaña igual se abre pero muestra el aviso del plan.
+    // Permite entrar directo a /panel?tab=ganancias, ?tab=whatsapp o ?tab=plan (ej. un link
+    // guardado); si el comercio no es Premium, la pestaña igual se abre pero muestra el aviso.
     const tabPorUrl = this.route.snapshot.queryParamMap.get('tab');
-    if (tabPorUrl === 'ganancias' || tabPorUrl === 'whatsapp') this.abrirTab(tabPorUrl);
+    if (tabPorUrl === 'ganancias' || tabPorUrl === 'whatsapp' || tabPorUrl === 'plan') this.abrirTab(tabPorUrl);
   }
 
   esPremium(): boolean {
     return this.sesion.planActual === 'Premium';
+  }
+
+  copiarLink(): void {
+    const url = `${window.location.host}/${this.sesion.aliasUrl}`;
+    navigator.clipboard?.writeText(url).then(() => {
+      this.linkCopiado.set(true);
+      setTimeout(() => this.linkCopiado.set(false), 2000);
+    });
   }
 
   cerrarSesion(): void {
@@ -104,10 +162,116 @@ export class Panel {
     this.router.navigateByUrl('/panel/login');
   }
 
-  abrirTab(tab: 'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'historial' | 'ganancias' | 'whatsapp'): void {
+  abrirTab(tab: 'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'historial' | 'ganancias' | 'whatsapp' | 'plan' | 'perfil'): void {
     this.tabActiva.set(tab);
     if (tab === 'ganancias' && !this.gananciasCargadaAlMenosUnaVez) this.cargarGanancias();
     if (tab === 'whatsapp' && !this.whatsAppCargadoAlMenosUnaVez) this.cargarWhatsAppConfig();
+  }
+
+  // ================= MI PLAN =================
+  guardarPlan(): void {
+    this.errorPlan.set(null);
+    this.planGuardadoOk.set(false);
+    this.guardandoPlan.set(true);
+    this.api.actualizarMiPlan(this.sesion.comercioId, this.planSeleccionado, this.cicloSeleccionado).subscribe({
+      next: r => {
+        this.guardandoPlan.set(false);
+        this.planGuardadoOk.set(true);
+        this.sesion = { ...this.sesion, planActual: r.planActual, cicloFacturacion: r.cicloFacturacion };
+        this.session.actualizarPlanEnSesion(r.planActual, r.cicloFacturacion);
+      },
+      error: err => {
+        this.guardandoPlan.set(false);
+        this.errorPlan.set(err.error?.mensaje ?? 'No pudimos actualizar tu plan.');
+      }
+    });
+  }
+
+  // ================= PERFIL DEL COMERCIO =================
+  logoUrlCompleta(): string | null {
+    return urlArchivo(this.sesion.logoUrl);
+  }
+
+  guardarPerfil(): void {
+    this.errorPerfil.set(null);
+    this.perfilGuardadoOk.set(false);
+
+    if (!this.perfilNombre.trim()) {
+      this.errorPerfil.set('El nombre del negocio no puede estar vacío.');
+      return;
+    }
+
+    this.guardandoPerfil.set(true);
+    this.api.actualizarPerfil(this.sesion.comercioId, {
+      nombre: this.perfilNombre.trim(),
+      telefonoNotificaciones: this.perfilTelefono.trim(),
+      datosBancarios: this.perfilDatosBancarios.trim()
+    }).subscribe({
+      next: p => {
+        this.guardandoPerfil.set(false);
+        this.perfilGuardadoOk.set(true);
+        this.sesion = { ...this.sesion, nombre: p.nombre, telefonoNotificaciones: p.telefonoNotificaciones, datosBancarios: p.datosBancarios };
+        this.session.actualizarPerfilEnSesion(p.nombre, p.telefonoNotificaciones, p.datosBancarios, this.sesion.logoUrl);
+      },
+      error: err => {
+        this.guardandoPerfil.set(false);
+        this.errorPerfil.set(err.error?.mensaje ?? 'No pudimos actualizar tu perfil.');
+      }
+    });
+  }
+
+  cambiarPassword(): void {
+    this.errorPassword.set(null);
+    this.passwordCambiadaOk.set(false);
+
+    if (!this.passwordActual || !this.passwordNueva) {
+      this.errorPassword.set('Completá tu contraseña actual y la nueva.');
+      return;
+    }
+    if (this.passwordNueva.length < 6) {
+      this.errorPassword.set('La contraseña nueva tiene que tener al menos 6 caracteres.');
+      return;
+    }
+    if (this.passwordNueva !== this.passwordNuevaRepetida) {
+      this.errorPassword.set('Las contraseñas nuevas no coinciden.');
+      return;
+    }
+
+    this.cambiandoPassword.set(true);
+    this.api.cambiarPassword(this.sesion.comercioId, this.passwordActual, this.passwordNueva).subscribe({
+      next: () => {
+        this.cambiandoPassword.set(false);
+        this.passwordCambiadaOk.set(true);
+        this.passwordActual = '';
+        this.passwordNueva = '';
+        this.passwordNuevaRepetida = '';
+      },
+      error: err => {
+        this.cambiandoPassword.set(false);
+        this.errorPassword.set(err.error?.mensaje ?? 'No pudimos cambiar tu contraseña.');
+      }
+    });
+  }
+
+  subirLogo(evento: Event): void {
+    const input = evento.target as HTMLInputElement;
+    const archivo = input.files?.[0];
+    if (!archivo) return;
+
+    this.errorLogo.set(null);
+    this.subiendoLogo.set(true);
+    this.api.subirLogo(this.sesion.comercioId, archivo).subscribe({
+      next: r => {
+        this.subiendoLogo.set(false);
+        this.sesion = { ...this.sesion, logoUrl: r.logoUrl };
+        this.session.actualizarPerfilEnSesion(this.sesion.nombre, this.sesion.telefonoNotificaciones, this.sesion.datosBancarios, r.logoUrl);
+      },
+      error: err => {
+        this.subiendoLogo.set(false);
+        this.errorLogo.set(err.error?.mensaje ?? 'No pudimos subir el logo.');
+      }
+    });
+    input.value = '';
   }
 
   private cargarTodo(): void {
@@ -267,21 +431,69 @@ export class Panel {
   }
 
   agregarServicio(): void {
-    if (!this.nuevoServicioNombre.trim()) return;
+    this.errorServicio.set(null);
+
+    if (!this.nuevoServicioNombre.trim()) {
+      this.errorServicio.set('Ingresá el nombre del servicio.');
+      return;
+    }
+    if (!this.nuevoServicioDuracion || this.nuevoServicioDuracion <= 0) {
+      this.errorServicio.set('Ingresá la duración en minutos.');
+      return;
+    }
 
     this.api.crearServicio({
       comercioId: this.sesion.comercioId,
       nombre: this.nuevoServicioNombre.trim(),
       duracionMinutos: this.nuevoServicioDuracion,
-      precio: this.nuevoServicioPrecio,
+      precio: this.nuevoServicioPrecio ?? 0,
       montoSeña: this.nuevoServicioSenia,
       activo: true
     }).subscribe(() => {
       this.nuevoServicioNombre = '';
-      this.nuevoServicioDuracion = 30;
-      this.nuevoServicioPrecio = 0;
-      this.nuevoServicioSenia = 0;
+      this.nuevoServicioDuracion = null;
+      this.nuevoServicioPrecio = null;
+      this.nuevoServicioSenia = null;
       this.cargarServicios();
+    });
+  }
+
+  iniciarEdicionServicio(s: Servicio): void {
+    this.servicioEditandoId.set(s.id);
+    this.editServicioNombre = s.nombre;
+    this.editServicioDuracion = s.duracionMinutos;
+    this.editServicioPrecio = s.precio;
+    this.editServicioSenia = s.montoSeña;
+    this.errorEditServicio.set(null);
+  }
+
+  cancelarEdicionServicio(): void {
+    this.servicioEditandoId.set(null);
+  }
+
+  guardarEdicionServicio(s: Servicio): void {
+    this.errorEditServicio.set(null);
+
+    if (!this.editServicioNombre.trim()) {
+      this.errorEditServicio.set('Ingresá el nombre del servicio.');
+      return;
+    }
+    if (!this.editServicioDuracion || this.editServicioDuracion <= 0) {
+      this.errorEditServicio.set('Ingresá la duración en minutos.');
+      return;
+    }
+
+    this.api.editarServicio(s.id, {
+      nombre: this.editServicioNombre.trim(),
+      duracionMinutos: this.editServicioDuracion,
+      precio: this.editServicioPrecio ?? 0,
+      montoSeña: this.editServicioSenia
+    }).subscribe({
+      next: () => {
+        this.servicioEditandoId.set(null);
+        this.cargarServicios();
+      },
+      error: err => this.errorEditServicio.set(err.error?.mensaje ?? 'No pudimos guardar los cambios.')
     });
   }
 
@@ -300,6 +512,39 @@ export class Panel {
       horaInicio: this.nuevoHorarioInicio,
       horaFin: this.nuevoHorarioFin
     }).subscribe(() => this.cargarHorarios());
+  }
+
+  iniciarEdicionHorario(h: Horario): void {
+    this.horarioEditandoId.set(h.id);
+    this.editHorarioDia = h.diaSemana;
+    this.editHorarioInicio = h.horaInicio.substring(0, 5);
+    this.editHorarioFin = h.horaFin.substring(0, 5);
+    this.errorEditHorario.set(null);
+  }
+
+  cancelarEdicionHorario(): void {
+    this.horarioEditandoId.set(null);
+  }
+
+  guardarEdicionHorario(h: Horario): void {
+    this.errorEditHorario.set(null);
+    this.api.editarHorario(h.id, {
+      diaSemana: this.editHorarioDia,
+      horaInicio: this.editHorarioInicio,
+      horaFin: this.editHorarioFin,
+      profesionalId: h.profesionalId ?? undefined
+    }).subscribe({
+      next: () => {
+        this.horarioEditandoId.set(null);
+        const p = this.profesionalSeleccionado();
+        if (h.profesionalId && p && p.id === h.profesionalId) {
+          this.seleccionarProfesionalDeNuevo(p);
+        } else {
+          this.cargarHorarios();
+        }
+      },
+      error: err => this.errorEditHorario.set(err.error?.mensaje ?? 'No pudimos guardar los cambios.')
+    });
   }
 
   quitarHorario(h: Horario): void {
@@ -323,6 +568,33 @@ export class Panel {
       error: err => {
         this.errorProfesional.set(err.error?.mensaje ?? 'No pudimos agregar el profesional.');
       }
+    });
+  }
+
+  iniciarEdicionProfesional(p: Profesional): void {
+    this.profesionalEditandoId.set(p.id);
+    this.editProfesionalNombre = p.nombre;
+    this.errorEditProfesional.set(null);
+  }
+
+  cancelarEdicionProfesional(): void {
+    this.profesionalEditandoId.set(null);
+  }
+
+  guardarEdicionProfesional(p: Profesional): void {
+    this.errorEditProfesional.set(null);
+
+    if (!this.editProfesionalNombre.trim()) {
+      this.errorEditProfesional.set('Ingresá el nombre del profesional.');
+      return;
+    }
+
+    this.api.editarProfesional(p.id, this.editProfesionalNombre.trim()).subscribe({
+      next: () => {
+        this.profesionalEditandoId.set(null);
+        this.cargarProfesionales();
+      },
+      error: err => this.errorEditProfesional.set(err.error?.mensaje ?? 'No pudimos guardar los cambios.')
     });
   }
 

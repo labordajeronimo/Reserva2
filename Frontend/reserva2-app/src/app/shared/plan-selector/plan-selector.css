@@ -1,0 +1,68 @@
+* { box-sizing: border-box; }
+
+.ps-toggle {
+  display: inline-flex;
+  padding: 3px;
+  background: #10172B;
+  border: 1px solid rgba(232, 236, 246, 0.13);
+  border-radius: 999px;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+.ps-toggle-opcion {
+  border: none;
+  background: transparent;
+  color: #A6AFC6;
+  font-family: 'Sora', sans-serif;
+  font-weight: 600;
+  font-size: 0.82rem;
+  padding: 7px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.ps-toggle-opcion:hover { color: #E8ECF6; }
+.ps-toggle-opcion.active {
+  background-image: linear-gradient(180deg, #F97316, #EA580C);
+  color: #fff;
+}
+.ps-badge {
+  background: rgba(52, 211, 153, 0.18);
+  color: #6EE7B7;
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 1px 7px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+.ps-toggle-opcion.active .ps-badge { background: rgba(255, 255, 255, 0.22); color: #fff; }
+
+.ps-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.ps-card {
+  text-align: left;
+  background: #10172B;
+  border: 1px solid rgba(232, 236, 246, 0.13);
+  border-radius: 14px;
+  padding: 16px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.ps-card:hover { border-color: rgba(232, 236, 246, 0.28); }
+.ps-card.selected { border-color: #EA580C; background: rgba(234, 88, 12, 0.1); }
+
+.ps-card-nombre { font-family: 'Sora', sans-serif; font-weight: 700; color: #E8ECF6; font-size: 0.95rem; margin-bottom: 6px; }
+.ps-card-precio { font-family: 'Sora', sans-serif; font-weight: 800; color: #FFFFFF; font-size: 1.3rem; margin-bottom: 4px; }
+.ps-card-precio span { font-size: 0.75rem; font-weight: 500; color: #A6AFC6; }
+.ps-card-detalle { font-size: 0.78rem; color: #A6AFC6; line-height: 1.5; }
+.ps-card-extra { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(232, 236, 246, 0.09); }
+
+.ps-nota { font-size: 0.78rem; color: #7C879E; margin-top: 14px; }

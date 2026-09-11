@@ -31,6 +31,15 @@
 }
 .btn-outline:hover { background: rgba(232, 236, 246, 0.13); }
 
+.error-msg {
+  background: rgba(248, 113, 113, 0.14);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: #FCA5A5;
+  font-size: 0.85rem;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
 /* ===================== PANEL ===================== */
 .panel-shell { min-height: 100vh; background: #0C1122; color: #E8ECF6; }
 

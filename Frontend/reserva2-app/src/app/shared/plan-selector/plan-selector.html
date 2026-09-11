@@ -1,0 +1,44 @@
+<div class="ps-toggle">
+  <button type="button" class="ps-toggle-opcion" [class.active]="ciclo === 'Mensual'" (click)="elegirCiclo('Mensual')">Mensual</button>
+  <button type="button" class="ps-toggle-opcion" [class.active]="ciclo === 'Anual'" (click)="elegirCiclo('Anual')">
+    Anual <span class="ps-badge">-25%</span>
+  </button>
+</div>
+
+<div class="ps-cards">
+  <button type="button" class="ps-card" [class.selected]="plan === 'Gratuito'" (click)="elegirPlan('Gratuito')">
+    <div class="ps-card-nombre">Gratuito</div>
+    <div class="ps-card-precio">$0<span>/mes</span></div>
+    <div class="ps-card-detalle">1 profesional · hasta 60 turnos/mes</div>
+  </button>
+
+  <button type="button" class="ps-card" [class.selected]="plan === 'Basico'" (click)="elegirPlan('Basico')">
+    <div class="ps-card-nombre">Básico</div>
+    @if (ciclo === 'Mensual') {
+      <div class="ps-card-precio">$7.000<span>/mes</span></div>
+      <div class="ps-card-detalle">único profesional</div>
+      <div class="ps-card-detalle">o $4.800/mes por profesional (2 o más)</div>
+    } @else {
+      <div class="ps-card-precio">$63.000<span>/año</span></div>
+      <div class="ps-card-detalle">único profesional · equivale a $5.250/mes</div>
+      <div class="ps-card-detalle">o $43.200/año por profesional</div>
+    }
+    <div class="ps-card-detalle ps-card-extra">Turnos ilimitados, hasta 2 profesionales, avisos por email</div>
+  </button>
+
+  <button type="button" class="ps-card" [class.selected]="plan === 'Premium'" (click)="elegirPlan('Premium')">
+    <div class="ps-card-nombre">Premium</div>
+    @if (ciclo === 'Mensual') {
+      <div class="ps-card-precio">$10.000<span>/mes</span></div>
+      <div class="ps-card-detalle">único profesional</div>
+      <div class="ps-card-detalle">o $8.000/mes por profesional (2 o más)</div>
+    } @else {
+      <div class="ps-card-precio">$90.000<span>/año</span></div>
+      <div class="ps-card-detalle">único profesional · equivale a $7.500/mes</div>
+      <div class="ps-card-detalle">o $72.000/año por profesional</div>
+    }
+    <div class="ps-card-detalle ps-card-extra">Todo lo de Básico + bot de WhatsApp y panel de ganancias</div>
+  </button>
+</div>
+
+<p class="ps-nota">El cobro real se coordina a mano con nosotros; esto solo deja registrado qué plan y modalidad elegiste.</p>

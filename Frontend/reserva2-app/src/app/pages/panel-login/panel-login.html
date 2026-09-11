@@ -1,5 +1,5 @@
 <div class="auth-page">
-  <div class="auth-card">
+  <div class="auth-card" [class.auth-card-ancho]="modoRegistro()">
     <a routerLink="/" class="back-link">← Volver al inicio</a>
 
     @if (!modoRegistro()) {
@@ -45,8 +45,13 @@
         </select>
       </div>
       <div class="field">
+        <label>Elegí tu plan</label>
+        <app-plan-selector [(plan)]="regPlan" [(ciclo)]="regCiclo"></app-plan-selector>
+      </div>
+      <div class="field">
         <label>WhatsApp de notificaciones</label>
         <input type="tel" [(ngModel)]="regTelefono" placeholder="341 000 0000">
+        <p class="field-ayuda">Es tu número, donde te van a llegar los avisos de reservas nuevas. No es lo que ve el cliente.</p>
       </div>
       <div class="field">
         <label>Alias o CBU para la seña</label>

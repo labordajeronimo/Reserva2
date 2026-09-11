@@ -1,0 +1,35 @@
+<div class="ct-page">
+  <div class="ct-card">
+    @if (cargando()) {
+      <p class="ct-texto">Buscando tu turno...</p>
+    } @else if (errorCarga()) {
+      <h1>Ups</h1>
+      <p class="ct-texto">{{ errorCarga() }}</p>
+      <a routerLink="/" class="ct-btn ct-btn-outline">Volver al inicio</a>
+    } @else if (canceladoOk()) {
+      <div class="ct-icono ct-icono-ok">✓</div>
+      <h1>Turno cancelado</h1>
+      <p class="ct-texto">Avisamos al negocio. Gracias por avisar con tiempo.</p>
+      <a routerLink="/" class="ct-btn ct-btn-outline">Volver al inicio</a>
+    } @else if (turno(); as t) {
+      @if (t.estadoReserva === 3) {
+        <h1>Este turno ya estaba cancelado</h1>
+        <p class="ct-texto">No hace falta que hagas nada más.</p>
+      } @else {
+        <h1>¿Cancelar tu turno?</h1>
+        <div class="ct-resumen">
+          <div><span>Negocio</span><strong>{{ t.nombreComercio }}</strong></div>
+          <div><span>Servicio</span><strong>{{ t.nombreServicio }}</strong></div>
+          <div><span>Fecha</span><strong>{{ t.fechaHoraInicio | date:'dd/MM/yyyy HH:mm' }}hs</strong></div>
+        </div>
+
+        @if (errorCancelar()) { <div class="ct-error">{{ errorCancelar() }}</div> }
+
+        <button class="ct-btn ct-btn-danger" [disabled]="cancelando()" (click)="confirmarCancelacion()">
+          {{ cancelando() ? 'Cancelando...' : 'Sí, cancelar mi turno' }}
+        </button>
+      }
+      <a routerLink="/" class="ct-btn ct-btn-outline">Volver al inicio</a>
+    }
+  </div>
+</div>

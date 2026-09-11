@@ -6,7 +6,14 @@ import { Session } from './session';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const session = inject(Session);
-  const token = session.obtenerToken() ?? session.obtenerTokenSuperAdmin();
+  // Las dos sesiones (Admin Cliente y Super Admin) pueden coexistir en el mismo navegador
+  // (localStorage no las pisa entre sí), así que hay que elegir el token según la ruta
+  // actual y no por un orden fijo, o una request a /super-admin podía viajar con el
+  // token de Admin Cliente y volver 403 sin que nadie lo note.
+  const enRutaSuperAdmin = window.location.pathname.startsWith('/super-admin');
+  const token = enRutaSuperAdmin
+    ? session.obtenerTokenSuperAdmin() ?? session.obtenerToken()
+    : session.obtenerToken() ?? session.obtenerTokenSuperAdmin();
   const authReq = token ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req;
 
   return next(authReq).pipe(

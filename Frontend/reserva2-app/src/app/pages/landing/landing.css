@@ -260,6 +260,8 @@ body {
 
 .btn-full { width: 100%; }
 
+.btn-link { display: block; text-align: center; text-decoration: none; box-sizing: border-box; }
+
 /* =========================================
    5. HERO SECTION
    ========================================= */

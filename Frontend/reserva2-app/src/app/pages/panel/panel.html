@@ -2,6 +2,7 @@
   <header class="panel-header">
     <div class="brand">{{ sesion.nombre }}</div>
     <div class="header-actions">
+      <button class="btn-outline" (click)="copiarLink()">{{ linkCopiado() ? '¡Copiado!' : 'Copiar mi link' }}</button>
       <a [routerLink]="['/', sesion.aliasUrl]" target="_blank">Ver mi página pública ↗</a>
       <button class="btn-outline" (click)="cerrarSesion()">Cerrar sesión</button>
     </div>
@@ -17,6 +18,8 @@
       <button [class.active]="tabActiva() === 'ganancias'" (click)="abrirTab('ganancias')">Ganancias</button>
       <button [class.active]="tabActiva() === 'whatsapp'" (click)="abrirTab('whatsapp')">WhatsApp</button>
     }
+    <button [class.active]="tabActiva() === 'plan'" (click)="abrirTab('plan')">Mi Plan</button>
+    <button [class.active]="tabActiva() === 'perfil'" (click)="abrirTab('perfil')">Perfil</button>
   </nav>
 
   <main class="panel-main">
@@ -111,6 +114,7 @@
             <button class="mini" (click)="mesHistorialSiguiente()">→</button>
           </div>
         </div>
+        <p class="sub-info">El detalle turno por turno. Si querés el resumen por profesional y por rango de fechas, es la pestaña Ganancias.</p>
 
         @if (cargandoHistorial()) {
           <p class="empty">Cargando...</p>
@@ -140,7 +144,8 @@
       @if (!esPremium()) {
         <div class="panel-card upsell-premium">
           <h2>Panel de ganancias</h2>
-          <p class="sub-info">Esto es parte del plan Premium. Actualizá tu plan para ver los ingresos por profesional y por período.</p>
+          <p class="sub-info">Esto es parte del plan Premium. Ves los ingresos por profesional y por período si actualizás tu plan.</p>
+          <button class="btn-naranja" (click)="abrirTab('plan')">Actualizar mi plan</button>
         </div>
       } @else {
         <div class="panel-card">
@@ -153,6 +158,7 @@
               <button class="mini" (click)="cargarGanancias()">Aplicar</button>
             </div>
           </div>
+          <p class="sub-info">Resumen agrupado por profesional para el rango elegido. Si buscás el detalle turno por turno, es la pestaña Historial.</p>
 
           @if (errorGanancias()) { <div class="error-msg">{{ errorGanancias() }}</div> }
 
@@ -197,7 +203,8 @@
       @if (!esPremium()) {
         <div class="panel-card upsell-premium">
           <h2>Bot de WhatsApp</h2>
-          <p class="sub-info">Esto es parte del plan Premium. Actualizá tu plan para activar los recordatorios y confirmaciones automáticas por WhatsApp.</p>
+          <p class="sub-info">Esto es parte del plan Premium. Activás los recordatorios y confirmaciones automáticas por WhatsApp si actualizás tu plan.</p>
+          <button class="btn-naranja" (click)="abrirTab('plan')">Actualizar mi plan</button>
         </div>
       } @else {
         <div class="panel-card">
@@ -220,6 +227,88 @@
       }
     }
 
+    @if (tabActiva() === 'plan') {
+      <div class="panel-card">
+        <h2>Mi Plan</h2>
+        <p class="sub-info">Plan actual: <strong>{{ sesion.planActual }}</strong> · Facturación {{ sesion.cicloFacturacion | lowercase }}</p>
+
+        <app-plan-selector [(plan)]="planSeleccionado" [(ciclo)]="cicloSeleccionado"></app-plan-selector>
+
+        @if (errorPlan()) { <div class="error-msg">{{ errorPlan() }}</div> }
+        @if (planGuardadoOk()) { <div class="ok-msg">¡Listo! Tu plan se actualizó.</div> }
+
+        <button class="btn-naranja" style="margin-top:16px;" [disabled]="guardandoPlan()" (click)="guardarPlan()">
+          {{ guardandoPlan() ? 'Guardando...' : 'Guardar plan' }}
+        </button>
+      </div>
+    }
+
+    @if (tabActiva() === 'perfil') {
+      <div class="panel-card">
+        <h2>Perfil del negocio</h2>
+
+        <div class="perfil-logo-row">
+          @if (logoUrlCompleta(); as logo) {
+            <img [src]="logo" alt="Logo actual" class="perfil-logo-preview">
+          } @else {
+            <div class="perfil-logo-preview perfil-logo-vacio">Sin logo</div>
+          }
+          <div>
+            <label class="btn-outline perfil-logo-btn">
+              {{ subiendoLogo() ? 'Subiendo...' : 'Cambiar logo' }}
+              <input type="file" accept="image/png,image/jpeg,image/webp" hidden [disabled]="subiendoLogo()" (change)="subirLogo($event)">
+            </label>
+            <p class="sub-info" style="margin:6px 0 0;">PNG, JPG o WEBP, hasta 2MB.</p>
+          </div>
+        </div>
+        @if (errorLogo()) { <div class="error-msg">{{ errorLogo() }}</div> }
+
+        <div class="field">
+          <label>Nombre del negocio</label>
+          <input type="text" [(ngModel)]="perfilNombre">
+        </div>
+        <div class="field">
+          <label>WhatsApp de notificaciones</label>
+          <input type="tel" [(ngModel)]="perfilTelefono">
+        </div>
+        <div class="field">
+          <label>Alias o CBU para la seña</label>
+          <input type="text" [(ngModel)]="perfilDatosBancarios">
+        </div>
+
+        @if (errorPerfil()) { <div class="error-msg">{{ errorPerfil() }}</div> }
+        @if (perfilGuardadoOk()) { <div class="ok-msg">¡Listo! Tu perfil se actualizó.</div> }
+
+        <button class="btn-naranja" [disabled]="guardandoPerfil()" (click)="guardarPerfil()">
+          {{ guardandoPerfil() ? 'Guardando...' : 'Guardar cambios' }}
+        </button>
+      </div>
+
+      <div class="panel-card" style="margin-top:20px;">
+        <h2>Cambiar contraseña</h2>
+
+        <div class="field">
+          <label>Contraseña actual</label>
+          <input type="password" [(ngModel)]="passwordActual">
+        </div>
+        <div class="field">
+          <label>Contraseña nueva</label>
+          <input type="password" [(ngModel)]="passwordNueva">
+        </div>
+        <div class="field">
+          <label>Repetí la contraseña nueva</label>
+          <input type="password" [(ngModel)]="passwordNuevaRepetida">
+        </div>
+
+        @if (errorPassword()) { <div class="error-msg">{{ errorPassword() }}</div> }
+        @if (passwordCambiadaOk()) { <div class="ok-msg">¡Listo! Tu contraseña se actualizó.</div> }
+
+        <button class="btn-naranja" [disabled]="cambiandoPassword()" (click)="cambiarPassword()">
+          {{ cambiandoPassword() ? 'Guardando...' : 'Cambiar contraseña' }}
+        </button>
+      </div>
+    }
+
     @if (tabActiva() === 'servicios') {
       <div class="panel-card">
         <h2>Servicios</h2>
@@ -228,25 +317,44 @@
         } @else {
           <ul class="lista">
             @for (s of servicios(); track s.id) {
-              <li>
-                <div>
-                  <strong>{{ s.nombre }}</strong>
-                  <span class="detalle">
-                    {{ s.duracionMinutos }} min · {{ s.precio | currency:'ARS':'$' }}
-                    @if (s['montoSeña']) { · seña {{ s['montoSeña'] | currency:'ARS':'$' }} }
-                  </span>
-                </div>
-                <button class="mini danger" (click)="quitarServicio(s)">Quitar</button>
+              <li [class.lista-item-editando]="servicioEditandoId() === s.id">
+                @if (servicioEditandoId() === s.id) {
+                  <div class="form-inline form-inline-servicios form-inline-edicion">
+                    <input type="text" [(ngModel)]="editServicioNombre" placeholder="Nombre del servicio">
+                    <input type="number" [(ngModel)]="editServicioDuracion" placeholder="Duración en minutos" min="5" step="5">
+                    <input type="number" [(ngModel)]="editServicioPrecio" placeholder="Precio $" min="0">
+                    <input type="number" [(ngModel)]="editServicioSenia" placeholder="Monto de la seña (opcional)" min="0">
+                    <div class="acciones">
+                      <button class="mini ok" (click)="guardarEdicionServicio(s)">Guardar</button>
+                      <button class="mini" (click)="cancelarEdicionServicio()">Cancelar</button>
+                    </div>
+                  </div>
+                  @if (errorEditServicio()) { <div class="error-msg">{{ errorEditServicio() }}</div> }
+                } @else {
+                  <div>
+                    <strong>{{ s.nombre }}</strong>
+                    <span class="detalle">
+                      {{ s.duracionMinutos }} min · {{ s.precio | currency:'ARS':'$' }}
+                      @if (s['montoSeña']) { · seña {{ s['montoSeña'] | currency:'ARS':'$' }} }
+                    </span>
+                  </div>
+                  <div class="acciones">
+                    <button class="mini" (click)="iniciarEdicionServicio(s)">Editar</button>
+                    <button class="mini danger" (click)="quitarServicio(s)">Quitar</button>
+                  </div>
+                }
               </li>
             }
           </ul>
         }
 
+        @if (errorServicio()) { <div class="error-msg">{{ errorServicio() }}</div> }
+
         <div class="form-inline form-inline-servicios">
           <input type="text" [(ngModel)]="nuevoServicioNombre" placeholder="Nombre del servicio">
-          <input type="number" [(ngModel)]="nuevoServicioDuracion" placeholder="Minutos" min="5" step="5">
+          <input type="number" [(ngModel)]="nuevoServicioDuracion" placeholder="Duración en minutos" min="5" step="5">
           <input type="number" [(ngModel)]="nuevoServicioPrecio" placeholder="Precio $" min="0">
-          <input type="number" [(ngModel)]="nuevoServicioSenia" placeholder="Seña $ (opcional)" min="0">
+          <input type="number" [(ngModel)]="nuevoServicioSenia" placeholder="Monto de la seña (opcional)" min="0">
           <button class="btn-naranja" (click)="agregarServicio()">Agregar</button>
         </div>
       </div>
@@ -260,9 +368,29 @@
         } @else {
           <ul class="lista">
             @for (h of horarios(); track h.id) {
-              <li>
-                <div>{{ dias[h.diaSemana] }} de {{ h.horaInicio.substring(0,5) }} a {{ h.horaFin.substring(0,5) }}</div>
-                <button class="mini danger" (click)="quitarHorario(h)">Quitar</button>
+              <li [class.lista-item-editando]="horarioEditandoId() === h.id">
+                @if (horarioEditandoId() === h.id) {
+                  <div class="form-inline form-inline-edicion">
+                    <select [(ngModel)]="editHorarioDia">
+                      @for (d of dias; track d; let i = $index) {
+                        <option [ngValue]="i">{{ d }}</option>
+                      }
+                    </select>
+                    <input type="time" [(ngModel)]="editHorarioInicio">
+                    <input type="time" [(ngModel)]="editHorarioFin">
+                    <div class="acciones">
+                      <button class="mini ok" (click)="guardarEdicionHorario(h)">Guardar</button>
+                      <button class="mini" (click)="cancelarEdicionHorario()">Cancelar</button>
+                    </div>
+                  </div>
+                  @if (errorEditHorario()) { <div class="error-msg">{{ errorEditHorario() }}</div> }
+                } @else {
+                  <div>{{ dias[h.diaSemana] }} de {{ h.horaInicio.substring(0,5) }} a {{ h.horaFin.substring(0,5) }}</div>
+                  <div class="acciones">
+                    <button class="mini" (click)="iniciarEdicionHorario(h)">Editar</button>
+                    <button class="mini danger" (click)="quitarHorario(h)">Quitar</button>
+                  </div>
+                }
               </li>
             }
           </ul>
@@ -292,12 +420,28 @@
           <ul class="lista">
             @for (p of profesionales(); track p.id) {
               <li class="profesional-item">
-                <div class="profesional-row">
-                  <button class="link-toggle" (click)="seleccionarProfesional(p)">
-                    {{ p.nombre }} {{ profesionalSeleccionado()?.id === p.id ? '▲' : '▼' }}
-                  </button>
-                  <button class="mini danger" (click)="quitarProfesional(p)">Quitar</button>
-                </div>
+                @if (profesionalEditandoId() === p.id) {
+                  <div class="profesional-row">
+                    <div class="form-inline form-inline-2 form-inline-edicion" style="flex:1;">
+                      <input type="text" [(ngModel)]="editProfesionalNombre" placeholder="Nombre del profesional">
+                      <div class="acciones">
+                        <button class="mini ok" (click)="guardarEdicionProfesional(p)">Guardar</button>
+                        <button class="mini" (click)="cancelarEdicionProfesional()">Cancelar</button>
+                      </div>
+                    </div>
+                  </div>
+                  @if (errorEditProfesional()) { <div class="error-msg">{{ errorEditProfesional() }}</div> }
+                } @else {
+                  <div class="profesional-row">
+                    <button class="link-toggle" (click)="seleccionarProfesional(p)">
+                      {{ p.nombre }} {{ profesionalSeleccionado()?.id === p.id ? '▲' : '▼' }}
+                    </button>
+                    <div class="acciones">
+                      <button class="mini" (click)="iniciarEdicionProfesional(p)">Editar</button>
+                      <button class="mini danger" (click)="quitarProfesional(p)">Quitar</button>
+                    </div>
+                  </div>
+                }
 
                 @if (profesionalSeleccionado()?.id === p.id) {
                   <div class="sub-horarios">
@@ -306,9 +450,29 @@
                     } @else {
                       <ul class="lista">
                         @for (h of horariosDelProfesional(); track h.id) {
-                          <li>
-                            <div>{{ dias[h.diaSemana] }} de {{ h.horaInicio.substring(0,5) }} a {{ h.horaFin.substring(0,5) }}</div>
-                            <button class="mini danger" (click)="quitarHorarioProfesional(h)">Quitar</button>
+                          <li [class.lista-item-editando]="horarioEditandoId() === h.id">
+                            @if (horarioEditandoId() === h.id) {
+                              <div class="form-inline form-inline-edicion">
+                                <select [(ngModel)]="editHorarioDia">
+                                  @for (d of dias; track d; let i = $index) {
+                                    <option [ngValue]="i">{{ d }}</option>
+                                  }
+                                </select>
+                                <input type="time" [(ngModel)]="editHorarioInicio">
+                                <input type="time" [(ngModel)]="editHorarioFin">
+                                <div class="acciones">
+                                  <button class="mini ok" (click)="guardarEdicionHorario(h)">Guardar</button>
+                                  <button class="mini" (click)="cancelarEdicionHorario()">Cancelar</button>
+                                </div>
+                              </div>
+                              @if (errorEditHorario()) { <div class="error-msg">{{ errorEditHorario() }}</div> }
+                            } @else {
+                              <div>{{ dias[h.diaSemana] }} de {{ h.horaInicio.substring(0,5) }} a {{ h.horaFin.substring(0,5) }}</div>
+                              <div class="acciones">
+                                <button class="mini" (click)="iniciarEdicionHorario(h)">Editar</button>
+                                <button class="mini danger" (click)="quitarHorarioProfesional(h)">Quitar</button>
+                              </div>
+                            }
                           </li>
                         }
                       </ul>

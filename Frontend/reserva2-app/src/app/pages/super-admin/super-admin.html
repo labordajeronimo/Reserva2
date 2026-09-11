@@ -32,7 +32,11 @@
 
     <div class="panel-card">
       <h2>Comercios</h2>
-      @if (comercios().length === 0) {
+      @if (errorComercios()) {
+        <div class="error-msg">{{ errorComercios() }}</div>
+      } @else if (cargandoComercios()) {
+        <p class="empty">Cargando...</p>
+      } @else if (comercios().length === 0) {
         <p class="empty">Todavía no hay comercios registrados.</p>
       } @else {
         <table class="tabla">

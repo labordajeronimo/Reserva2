@@ -59,6 +59,7 @@ namespace Reserva2.Api.Data
 
             modelBuilder.Entity<PasswordResetToken>().HasIndex(t => t.Token).IsUnique();
             modelBuilder.Entity<WhatsAppConfig>().HasIndex(w => w.ComercioId).IsUnique();
+            modelBuilder.Entity<Turno>().HasIndex(t => t.TokenCancelacion).IsUnique();
         }
     }
 }

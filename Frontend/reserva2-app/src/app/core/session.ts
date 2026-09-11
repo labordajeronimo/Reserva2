@@ -27,6 +27,20 @@ export class Session {
     return this.obtenerUsuario() !== null;
   }
 
+  // Actualiza el plan/ciclo guardados sin tener que volver a loguearse (ej. tras
+  // cambiar de plan desde el propio panel).
+  actualizarPlanEnSesion(planActual: string, cicloFacturacion: string): void {
+    const actual = this.obtenerUsuario();
+    if (!actual) return;
+    this.iniciarSesion({ ...actual, planActual, cicloFacturacion });
+  }
+
+  actualizarPerfilEnSesion(nombre: string, telefonoNotificaciones: string, datosBancarios: string, logoUrl: string | null): void {
+    const actual = this.obtenerUsuario();
+    if (!actual) return;
+    this.iniciarSesion({ ...actual, nombre, telefonoNotificaciones, datosBancarios, logoUrl });
+  }
+
   // --- Super Admin (sesión separada, no se mezcla con la del Admin Cliente) ---
   iniciarSesionSuperAdmin(datos: SuperAdminSession): void {
     localStorage.setItem(this.SUPER_ADMIN_STORAGE_KEY, JSON.stringify(datos));

@@ -26,6 +26,7 @@
     display:flex; align-items:center; justify-content:center; font-family:'Sora',sans-serif; font-weight:700; font-size:24px;
     flex-shrink:0; box-shadow:0 12px 30px rgba(234,88,12,0.35);
   }
+  .biz-avatar-img{ object-fit:cover; background-image:none; box-shadow:0 12px 30px rgba(0,0,0,0.35); }
   .biz-info{flex:1; min-width:220px;}
   .biz-info h1{font-size:24px; font-weight:700; margin:0 0 6px;}
   .biz-meta{display:flex; gap:16px; flex-wrap:wrap; font-size:13.5px; color:#A6AFC6;}
@@ -76,6 +77,14 @@
   .day-tab .n{font-family:'Sora',sans-serif; font-size:16px; font-weight:700; color:#E8ECF6;}
   .day-tab.active{background:#E8ECF6; border-color:#E8ECF6;}
   .day-tab.active .d, .day-tab.active .n{color:#0C1122;}
+
+  .fecha-manual{display:flex; align-items:center; gap:10px; margin-top:14px; padding-top:14px; border-top:1px solid rgba(232,236,246,0.09);}
+  .fecha-manual label{font-size:13px; color:#A6AFC6;}
+  .fecha-manual input{
+    padding:8px 10px; border-radius:9px; border:1px solid rgba(232,236,246,0.16); background:#10172B; color:#E8ECF6;
+    font-size:13px; font-family:inherit;
+  }
+  .fecha-manual input:focus{outline:2px solid #FB923C; outline-offset:1px;}
 
   /* slot grid */
   .slot-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px;}

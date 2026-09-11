@@ -21,6 +21,8 @@ export class SuperAdmin {
 
   metricas = signal<Metricas | null>(null);
   comercios = signal<ComercioAdmin[]>([]);
+  cargandoComercios = signal(false);
+  errorComercios = signal<string | null>(null);
   actualizandoEstadoId = signal<number | null>(null);
   actualizandoMontoId = signal<number | null>(null);
 
@@ -37,7 +39,19 @@ export class SuperAdmin {
 
   private cargarTodo(): void {
     this.api.getMetricas().subscribe(m => this.metricas.set(m));
-    this.api.getComerciosAdmin().subscribe(c => this.comercios.set(c));
+
+    this.errorComercios.set(null);
+    this.cargandoComercios.set(true);
+    this.api.getComerciosAdmin().subscribe({
+      next: c => {
+        this.comercios.set(c);
+        this.cargandoComercios.set(false);
+      },
+      error: () => {
+        this.cargandoComercios.set(false);
+        this.errorComercios.set('No pudimos cargar los comercios. Probá recargar la página o volver a ingresar.');
+      }
+    });
   }
 
   toggleEstado(c: ComercioAdmin): void {

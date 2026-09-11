@@ -27,5 +27,9 @@ namespace Reserva2.Api.Models
         // Momento en que se creó la pre-reserva. Si pasan 2hs sin pasar a
         // EstadoReserva = 2 (Confirmado), el horario se considera liberado.
         public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
+
+        // Token de un solo uso que va en el link de cancelación del mail de confirmación,
+        // para que el cliente final pueda cancelar su turno sin necesitar una cuenta.
+        public string TokenCancelacion { get; set; } = Guid.NewGuid().ToString("N");
     }
 }
