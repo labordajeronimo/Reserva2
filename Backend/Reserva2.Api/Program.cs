@@ -867,6 +867,25 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
         {
             logger.LogError(ex, "No se pudo enviar el email de confirmación de turno.");
         }
+
+        // PUNTO DE ENGANCHE DEL BOT DE WHATSAPP (Premium, todavía sin implementar).
+        //
+        // Diseño ya decidido, no volver a discutirlo al implementar: UN SOLO mensaje de
+        // WhatsApp por turno, no un recordatorio + una confirmación separados. Ese único
+        // mensaje ES la confirmación de la reserva, y solo si el servicio tiene seña
+        // configurada (servicio.MontoSeña != null) incluye el alias/monto de la seña; si
+        // el servicio no tiene seña, confirma el turno sin esa parte.
+        //
+        // Por qué un solo mensaje: Meta cobra por mensaje de WhatsApp Business enviado.
+        // Con dos mensajes por turno (recordatorio + confirmación) el margen del plan
+        // Premium se comía rápido en comercios con mucho movimiento diario. Con uno solo,
+        // el margen aguanta cómodo incluso con varios turnos por día.
+        //
+        // Cuándo dispararlo: acá mismo, justo después del mail de confirmación, si
+        // comercio.PlanActual == "Premium" y el WhatsAppConfig del comercio tiene
+        // Activado == true. Todavía no está conectado a la Cloud API real de Meta:
+        // falta cargar las credenciales (WhatsApp Business Account, número verificado,
+        // token de acceso) cuando estén disponibles.
     }
 
     return Results.Created($"/api/turnos/{turno.Id}", turno);
@@ -1020,6 +1039,13 @@ app.MapGet("/api/comercios/{comercioId:int}/ganancias", async (AppDbContext cont
 // WHATSAPP (placeholder — exclusivo plan Premium)
 // Todavía no conecta a la Cloud API real de Meta: solo guarda si el comercio
 // activó o no el bot. La integración real se hace aparte con las credenciales.
+//
+// Diseño ya decidido para cuando se implemente (ver el comentario largo en el punto de
+// enganche, en POST /api/turnos): un solo mensaje de WhatsApp por turno —la confirmación
+// de la reserva, con los datos de la seña solo si el servicio tiene una configurada—, no
+// un recordatorio más una confirmación separados. Es así a propósito por costo: Meta
+// cobra por mensaje, y con dos mensajes por turno el margen de Premium se comía rápido en
+// comercios con mucho movimiento.
 // ==========================================
 app.MapGet("/api/comercios/{comercioId:int}/whatsapp-config", async (AppDbContext context, int comercioId, ClaimsPrincipal user) =>
 {
