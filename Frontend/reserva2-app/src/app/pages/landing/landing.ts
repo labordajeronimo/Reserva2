@@ -12,12 +12,21 @@ import { Router, RouterLink } from '@angular/router';
 export class Landing {
   isScrolled = false;
   facturacionAnual = false;
+  menuMobileAbierto = false;
 
   constructor(private router: Router) {}
 
   @HostListener('window:scroll', [])
   onWindowScroll() {
     this.isScrolled = window.scrollY > 50;
+  }
+
+  toggleMenuMobile(): void {
+    this.menuMobileAbierto = !this.menuMobileAbierto;
+  }
+
+  cerrarMenuMobile(): void {
+    this.menuMobileAbierto = false;
   }
 
   irAlPanel(): void {

@@ -212,7 +212,7 @@ async Task EnviarEmail(IConfiguration config, ILogger logger, string destinatari
 
     using var mensaje = new MailMessage
     {
-        From = new MailAddress(config["Smtp:From"] ?? config["Smtp:User"] ?? "no-reply@reserva2.app", "Reserva2"),
+        From = new MailAddress(config["Smtp:From"] ?? config["Smtp:User"] ?? "no-reply@reservados2.com", "Reserva2"),
         Subject = asunto,
         Body = cuerpo,
         IsBodyHtml = false

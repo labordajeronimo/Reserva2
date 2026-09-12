@@ -3,7 +3,7 @@
 Plataforma SaaS multi-tenant de reservas de turnos online. Cada negocio
 (peluquería, barbería, estudio de tatuajes, cancha de fútbol 5, etc.) gestiona
 su propia agenda desde un panel aislado y comparte un link público
-(`reserva2.app/tu-negocio`) donde sus clientes reservan turnos sin necesidad
+(`reservados2.com/tu-negocio`) donde sus clientes reservan turnos sin necesidad
 de crear cuenta.
 
 *Desarrollado en Rosario, Santa Fe, Argentina — proyecto de diploma de

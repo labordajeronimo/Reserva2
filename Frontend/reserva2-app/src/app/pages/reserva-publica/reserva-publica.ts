@@ -51,7 +51,7 @@ export class ReservaPublica implements OnInit {
   linkCopiado = signal(false);
   intentoEnviar = signal(false);
 
-  hostActual = typeof window !== 'undefined' ? window.location.host : 'reserva2.app';
+  hostActual = typeof window !== 'undefined' ? window.location.host : 'reservados2.com';
 
   logoUrl = computed(() => urlArchivo(this.comercio()?.logoUrl ?? null));
 

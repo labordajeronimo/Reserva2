@@ -24,8 +24,19 @@
   <div class="nav-actions">
     <a routerLink="/panel" class="nav-login">Iniciar sesión</a>
     <button class="btn-naranja" (click)="irAlPanel()">Registrar mi negocio</button>
+    <button class="nav-menu-btn" type="button" aria-label="Abrir menú" [attr.aria-expanded]="menuMobileAbierto" (click)="toggleMenuMobile()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
   </div>
 </nav>
+
+@if (menuMobileAbierto) {
+  <ul class="nav-menu-mobile">
+    <li><a href="#planes" (click)="cerrarMenuMobile()">Planes</a></li>
+    <li><a href="#como-funciona" (click)="cerrarMenuMobile()">Cómo funciona</a></li>
+    <li><a href="#automatiza" (click)="cerrarMenuMobile()">Automatizá</a></li>
+  </ul>
+}
 
 <!-- SECCIÓN HERO LIMPIA Y CON BOTÓN LARGO -->
 <section class="hero-section">
@@ -187,7 +198,7 @@
         <li><span class="check"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> Panel de ganancias: ingresos por profesional y por período</li>
         <li><span class="check"><svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> 0% de comisión por cobro</li>
       </ul>
-      <a class="btn-secundario-outline btn-link" href="mailto:reserva2@gmail.com">Contactar ventas</a>
+      <a class="btn-secundario-outline btn-link" href="mailto:contactoreserva2@gmail.com">Contactar ventas</a>
     </div>
   </div>
 </section>
@@ -295,7 +306,7 @@
       <h4>Soporte</h4>
       <ul>
         <li><a href="#">Centro de ayuda</a></li>
-        <li><a href="mailto:reserva2@gmail.com">Contactar ventas</a></li>
+        <li><a href="mailto:contactoreserva2@gmail.com">Contactar ventas</a></li>
         <!-- Soporte por WhatsApp: pendiente hasta tener un número de WhatsApp Business para linkear. -->
       </ul>
     </div>
