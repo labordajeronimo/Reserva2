@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
-import { Api, ComercioPublico, Servicio, SlotDisponibilidad, urlArchivo } from '../../core/api';
+import { Api, ComercioPublico, Servicio, SlotDisponibilidad, Sucursal, Profesional, urlArchivo } from '../../core/api';
 
 interface DiaGrilla {
   fecha: string; // yyyy-MM-dd, lo que le mandamos a la API
@@ -29,6 +29,18 @@ export class ReservaPublica implements OnInit {
   comercio = signal<ComercioPublico | null>(null);
   cargandoComercio = signal(true);
   comercioInactivo = signal(false);
+
+  // Sucursales: si el comercio tiene más de una activa, el cliente tiene que elegir una
+  // antes de ver servicios/horarios. Si tiene 0 o 1, el flujo sigue igual que siempre.
+  sucursales = signal<Sucursal[]>([]);
+  sucursalesActivas = computed(() => this.sucursales().filter(s => s.activa));
+  necesitaElegirSucursal = computed(() => this.sucursalesActivas().length > 1);
+  sucursalSeleccionada = signal<Sucursal | null>(null);
+
+  // Profesionales: el cliente siempre puede elegir uno (o "cualquiera disponible") si el
+  // comercio cargó alguno; si no cargó ninguno, no se muestra el paso, igual que siempre.
+  profesionales = signal<Profesional[]>([]);
+  profesionalSeleccionado = signal<Profesional | null>(null);
 
   servicios = signal<Servicio[]>([]);
   servicioSeleccionado = signal<Servicio | null>(null);
@@ -116,14 +128,46 @@ export class ReservaPublica implements OnInit {
       next: comercio => {
         this.comercio.set(comercio);
         this.cargandoComercio.set(false);
-        this.cargarServicios(comercio.id);
-        this.elegirDia(this.diasDisponibles[0]);
+        this.cargarSucursales(comercio.id);
       },
       error: err => {
         if (err.status === 403) this.comercioInactivo.set(true);
         this.cargandoComercio.set(false);
       }
     });
+  }
+
+  private cargarSucursales(comercioId: number): void {
+    this.api.getSucursales(comercioId).subscribe(sucursales => {
+      this.sucursales.set(sucursales);
+      const activas = sucursales.filter(s => s.activa);
+      // Con 0 o 1 sucursal activa no hace falta que el cliente elija nada: se sigue
+      // exactamente igual que antes de esta feature.
+      if (activas.length <= 1) this.elegirSucursal(activas[0] ?? null);
+    });
+  }
+
+  elegirSucursal(sucursal: Sucursal | null): void {
+    this.sucursalSeleccionada.set(sucursal);
+    const comercio = this.comercio();
+    if (!comercio) return;
+
+    this.cargarProfesionales(comercio.id, sucursal?.id ?? undefined);
+    this.cargarServicios(comercio.id);
+    this.elegirDia(this.diasDisponibles[0]);
+  }
+
+  private cargarProfesionales(comercioId: number, sucursalId?: number): void {
+    this.api.getProfesionales(comercioId, sucursalId).subscribe(profesionales => {
+      this.profesionales.set(profesionales);
+      this.profesionalSeleccionado.set(null);
+    });
+  }
+
+  elegirProfesional(profesional: Profesional | null): void {
+    this.profesionalSeleccionado.set(profesional);
+    this.slotSeleccionado.set(null);
+    this.buscarDisponibilidad();
   }
 
   private cargarServicios(comercioId: number): void {
@@ -179,7 +223,7 @@ export class ReservaPublica implements OnInit {
     if (!comercio || !servicio || !dia) return;
 
     this.cargandoSlots.set(true);
-    this.api.getDisponibilidad(comercio.id, servicio.id, dia.fecha).subscribe({
+    this.api.getDisponibilidad(comercio.id, servicio.id, dia.fecha, this.profesionalSeleccionado()?.id, this.sucursalSeleccionada()?.id).subscribe({
       next: slots => {
         this.slots.set(slots);
         this.cargandoSlots.set(false);
@@ -221,7 +265,8 @@ export class ReservaPublica implements OnInit {
       fechaHoraInicio: slot.inicio,
       clienteNombre: this.clienteNombre.trim(),
       clienteWhatsApp: this.clienteWhatsApp.trim(),
-      clienteEmail: this.clienteEmail.trim()
+      clienteEmail: this.clienteEmail.trim(),
+      profesionalId: this.profesionalSeleccionado()?.id ?? null
     }).subscribe({
       next: () => {
         this.reservando.set(false);

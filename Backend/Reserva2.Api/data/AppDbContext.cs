@@ -17,6 +17,7 @@ namespace Reserva2.Api.Data
         public DbSet<Turno> Turnos { get; set; }
         public DbSet<Horario> Horarios { get; set; }
         public DbSet<Profesional> Profesionales { get; set; }
+        public DbSet<Sucursal> Sucursales { get; set; }
         public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
         public DbSet<WhatsAppConfig> WhatsAppConfigs { get; set; }
 

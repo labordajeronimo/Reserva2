@@ -61,6 +61,7 @@
   .service:hover{border-color:rgba(232,236,246,0.24);}
   .service:active{transform:scale(0.98);}
   .service.active{border-color:rgba(249,115,22,0.55); background:rgba(234,88,12,0.14);}
+  .cambiar-sucursal-btn{background:none; border:none; color:#FB923C; font-size:13.5px; cursor:pointer; text-decoration:underline; padding:0; font-family:inherit;}
   .service .name{font-family:'Sora',sans-serif; font-size:14.5px; font-weight:600; overflow-wrap:break-word;}
   .service .dur{font-size:12.5px; color:#7C879E; margin-top:2px;}
   .service .price{font-family:'Sora',sans-serif; font-size:14.5px; font-weight:600; color:#E8ECF6; text-align:right; white-space:nowrap;}

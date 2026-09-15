@@ -41,7 +41,7 @@
       } @else {
         <table class="tabla">
           <thead>
-            <tr><th>Nombre</th><th>Link</th><th>Plan</th><th>Ciclo</th><th>Monto mensual acordado</th><th>Estado</th><th></th></tr>
+            <tr><th>Nombre</th><th>Link</th><th>Plan</th><th>Ciclo</th><th>Monto mensual acordado</th><th>Vencimiento</th><th>Estado</th><th></th></tr>
           </thead>
           <tbody>
             @for (c of comercios(); track c.id) {
@@ -72,6 +72,15 @@
                     {{ actualizandoMontoId() === c.id ? '...' : 'Guardar' }}
                   </button>
                 </td>
+                <td>
+                  @if (c.fechaProximoPago) {
+                    <span class="badge" [class.badge-danger]="vencimientoUrgente(c)" [class.badge-ok]="!vencimientoUrgente(c)">
+                      {{ etiquetaVencimiento(c) }}
+                    </span>
+                  } @else {
+                    <span class="sin-vencimiento">Sin definir</span>
+                  }
+                </td>
                 <td><span class="badge" [class.badge-ok]="c.activo" [class.badge-danger]="!c.activo">{{ c.activo ? 'Activo' : 'Pausado' }}</span></td>
                 <td class="acciones">
                   <button
@@ -81,6 +90,12 @@
                     [disabled]="actualizandoEstadoId() === c.id"
                     (click)="toggleEstado(c)">
                     {{ c.activo ? 'Pausar' : 'Activar' }}
+                  </button>
+                  <button
+                    class="mini ok"
+                    [disabled]="renovandoId() === c.id"
+                    (click)="renovar(c)">
+                    {{ renovandoId() === c.id ? '...' : 'Marcar como renovado' }}
                   </button>
                 </td>
               </tr>

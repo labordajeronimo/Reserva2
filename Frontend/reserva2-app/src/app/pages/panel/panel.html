@@ -14,6 +14,7 @@
     <button [class.active]="tabActiva() === 'servicios'" (click)="abrirTab('servicios')">Servicios</button>
     <button [class.active]="tabActiva() === 'horarios'" (click)="abrirTab('horarios')">Horarios</button>
     <button [class.active]="tabActiva() === 'profesionales'" (click)="abrirTab('profesionales')">Profesionales</button>
+    <button [class.active]="tabActiva() === 'sucursales'" (click)="abrirTab('sucursales')">Sucursales</button>
     @if (esPremium()) {
       <button [class.active]="tabActiva() === 'ganancias'" (click)="abrirTab('ganancias')">Ganancias</button>
       <button [class.active]="tabActiva() === 'whatsapp'" (click)="abrirTab('whatsapp')">WhatsApp</button>
@@ -232,6 +233,26 @@
         <h2>Mi Plan</h2>
         <p class="sub-info">Plan actual: <strong>{{ sesion.planActual }}</strong> · Facturación {{ sesion.cicloFacturacion | lowercase }}</p>
 
+        @if (diasParaRenovacion() !== null) {
+          <div class="renovacion-contador" [class.alerta]="renovacionUrgente()">
+            @if (diasParaRenovacion()! > 0) {
+              Te quedan <strong>{{ diasParaRenovacion() }}</strong> día{{ diasParaRenovacion() === 1 ? '' : 's' }} para tu próxima renovación.
+            } @else if (diasParaRenovacion() === 0) {
+              Tu plan vence hoy.
+            } @else {
+              Venciste hace <strong>{{ -diasParaRenovacion()! }}</strong> día{{ diasParaRenovacion() === -1 ? '' : 's' }}.
+            }
+          </div>
+        }
+
+        <p class="monto-estimado-info">
+          Monto estimado con tu plan actual y {{ profesionales().length }} profesional{{ profesionales().length === 1 ? '' : 'es' }}:
+          <strong>{{ montoEstimadoTexto() }}</strong>
+        </p>
+        <a class="btn-outline renovacion-btn" [href]="linkPagoWhatsApp()" target="_blank" rel="noopener">
+          Pagar / renovar plan por WhatsApp
+        </a>
+
         <app-plan-selector [(plan)]="planSeleccionado" [(ciclo)]="cicloSeleccionado"></app-plan-selector>
 
         @if (errorPlan()) { <div class="error-msg">{{ errorPlan() }}</div> }
@@ -424,6 +445,14 @@
                   <div class="profesional-row">
                     <div class="form-inline form-inline-2 form-inline-edicion" style="flex:1;">
                       <input type="text" [(ngModel)]="editProfesionalNombre" placeholder="Nombre del profesional">
+                      @if (sucursales().length > 1) {
+                        <select [(ngModel)]="editProfesionalSucursalId">
+                          <option [ngValue]="null">Sin sucursal asignada</option>
+                          @for (s of sucursales(); track s.id) {
+                            <option [ngValue]="s.id">{{ s.nombre }}</option>
+                          }
+                        </select>
+                      }
                       <div class="acciones">
                         <button class="mini ok" (click)="guardarEdicionProfesional(p)">Guardar</button>
                         <button class="mini" (click)="cancelarEdicionProfesional()">Cancelar</button>
@@ -434,7 +463,11 @@
                 } @else {
                   <div class="profesional-row">
                     <button class="link-toggle" (click)="seleccionarProfesional(p)">
-                      {{ p.nombre }} {{ profesionalSeleccionado()?.id === p.id ? '▲' : '▼' }}
+                      {{ p.nombre }}
+                      @if (sucursales().length > 1 && p.sucursalId) {
+                        <span class="sucursal-tag">· {{ nombreSucursal(p.sucursalId) }}</span>
+                      }
+                      {{ profesionalSeleccionado()?.id === p.id ? '▲' : '▼' }}
                     </button>
                     <div class="acciones">
                       <button class="mini" (click)="iniciarEdicionProfesional(p)">Editar</button>
@@ -499,7 +532,67 @@
 
         <div class="form-inline form-inline-2">
           <input type="text" [(ngModel)]="nuevoProfesionalNombre" placeholder="Nombre del profesional">
+          @if (sucursales().length > 1) {
+            <select [(ngModel)]="nuevoProfesionalSucursalId">
+              <option [ngValue]="null">Sin sucursal asignada</option>
+              @for (s of sucursales(); track s.id) {
+                <option [ngValue]="s.id">{{ s.nombre }}</option>
+              }
+            </select>
+          }
           <button class="btn-naranja" (click)="agregarProfesional()">Agregar</button>
+        </div>
+      </div>
+    }
+
+    @if (tabActiva() === 'sucursales') {
+      <div class="panel-card">
+        <h2>Sucursales</h2>
+        <p class="sub-info">Si cargás más de una sucursal, tus clientes van a poder elegir en cuál reservar desde tu página pública.</p>
+
+        @if (sucursales().length === 0) {
+          <p class="empty">Todavía no cargaste sucursales.</p>
+        } @else {
+          <ul class="lista">
+            @for (s of sucursales(); track s.id) {
+              <li class="profesional-item">
+                @if (sucursalEditandoId() === s.id) {
+                  <div class="form-inline form-inline-2 form-inline-edicion">
+                    <input type="text" [(ngModel)]="editSucursalNombre" placeholder="Nombre">
+                    <input type="text" [(ngModel)]="editSucursalDireccion" placeholder="Dirección">
+                    <input type="text" [(ngModel)]="editSucursalTelefono" placeholder="Teléfono (opcional)">
+                    <div class="acciones">
+                      <button class="mini ok" (click)="guardarEdicionSucursal(s)">Guardar</button>
+                      <button class="mini" (click)="cancelarEdicionSucursal()">Cancelar</button>
+                    </div>
+                  </div>
+                  @if (errorEditSucursal()) { <div class="error-msg">{{ errorEditSucursal() }}</div> }
+                } @else {
+                  <div class="profesional-row">
+                    <div>
+                      <strong>{{ s.nombre }}</strong>
+                      <span class="badge" [class.badge-ok]="s.activa" [class.badge-danger]="!s.activa">{{ s.activa ? 'Activa' : 'Inactiva' }}</span>
+                      <div class="sub-info" style="margin:2px 0 0;">{{ s.direccion || 'Sin dirección cargada' }} {{ s.telefono ? '· ' + s.telefono : '' }}</div>
+                    </div>
+                    <div class="acciones">
+                      <button class="mini" (click)="iniciarEdicionSucursal(s)">Editar</button>
+                      <button class="mini" [class.ok]="!s.activa" [class.danger]="s.activa" (click)="toggleActivaSucursal(s)">{{ s.activa ? 'Desactivar' : 'Activar' }}</button>
+                      <button class="mini danger" (click)="quitarSucursal(s)">Quitar</button>
+                    </div>
+                  </div>
+                }
+              </li>
+            }
+          </ul>
+        }
+
+        @if (errorSucursal()) { <div class="error-msg">{{ errorSucursal() }}</div> }
+
+        <div class="form-inline form-inline-2">
+          <input type="text" [(ngModel)]="nuevaSucursalNombre" placeholder="Nombre de la sucursal">
+          <input type="text" [(ngModel)]="nuevaSucursalDireccion" placeholder="Dirección">
+          <input type="text" [(ngModel)]="nuevaSucursalTelefono" placeholder="Teléfono (opcional)">
+          <button class="btn-naranja" (click)="agregarSucursal()">Agregar</button>
         </div>
       </div>
     }

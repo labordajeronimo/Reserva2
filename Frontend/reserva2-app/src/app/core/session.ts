@@ -29,10 +29,10 @@ export class Session {
 
   // Actualiza el plan/ciclo guardados sin tener que volver a loguearse (ej. tras
   // cambiar de plan desde el propio panel).
-  actualizarPlanEnSesion(planActual: string, cicloFacturacion: string): void {
+  actualizarPlanEnSesion(planActual: string, cicloFacturacion: string, fechaProximoPago: string | null): void {
     const actual = this.obtenerUsuario();
     if (!actual) return;
-    this.iniciarSesion({ ...actual, planActual, cicloFacturacion });
+    this.iniciarSesion({ ...actual, planActual, cicloFacturacion, fechaProximoPago });
   }
 
   actualizarPerfilEnSesion(nombre: string, telefonoNotificaciones: string, datosBancarios: string, logoUrl: string | null): void {

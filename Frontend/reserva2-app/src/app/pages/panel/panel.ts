@@ -3,12 +3,28 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
-import { Api, Turno, Servicio, Horario, Profesional, LoginResponse, Historial, Ganancias, WhatsAppConfig, urlArchivo } from '../../core/api';
+import { Api, Turno, Servicio, Horario, Profesional, Sucursal, LoginResponse, Historial, Ganancias, WhatsAppConfig, urlArchivo } from '../../core/api';
 import { Session } from '../../core/session';
 import { PlanSelector } from '../../shared/plan-selector/plan-selector';
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+// Precios de lista (los mismos que se muestran en la landing y en el selector de plan).
+// El monto real que cobra cada comercio puede diferir si el Super Admin acordó un monto
+// puntual (MontoMensualAcordado); esto es solo para precargar el mensaje de WhatsApp con
+// una cifra de referencia calculada según cuántos profesionales tiene el comercio en total
+// (sumando todas sus sucursales).
+const PRECIOS_PLAN: Record<string, { unico: number; porProfesional: number }> = {
+  Gratuito: { unico: 0, porProfesional: 0 },
+  Basico: { unico: 7000, porProfesional: 4800 },
+  Premium: { unico: 11000, porProfesional: 8500 }
+};
+const PRECIOS_PLAN_ANUAL: Record<string, { unico: number; porProfesional: number }> = {
+  Gratuito: { unico: 0, porProfesional: 0 },
+  Basico: { unico: 63000, porProfesional: 43200 },
+  Premium: { unico: 99000, porProfesional: 76500 }
+};
 
 @Component({
   selector: 'app-panel',
@@ -22,7 +38,7 @@ export class Panel {
   meses = MESES;
 
   sesion: LoginResponse;
-  tabActiva = signal<'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'historial' | 'ganancias' | 'whatsapp' | 'plan' | 'perfil'>('turnos');
+  tabActiva = signal<'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'sucursales' | 'historial' | 'ganancias' | 'whatsapp' | 'plan' | 'perfil'>('turnos');
 
   // --- Perfil del comercio ---
   perfilNombre = '';
@@ -111,12 +127,26 @@ export class Panel {
   // --- Profesionales ---
   profesionales = signal<Profesional[]>([]);
   nuevoProfesionalNombre = '';
+  nuevoProfesionalSucursalId: number | null = null;
   errorProfesional = signal<string | null>(null);
   profesionalSeleccionado = signal<Profesional | null>(null);
   horariosDelProfesional = signal<Horario[]>([]);
   profesionalEditandoId = signal<number | null>(null);
   editProfesionalNombre = '';
+  editProfesionalSucursalId: number | null = null;
   errorEditProfesional = signal<string | null>(null);
+
+  // --- Sucursales ---
+  sucursales = signal<Sucursal[]>([]);
+  nuevaSucursalNombre = '';
+  nuevaSucursalDireccion = '';
+  nuevaSucursalTelefono = '';
+  errorSucursal = signal<string | null>(null);
+  sucursalEditandoId = signal<number | null>(null);
+  editSucursalNombre = '';
+  editSucursalDireccion = '';
+  editSucursalTelefono = '';
+  errorEditSucursal = signal<string | null>(null);
 
   constructor(private api: Api, private session: Session, private router: Router, private route: ActivatedRoute) {
     // El guard de la ruta ya garantiza que hay sesión antes de llegar acá.
@@ -149,6 +179,45 @@ export class Panel {
     return this.sesion.planActual === 'Premium';
   }
 
+  // ================= RENOVACIÓN DEL PLAN =================
+  diasParaRenovacion(): number | null {
+    if (!this.sesion.fechaProximoPago) return null;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const vencimiento = new Date(this.sesion.fechaProximoPago);
+    vencimiento.setHours(0, 0, 0, 0);
+    const msPorDia = 1000 * 60 * 60 * 24;
+    return Math.round((vencimiento.getTime() - hoy.getTime()) / msPorDia);
+  }
+
+  renovacionUrgente(): boolean {
+    const dias = this.diasParaRenovacion();
+    return dias !== null && dias <= 7;
+  }
+
+  // Monto de referencia según plan, ciclo y cantidad total de profesionales del comercio
+  // (sumando todas sus sucursales). No es necesariamente lo que termina cobrándose si el
+  // Super Admin acordó un monto puntual distinto, pero le da al cliente una cifra concreta
+  // para coordinar la transferencia en vez de tener que calcularla él mismo.
+  montoEstimadoPlan(): number {
+    const tabla = this.sesion.cicloFacturacion === 'Anual' ? PRECIOS_PLAN_ANUAL : PRECIOS_PLAN;
+    const precios = tabla[this.sesion.planActual] ?? tabla['Gratuito'];
+    const cantidadProfesionales = this.profesionales().length;
+    return cantidadProfesionales > 1 ? precios.porProfesional * cantidadProfesionales : precios.unico;
+  }
+
+  montoEstimadoTexto(): string {
+    const monto = this.montoEstimadoPlan();
+    if (monto <= 0) return 'a coordinar';
+    const periodo = this.sesion.cicloFacturacion === 'Anual' ? '/año' : '/mes';
+    return `$${monto.toLocaleString('es-AR')}${periodo}`;
+  }
+
+  linkPagoWhatsApp(): string {
+    const mensaje = `Hola! Quiero renovar mi plan de Reserva2. Comercio: ${this.sesion.nombre}. Plan: ${this.sesion.planActual} (${this.sesion.cicloFacturacion}). Profesionales: ${this.profesionales().length}. Monto estimado: ${this.montoEstimadoTexto()}.`;
+    return `https://wa.me/5492353410084?text=${encodeURIComponent(mensaje)}`;
+  }
+
   copiarLink(): void {
     const url = `${window.location.host}/${this.sesion.aliasUrl}`;
     navigator.clipboard?.writeText(url).then(() => {
@@ -162,7 +231,7 @@ export class Panel {
     this.router.navigateByUrl('/panel/login');
   }
 
-  abrirTab(tab: 'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'historial' | 'ganancias' | 'whatsapp' | 'plan' | 'perfil'): void {
+  abrirTab(tab: 'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'sucursales' | 'historial' | 'ganancias' | 'whatsapp' | 'plan' | 'perfil'): void {
     this.tabActiva.set(tab);
     if (tab === 'ganancias' && !this.gananciasCargadaAlMenosUnaVez) this.cargarGanancias();
     if (tab === 'whatsapp' && !this.whatsAppCargadoAlMenosUnaVez) this.cargarWhatsAppConfig();
@@ -177,8 +246,8 @@ export class Panel {
       next: r => {
         this.guardandoPlan.set(false);
         this.planGuardadoOk.set(true);
-        this.sesion = { ...this.sesion, planActual: r.planActual, cicloFacturacion: r.cicloFacturacion };
-        this.session.actualizarPlanEnSesion(r.planActual, r.cicloFacturacion);
+        this.sesion = { ...this.sesion, planActual: r.planActual, cicloFacturacion: r.cicloFacturacion, fechaProximoPago: r.fechaProximoPago };
+        this.session.actualizarPlanEnSesion(r.planActual, r.cicloFacturacion, r.fechaProximoPago);
       },
       error: err => {
         this.guardandoPlan.set(false);
@@ -279,6 +348,7 @@ export class Panel {
     this.cargarServicios();
     this.cargarHorarios();
     this.cargarProfesionales();
+    this.cargarSucursales();
     this.cargarHistorial();
   }
 
@@ -556,13 +626,89 @@ export class Panel {
     this.api.getProfesionales(this.sesion.comercioId).subscribe(profesionales => this.profesionales.set(profesionales));
   }
 
+  // ================= SUCURSALES =================
+  nombreSucursal(sucursalId: number): string {
+    return this.sucursales().find(s => s.id === sucursalId)?.nombre ?? '';
+  }
+
+  cargarSucursales(): void {
+    this.api.getSucursales(this.sesion.comercioId).subscribe(sucursales => this.sucursales.set(sucursales));
+  }
+
+  agregarSucursal(): void {
+    if (!this.nuevaSucursalNombre.trim()) return;
+
+    this.errorSucursal.set(null);
+    this.api.crearSucursal(this.sesion.comercioId, {
+      nombre: this.nuevaSucursalNombre.trim(),
+      direccion: this.nuevaSucursalDireccion.trim(),
+      telefono: this.nuevaSucursalTelefono.trim() || null
+    }).subscribe({
+      next: () => {
+        this.nuevaSucursalNombre = '';
+        this.nuevaSucursalDireccion = '';
+        this.nuevaSucursalTelefono = '';
+        this.cargarSucursales();
+      },
+      error: err => this.errorSucursal.set(err.error?.mensaje ?? 'No pudimos agregar la sucursal.')
+    });
+  }
+
+  iniciarEdicionSucursal(s: Sucursal): void {
+    this.sucursalEditandoId.set(s.id);
+    this.editSucursalNombre = s.nombre;
+    this.editSucursalDireccion = s.direccion;
+    this.editSucursalTelefono = s.telefono ?? '';
+    this.errorEditSucursal.set(null);
+  }
+
+  cancelarEdicionSucursal(): void {
+    this.sucursalEditandoId.set(null);
+  }
+
+  guardarEdicionSucursal(s: Sucursal): void {
+    this.errorEditSucursal.set(null);
+
+    if (!this.editSucursalNombre.trim()) {
+      this.errorEditSucursal.set('Ingresá el nombre de la sucursal.');
+      return;
+    }
+
+    this.api.editarSucursal(s.id, {
+      nombre: this.editSucursalNombre.trim(),
+      direccion: this.editSucursalDireccion.trim(),
+      telefono: this.editSucursalTelefono.trim() || null,
+      activa: s.activa
+    }).subscribe({
+      next: () => {
+        this.sucursalEditandoId.set(null);
+        this.cargarSucursales();
+      },
+      error: err => this.errorEditSucursal.set(err.error?.mensaje ?? 'No pudimos guardar los cambios.')
+    });
+  }
+
+  toggleActivaSucursal(s: Sucursal): void {
+    this.api.editarSucursal(s.id, { nombre: s.nombre, direccion: s.direccion, telefono: s.telefono, activa: !s.activa }).subscribe(() => {
+      this.cargarSucursales();
+    });
+  }
+
+  quitarSucursal(s: Sucursal): void {
+    this.api.eliminarSucursal(s.id).subscribe(() => {
+      this.cargarSucursales();
+      this.cargarProfesionales();
+    });
+  }
+
   agregarProfesional(): void {
     if (!this.nuevoProfesionalNombre.trim()) return;
 
     this.errorProfesional.set(null);
-    this.api.crearProfesional(this.sesion.comercioId, this.nuevoProfesionalNombre.trim()).subscribe({
+    this.api.crearProfesional(this.sesion.comercioId, this.nuevoProfesionalNombre.trim(), this.nuevoProfesionalSucursalId).subscribe({
       next: () => {
         this.nuevoProfesionalNombre = '';
+        this.nuevoProfesionalSucursalId = null;
         this.cargarProfesionales();
       },
       error: err => {
@@ -574,6 +720,7 @@ export class Panel {
   iniciarEdicionProfesional(p: Profesional): void {
     this.profesionalEditandoId.set(p.id);
     this.editProfesionalNombre = p.nombre;
+    this.editProfesionalSucursalId = p.sucursalId;
     this.errorEditProfesional.set(null);
   }
 
@@ -589,7 +736,7 @@ export class Panel {
       return;
     }
 
-    this.api.editarProfesional(p.id, this.editProfesionalNombre.trim()).subscribe({
+    this.api.editarProfesional(p.id, this.editProfesionalNombre.trim(), this.editProfesionalSucursalId).subscribe({
       next: () => {
         this.profesionalEditandoId.set(null);
         this.cargarProfesionales();

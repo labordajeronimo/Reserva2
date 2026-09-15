@@ -112,7 +112,7 @@
 }
 .plan-select:focus { outline: 2px solid #FB923C; outline-offset: 1px; }
 .tabla tr:last-child td { border-bottom: none; }
-.acciones { display: flex; gap: 8px; }
+.acciones { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .monto-acordado { display: flex; align-items: center; gap: 6px; }
 .monto-prefijo { color: #A6AFC6; font-size: 0.85rem; }
@@ -139,6 +139,7 @@
 }
 .badge-ok { background: rgba(52, 211, 153, 0.16); border-color: rgba(52, 211, 153, 0.3); color: #6EE7B7; }
 .badge-danger { background: rgba(248, 113, 113, 0.16); border-color: rgba(248, 113, 113, 0.3); color: #FCA5A5; }
+.sin-vencimiento { color: #6B748A; font-size: 0.82rem; }
 
 .mini {
   border: 1px solid transparent;

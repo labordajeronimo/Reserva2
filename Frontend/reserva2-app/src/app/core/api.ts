@@ -2,9 +2,11 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
-// Ajustá esto si corrés el backend en otro puerto (ver Properties/launchSettings.json).
-const API_BASE = 'http://localhost:5267/api';
-const API_ROOT = API_BASE.replace(/\/api$/, '');
+// Usa el mismo host desde el que se sirvió la página (localhost o la IP de la red local),
+// así funciona igual accediendo desde la compu o desde el celular en el mismo WiFi.
+// Ajustá el puerto si corrés el backend en otro (ver Properties/launchSettings.json).
+const API_ROOT = typeof window !== 'undefined' ? `http://${window.location.hostname}:5267` : 'http://localhost:5267';
+const API_BASE = `${API_ROOT}/api`;
 
 // Las rutas de archivos (ej. LogoUrl) vienen relativas al backend ("/uploads/logos/1.png"),
 // no al frontend, así que hay que anteponerles el host del backend para poder mostrarlas.
@@ -44,6 +46,16 @@ export interface Profesional {
   id: number;
   comercioId: number;
   nombre: string;
+  sucursalId: number | null;
+}
+
+export interface Sucursal {
+  id: number;
+  comercioId: number;
+  nombre: string;
+  direccion: string;
+  telefono: string | null;
+  activa: boolean;
 }
 
 export interface SlotDisponibilidad {
@@ -115,11 +127,13 @@ export interface LoginResponse {
   telefonoNotificaciones: string;
   datosBancarios: string;
   logoUrl: string | null;
+  fechaProximoPago: string | null;
 }
 
 export interface MiPlan {
   planActual: string;
   cicloFacturacion: string;
+  fechaProximoPago: string | null;
 }
 
 export interface Perfil {
@@ -231,6 +245,10 @@ export class Api {
     return this.http.patch<ComercioAdmin>(`${API_BASE}/comercios/${id}/ciclo-facturacion`, { cicloFacturacion });
   }
 
+  renovarComercio(id: number): Observable<ComercioAdmin> {
+    return this.http.patch<ComercioAdmin>(`${API_BASE}/comercios/${id}/renovar`, {});
+  }
+
   getMetricas(): Observable<Metricas> {
     return this.http.get<Metricas>(`${API_BASE}/admin/metricas`);
   }
@@ -277,27 +295,47 @@ export class Api {
   }
 
   // --- Profesionales ---
-  getProfesionales(comercioId: number): Observable<Profesional[]> {
-    return this.http.get<Profesional[]>(`${API_BASE}/comercios/${comercioId}/profesionales`);
+  getProfesionales(comercioId: number, sucursalId?: number): Observable<Profesional[]> {
+    return this.http.get<Profesional[]>(`${API_BASE}/comercios/${comercioId}/profesionales`, {
+      params: sucursalId ? { sucursalId } : {}
+    });
   }
 
-  crearProfesional(comercioId: number, nombre: string): Observable<Profesional> {
-    return this.http.post<Profesional>(`${API_BASE}/comercios/${comercioId}/profesionales`, { nombre });
+  crearProfesional(comercioId: number, nombre: string, sucursalId?: number | null): Observable<Profesional> {
+    return this.http.post<Profesional>(`${API_BASE}/comercios/${comercioId}/profesionales`, { nombre, sucursalId });
   }
 
-  editarProfesional(id: number, nombre: string): Observable<Profesional> {
-    return this.http.put<Profesional>(`${API_BASE}/profesionales/${id}`, { nombre });
+  editarProfesional(id: number, nombre: string, sucursalId?: number | null): Observable<Profesional> {
+    return this.http.put<Profesional>(`${API_BASE}/profesionales/${id}`, { nombre, sucursalId });
   }
 
   eliminarProfesional(id: number): Observable<void> {
     return this.http.delete<void>(`${API_BASE}/profesionales/${id}`);
   }
 
+  // --- Sucursales ---
+  getSucursales(comercioId: number): Observable<Sucursal[]> {
+    return this.http.get<Sucursal[]>(`${API_BASE}/comercios/${comercioId}/sucursales`);
+  }
+
+  crearSucursal(comercioId: number, datos: { nombre: string; direccion: string; telefono?: string | null; activa?: boolean }): Observable<Sucursal> {
+    return this.http.post<Sucursal>(`${API_BASE}/comercios/${comercioId}/sucursales`, datos);
+  }
+
+  editarSucursal(id: number, datos: { nombre: string; direccion: string; telefono?: string | null; activa?: boolean }): Observable<Sucursal> {
+    return this.http.put<Sucursal>(`${API_BASE}/sucursales/${id}`, datos);
+  }
+
+  eliminarSucursal(id: number): Observable<void> {
+    return this.http.delete<void>(`${API_BASE}/sucursales/${id}`);
+  }
+
   // --- Disponibilidad y turnos ---
-  getDisponibilidad(comercioId: number, servicioId: number, fecha: string): Observable<SlotDisponibilidad[]> {
-    return this.http.get<SlotDisponibilidad[]>(`${API_BASE}/comercios/${comercioId}/disponibilidad`, {
-      params: { servicioId, fecha }
-    });
+  getDisponibilidad(comercioId: number, servicioId: number, fecha: string, profesionalId?: number | null, sucursalId?: number | null): Observable<SlotDisponibilidad[]> {
+    const params: Record<string, string | number> = { servicioId, fecha };
+    if (profesionalId) params['profesionalId'] = profesionalId;
+    if (sucursalId) params['sucursalId'] = sucursalId;
+    return this.http.get<SlotDisponibilidad[]>(`${API_BASE}/comercios/${comercioId}/disponibilidad`, { params });
   }
 
   crearTurno(turno: {
@@ -307,6 +345,7 @@ export class Api {
     clienteNombre: string;
     clienteWhatsApp: string;
     clienteEmail: string;
+    profesionalId?: number | null;
   }): Observable<Turno> {
     return this.http.post<Turno>(`${API_BASE}/turnos`, turno);
   }

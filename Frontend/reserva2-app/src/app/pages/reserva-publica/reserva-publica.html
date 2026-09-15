@@ -76,11 +76,66 @@
   </div>
 </main>
 
+} @else if (necesitaElegirSucursal() && !sucursalSeleccionada()) {
+
+<main>
+  <div class="wrap" style="max-width:640px;">
+    <div class="card">
+      <h2>Elegí la sucursal</h2>
+      <p class="sub">{{ comercio()!.nombre }} tiene más de un local. Elegí en cuál querés reservar.</p>
+
+      <div class="services">
+        @for (s of sucursalesActivas(); track s.id) {
+          <div class="service" (click)="elegirSucursal(s)">
+            <div>
+              <div class="name">{{ s.nombre }}</div>
+              @if (s.direccion) { <div class="dur">{{ s.direccion }}</div> }
+              @if (s.telefono) { <div class="dur">{{ s.telefono }}</div> }
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</main>
+
 } @else {
 
 <main>
   <div class="wrap layout">
     <div>
+      @if (sucursalSeleccionada(); as sucursal) {
+        <div class="card" style="margin-bottom:22px;">
+          <h2>Sucursal elegida</h2>
+          <p class="sub" style="margin-bottom:0;">
+            <strong>{{ sucursal.nombre }}</strong>
+            @if (sucursal.direccion) { · {{ sucursal.direccion }} }
+            @if (sucursal.telefono) { · {{ sucursal.telefono }} }
+            @if (necesitaElegirSucursal()) {
+              · <button type="button" class="cambiar-sucursal-btn" (click)="elegirSucursal(null)">Cambiar</button>
+            }
+          </p>
+        </div>
+      }
+
+      @if (profesionales().length > 0) {
+        <div class="card" style="margin-bottom:22px;">
+          <h2>Elegí profesional</h2>
+          <p class="sub">Podés dejar que te atienda cualquiera disponible.</p>
+
+          <div class="services">
+            <div class="service" [class.active]="profesionalSeleccionado() === null" (click)="elegirProfesional(null)">
+              <div><div class="name">Cualquiera disponible</div></div>
+            </div>
+            @for (p of profesionales(); track p.id) {
+              <div class="service" [class.active]="profesionalSeleccionado()?.id === p.id" (click)="elegirProfesional(p)">
+                <div><div class="name">{{ p.nombre }}</div></div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
       <div class="card" style="margin-bottom:22px;">
         <h2>Elegí el servicio</h2>
         <p class="sub">Los horarios se ajustan según la duración de cada uno.</p>

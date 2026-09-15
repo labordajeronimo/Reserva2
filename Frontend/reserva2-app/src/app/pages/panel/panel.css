@@ -175,6 +175,37 @@
 
 .whatsapp-estado { display: flex; align-items: center; gap: 14px; margin-top: 20px; }
 
+.renovacion-contador {
+  background: rgba(232, 236, 246, 0.06);
+  border: 1px solid rgba(232, 236, 246, 0.13);
+  color: #D3D9E8;
+  font-size: 0.88rem;
+  padding: 12px 14px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+.renovacion-contador strong { color: #FFFFFF; }
+.renovacion-contador.alerta {
+  background: rgba(248, 113, 113, 0.14);
+  border-color: rgba(248, 113, 113, 0.32);
+  color: #FCA5A5;
+  font-weight: 600;
+}
+.renovacion-contador.alerta strong { color: #FCA5A5; }
+
+.monto-estimado-info { color: #A6AFC6; font-size: 0.85rem; margin: 0 0 14px; }
+.monto-estimado-info strong { color: #FFFFFF; }
+
+.renovacion-btn {
+  display: inline-block;
+  margin-bottom: 22px;
+  text-decoration: none;
+  color: #6EE7B7;
+  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(52, 211, 153, 0.1);
+}
+.renovacion-btn:hover { background: rgba(52, 211, 153, 0.18); }
+
 .panel-card {
   background: #131A2E;
   border: 1px solid rgba(232, 236, 246, 0.09);
@@ -282,6 +313,8 @@
   justify-content: space-between;
   padding: 12px 14px;
 }
+.sucursal-tag { font-weight: 400; font-size: 0.8rem; color: #A6AFC6; }
+
 .link-toggle {
   background: none;
   border: none;

@@ -60,6 +60,19 @@ body {
   filter: blur(110px);
   opacity: 0.5;
   animation: float 20s infinite alternate ease-in-out;
+  /* Fuerza al blob a su propia capa de composición en vez de repintarse con el
+     resto de la página en cada frame — sin esto, el blur de 110px + la animación
+     continua traban el scroll en Safari iOS. */
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* En pantallas chicas el blur pesado del fondo es la causa más probable de scroll
+   trabado en celulares reales; se reduce el radio (el costo de un blur crece con
+   el cuadrado del radio) y se corta la animación, que no aporta nada visible ahí. */
+@media (max-width: 720px) {
+  .blob { filter: blur(50px); animation: none; }
+  .navbar { backdrop-filter: blur(8px); }
 }
 
 .blob.orange {
@@ -100,7 +113,9 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
-  transition: all 0.3s ease;
+  /* Transicionar solo padding/background/shadow, no "all": incluir backdrop-filter
+     en la transición es muy costoso para el compositor en Safari iOS y trababa el scroll. */
+  transition: padding 0.3s ease, background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .navbar.scrolled {
@@ -225,12 +240,17 @@ body {
    detrás de un botón de menú (☰) que despliega un dropdown simple; el logo y los
    botones se achican para que todo entre en una fila sin forzar scroll horizontal. */
 @media (max-width: 720px) {
-  .navbar { padding: 0.7rem 4%; gap: 10px; }
-  .navbar.scrolled { padding: 0.4rem 4%; }
+  /* En mobile el navbar NO achica su padding/logo al cruzar el umbral de scroll (a
+     diferencia de escritorio): ese cambio de tamaño en un elemento sticky, mientras
+     el dedo está arrastrando la página, es lo que causaba que el scroll "rebotara"
+     y se trabara en Safari iOS. Acá el navbar.scrolled solo cambia de color/sombra,
+     igual que el estado normal en tamaño, para no forzar reflow durante el scroll. */
+  html { scroll-behavior: auto; }
+  .navbar, .navbar.scrolled { padding: 0.7rem 4%; gap: 10px; }
   .nav-links { display: none; }
   .logo-container { padding: 3px 10px 3px 6px; }
-  .logo-icon { height: 30px; }
-  .logo-text { height: 20px; }
+  .logo-icon, .navbar.scrolled .logo-icon { height: 30px; }
+  .logo-text, .navbar.scrolled .logo-text { height: 20px; }
   .nav-actions { gap: 0.5rem; }
   .nav-login { display: none; }
   .nav-actions .btn-naranja { padding: 9px 12px; font-size: 0.78rem; }

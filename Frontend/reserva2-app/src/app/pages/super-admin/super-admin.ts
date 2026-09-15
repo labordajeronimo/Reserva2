@@ -25,6 +25,7 @@ export class SuperAdmin {
   errorComercios = signal<string | null>(null);
   actualizandoEstadoId = signal<number | null>(null);
   actualizandoMontoId = signal<number | null>(null);
+  renovandoId = signal<number | null>(null);
 
   constructor(private api: Api, private session: Session, private router: Router) {
     // El guard de la ruta ya garantiza que hay sesión antes de llegar acá.
@@ -88,6 +89,41 @@ export class SuperAdmin {
     if (nuevoCiclo === c.cicloFacturacion) return;
     this.api.actualizarCicloFacturacion(c.id, nuevoCiclo).subscribe(actualizado => {
       this.comercios.update(lista => lista.map(x => x.id === actualizado.id ? actualizado : x));
+    });
+  }
+
+  private diasParaVencimiento(c: ComercioAdmin): number | null {
+    if (!c.fechaProximoPago) return null;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const vencimiento = new Date(c.fechaProximoPago);
+    vencimiento.setHours(0, 0, 0, 0);
+    const msPorDia = 1000 * 60 * 60 * 24;
+    return Math.round((vencimiento.getTime() - hoy.getTime()) / msPorDia);
+  }
+
+  etiquetaVencimiento(c: ComercioAdmin): string {
+    const dias = this.diasParaVencimiento(c);
+    if (dias === null) return 'Sin definir';
+    if (dias > 0) return `${dias} día${dias === 1 ? '' : 's'}`;
+    if (dias === 0) return 'Hoy';
+    return `Venció hace ${-dias} día${dias === -1 ? '' : 's'}`;
+  }
+
+  vencimientoUrgente(c: ComercioAdmin): boolean {
+    const dias = this.diasParaVencimiento(c);
+    return dias !== null && dias <= 7;
+  }
+
+  renovar(c: ComercioAdmin): void {
+    this.renovandoId.set(c.id);
+    this.api.renovarComercio(c.id).subscribe({
+      next: actualizado => {
+        this.comercios.update(lista => lista.map(x => x.id === actualizado.id ? actualizado : x));
+        this.renovandoId.set(null);
+        this.api.getMetricas().subscribe(m => this.metricas.set(m));
+      },
+      error: () => this.renovandoId.set(null)
     });
   }
 }

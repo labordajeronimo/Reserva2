@@ -147,6 +147,12 @@ static int TopeProfesionales(string plan) => plan switch
 // (si no, un despliegue en un servidor con reloj en UTC corre el día/las franjas ~3hs).
 static DateTime AhoraArgentina() => DateTime.UtcNow.AddHours(-3);
 
+// Próxima fecha de pago según el ciclo de facturación: un mes o un año desde hoy.
+// Se recalcula cada vez que cambia el plan/ciclo, y también al marcar un pago recibido
+// (ahí no se extiende desde la fecha vieja, se vuelve a contar un ciclo entero desde hoy).
+static DateTime CalcularProximoPago(string cicloFacturacion) =>
+    cicloFacturacion == "Anual" ? AhoraArgentina().Date.AddYears(1) : AhoraArgentina().Date.AddMonths(1);
+
 bool EsPreReservaVigente(Turno t) =>
     t.EstadoReserva == 1 && t.FechaCreacion > DateTime.UtcNow.AddHours(-HorasLimiteParaConfirmar);
 
@@ -272,7 +278,8 @@ app.MapPost("/api/auth/register", async (AppDbContext context, RegistroRequest r
         Email = req.Email,
         PasswordHash = HashPassword(req.Password),
         PlanActual = planElegido,
-        CicloFacturacion = cicloElegido
+        CicloFacturacion = cicloElegido,
+        FechaProximoPago = CalcularProximoPago(cicloElegido)
     };
 
     context.Comercios.Add(comercio);
@@ -280,7 +287,7 @@ app.MapPost("/api/auth/register", async (AppDbContext context, RegistroRequest r
 
     return Results.Created($"/api/comercios/{comercio.Id}",
         new LoginResponse(comercio.Id, comercio.Nombre, comercio.AliasUrl, GenerarToken("AdminCliente", comercio.Id), comercio.PlanActual, comercio.CicloFacturacion,
-            comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.LogoUrl));
+            comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.LogoUrl, comercio.FechaProximoPago));
 }).RequireRateLimiting("login");
 
 app.MapPost("/api/auth/login", async (AppDbContext context, LoginRequest req) =>
@@ -290,7 +297,7 @@ app.MapPost("/api/auth/login", async (AppDbContext context, LoginRequest req) =>
         return Results.Unauthorized();
 
     return Results.Ok(new LoginResponse(comercio.Id, comercio.Nombre, comercio.AliasUrl, GenerarToken("AdminCliente", comercio.Id), comercio.PlanActual, comercio.CicloFacturacion,
-            comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.LogoUrl));
+            comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.LogoUrl, comercio.FechaProximoPago));
 }).RequireRateLimiting("login");
 
 app.MapPost("/api/auth/forgot-password", async (AppDbContext context, IConfiguration config, ILogger<Program> logger, ForgotPasswordRequest req) =>
@@ -398,6 +405,7 @@ app.MapPatch("/api/comercios/{id:int}/plan", async (AppDbContext context, int id
     if (comercio is null) return Results.NotFound();
 
     comercio.PlanActual = req.PlanActual;
+    comercio.FechaProximoPago = CalcularProximoPago(comercio.CicloFacturacion);
     await context.SaveChangesAsync();
 
     return Results.Ok(new ComercioDto(comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla,
@@ -425,6 +433,25 @@ app.MapPatch("/api/comercios/{id:int}/ciclo-facturacion", async (AppDbContext co
     if (comercio is null) return Results.NotFound();
 
     comercio.CicloFacturacion = req.CicloFacturacion;
+    // El ciclo cambió, así que la fecha de próximo pago (que se cuenta en meses o años según
+    // el ciclo) se recalcula para no quedar desalineada con el nuevo ciclo elegido.
+    comercio.FechaProximoPago = CalcularProximoPago(comercio.CicloFacturacion);
+    await context.SaveChangesAsync();
+
+    return Results.Ok(new ComercioDto(comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla,
+        comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.Email, comercio.Activo, comercio.PlanActual, comercio.FechaProximoPago, comercio.MontoMensualAcordado, comercio.CicloFacturacion));
+}).RequireAuthorization("SuperAdmin");
+
+// El Super Admin marca un pago como recibido (transferencia coordinada a mano por WhatsApp):
+// empuja la fecha de próximo pago un ciclo entero desde hoy y reactiva el comercio si estaba
+// pausado por falta de pago.
+app.MapPatch("/api/comercios/{id:int}/renovar", async (AppDbContext context, int id) =>
+{
+    var comercio = await context.Comercios.FindAsync(id);
+    if (comercio is null) return Results.NotFound();
+
+    comercio.FechaProximoPago = CalcularProximoPago(comercio.CicloFacturacion);
+    comercio.Activo = true;
     await context.SaveChangesAsync();
 
     return Results.Ok(new ComercioDto(comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla,
@@ -473,9 +500,10 @@ app.MapPatch("/api/comercios/{comercioId:int}/mi-plan", async (AppDbContext cont
 
     comercio.PlanActual = req.PlanActual;
     comercio.CicloFacturacion = req.CicloFacturacion;
+    comercio.FechaProximoPago = CalcularProximoPago(comercio.CicloFacturacion);
     await context.SaveChangesAsync();
 
-    return Results.Ok(new MiPlanDto(comercio.PlanActual, comercio.CicloFacturacion));
+    return Results.Ok(new MiPlanDto(comercio.PlanActual, comercio.CicloFacturacion, comercio.FechaProximoPago));
 }).RequireAuthorization("AdminCliente");
 
 // El dueño edita los datos de su propio negocio (no el alias del link público: cambiarlo
@@ -624,19 +652,20 @@ app.MapPost("/api/comercios/{comercioId:int}/profesionales", async (AppDbContext
     if (cantidadActual >= tope)
         return Results.Conflict(new { mensaje = $"Tu plan {comercio.PlanActual} permite hasta {tope} profesional(es). Actualizá de plan para agregar más." });
 
-    var profesional = new Profesional { ComercioId = comercioId, Nombre = req.Nombre };
+    var profesional = new Profesional { ComercioId = comercioId, Nombre = req.Nombre, SucursalId = req.SucursalId };
     context.Profesionales.Add(profesional);
     await context.SaveChangesAsync();
     return Results.Created($"/api/profesionales/{profesional.Id}", profesional);
 }).RequireAuthorization("AdminCliente");
 
 // Público: la página de reserva necesita listarlos para que el cliente elija profesional.
-app.MapGet("/api/comercios/{comercioId:int}/profesionales", async (AppDbContext context, int comercioId) =>
+// Si el comercio tiene sucursales, se puede filtrar para mostrar solo los de la sucursal elegida.
+app.MapGet("/api/comercios/{comercioId:int}/profesionales", async (AppDbContext context, int comercioId, int? sucursalId) =>
 {
-    var profesionales = await context.Profesionales
-        .Where(p => p.ComercioId == comercioId)
-        .OrderBy(p => p.Nombre)
-        .ToListAsync();
+    var query = context.Profesionales.Where(p => p.ComercioId == comercioId);
+    if (sucursalId is not null) query = query.Where(p => p.SucursalId == sucursalId);
+
+    var profesionales = await query.OrderBy(p => p.Nombre).ToListAsync();
     return Results.Ok(profesionales);
 });
 
@@ -650,6 +679,7 @@ app.MapPut("/api/profesionales/{id:int}", async (AppDbContext context, int id, P
     if (ComercioIdDelToken(user) != profesional.ComercioId) return Results.Forbid();
 
     profesional.Nombre = req.Nombre.Trim();
+    profesional.SucursalId = req.SucursalId;
     await context.SaveChangesAsync();
 
     return Results.Ok(profesional);
@@ -667,6 +697,73 @@ app.MapDelete("/api/profesionales/{id:int}", async (AppDbContext context, int id
     context.Horarios.RemoveRange(horariosDelProfesional);
 
     context.Profesionales.Remove(profesional);
+    await context.SaveChangesAsync();
+    return Results.NoContent();
+}).RequireAuthorization("AdminCliente");
+
+// ==========================================
+// ENDPOINTS PARA SUCURSALES (disponible en todos los planes)
+// ==========================================
+app.MapPost("/api/comercios/{comercioId:int}/sucursales", async (AppDbContext context, int comercioId, SucursalRequest req, ClaimsPrincipal user) =>
+{
+    if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(req.Nombre))
+        return Results.BadRequest(new { mensaje = "El nombre no puede estar vacío." });
+
+    var sucursal = new Sucursal
+    {
+        ComercioId = comercioId,
+        Nombre = req.Nombre.Trim(),
+        Direccion = req.Direccion?.Trim() ?? string.Empty,
+        Telefono = req.Telefono,
+        Activa = req.Activa
+    };
+    context.Sucursales.Add(sucursal);
+    await context.SaveChangesAsync();
+    return Results.Created($"/api/sucursales/{sucursal.Id}", sucursal);
+}).RequireAuthorization("AdminCliente");
+
+// Público: la página de reserva necesita listarlas para que el cliente elija sucursal
+// cuando el comercio tiene más de una activa.
+app.MapGet("/api/comercios/{comercioId:int}/sucursales", async (AppDbContext context, int comercioId) =>
+{
+    var sucursales = await context.Sucursales
+        .Where(s => s.ComercioId == comercioId)
+        .OrderBy(s => s.Nombre)
+        .ToListAsync();
+    return Results.Ok(sucursales);
+});
+
+app.MapPut("/api/sucursales/{id:int}", async (AppDbContext context, int id, SucursalRequest req, ClaimsPrincipal user) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Nombre))
+        return Results.BadRequest(new { mensaje = "El nombre no puede estar vacío." });
+
+    var sucursal = await context.Sucursales.FindAsync(id);
+    if (sucursal is null) return Results.NotFound();
+    if (ComercioIdDelToken(user) != sucursal.ComercioId) return Results.Forbid();
+
+    sucursal.Nombre = req.Nombre.Trim();
+    sucursal.Direccion = req.Direccion?.Trim() ?? string.Empty;
+    sucursal.Telefono = req.Telefono;
+    sucursal.Activa = req.Activa;
+    await context.SaveChangesAsync();
+
+    return Results.Ok(sucursal);
+}).RequireAuthorization("AdminCliente");
+
+app.MapDelete("/api/sucursales/{id:int}", async (AppDbContext context, int id, ClaimsPrincipal user) =>
+{
+    var sucursal = await context.Sucursales.FindAsync(id);
+    if (sucursal is null) return Results.NotFound();
+    if (ComercioIdDelToken(user) != sucursal.ComercioId) return Results.Forbid();
+
+    // Los profesionales de esta sucursal quedan sin sucursal asignada (no se borran ni se
+    // tocan sus turnos/horarios), como si el comercio recién estuviera armando sus sucursales.
+    var profesionalesDeLaSucursal = await context.Profesionales.Where(p => p.SucursalId == id).ToListAsync();
+    foreach (var p in profesionalesDeLaSucursal) p.SucursalId = null;
+
+    context.Sucursales.Remove(sucursal);
     await context.SaveChangesAsync();
     return Results.NoContent();
 }).RequireAuthorization("AdminCliente");
@@ -737,7 +834,7 @@ app.MapDelete("/api/horarios/{id:int}", async (AppDbContext context, int id, Cla
 // ==========================================
 // DISPONIBILIDAD (la grilla verde/gris que ve el cliente)
 // ==========================================
-app.MapGet("/api/comercios/{comercioId:int}/disponibilidad", async (AppDbContext context, int comercioId, int servicioId, DateOnly fecha, int? profesionalId) =>
+app.MapGet("/api/comercios/{comercioId:int}/disponibilidad", async (AppDbContext context, int comercioId, int servicioId, DateOnly fecha, int? profesionalId, int? sucursalId) =>
 {
     var comercioActivo = await context.Comercios.Where(c => c.Id == comercioId).Select(c => (bool?)c.Activo).FirstOrDefaultAsync();
     if (comercioActivo is null) return Results.NotFound();
@@ -747,8 +844,17 @@ app.MapGet("/api/comercios/{comercioId:int}/disponibilidad", async (AppDbContext
     if (servicio is null || servicio.ComercioId != comercioId)
         return Results.NotFound(new { mensaje = "El servicio no pertenece a este comercio." });
 
-    if (profesionalId is not null && !await context.Profesionales.AnyAsync(p => p.Id == profesionalId && p.ComercioId == comercioId))
-        return Results.NotFound(new { mensaje = "El profesional no pertenece a este comercio." });
+    if (profesionalId is not null)
+    {
+        // Horario cuelga de Profesional, no de Sucursal directamente: si vienen los dos
+        // parámetros, lo que hay que validar es que el profesional elegido efectivamente
+        // pertenezca a esa sucursal (evita mezclar datos de sucursales distintas).
+        var profesional = await context.Profesionales.FirstOrDefaultAsync(p => p.Id == profesionalId && p.ComercioId == comercioId);
+        if (profesional is null)
+            return Results.NotFound(new { mensaje = "El profesional no pertenece a este comercio." });
+        if (sucursalId is not null && profesional.SucursalId != sucursalId)
+            return Results.NotFound(new { mensaje = "El profesional no pertenece a esa sucursal." });
+    }
 
     var diaSemana = (int)fecha.DayOfWeek;
     var bloques = await ObtenerBloquesHorario(context, comercioId, profesionalId, diaSemana);
@@ -1187,7 +1293,7 @@ record ActualizarCicloFacturacionRequest(string CicloFacturacion);
 record MetricasDto(int TotalComercios, int ComerciosActivos, int ComerciosInactivos, int TurnosDelMes);
 record RegistroRequest(string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string DatosBancarios, string Email, string Password, string? PlanActual = null, string? CicloFacturacion = null);
 record MiPlanRequest(string PlanActual, string CicloFacturacion);
-record MiPlanDto(string PlanActual, string CicloFacturacion);
+record MiPlanDto(string PlanActual, string CicloFacturacion, DateTime? FechaProximoPago);
 record PerfilRequest(string Nombre, string TelefonoNotificaciones, string DatosBancarios);
 record PerfilDto(string Nombre, string TelefonoNotificaciones, string DatosBancarios, string? LogoUrl);
 record EditarServicioRequest(string Nombre, int DuracionMinutos, decimal Precio, decimal? MontoSeña);
@@ -1197,10 +1303,11 @@ record LoginRequest(string Email, string Password);
 record ForgotPasswordRequest(string Email);
 record ResetPasswordRequest(string Token, string NuevaPassword);
 record LoginResponse(int ComercioId, string Nombre, string AliasUrl, string Token, string PlanActual, string CicloFacturacion,
-    string TelefonoNotificaciones, string DatosBancarios, string? LogoUrl);
+    string TelefonoNotificaciones, string DatosBancarios, string? LogoUrl, DateTime? FechaProximoPago);
 record SuperAdminLoginRequest(string Email, string Password);
 record SuperAdminLoginResponse(string Token);
-record ProfesionalRequest(string Nombre);
+record ProfesionalRequest(string Nombre, int? SucursalId = null);
+record SucursalRequest(string Nombre, string Direccion, string? Telefono, bool Activa = true);
 record HorarioRequest(int DiaSemana, TimeSpan HoraInicio, TimeSpan HoraFin, int? ProfesionalId = null);
 record SlotDisponibilidad(DateTime Inicio, DateTime Fin, bool Disponible);
 record CrearTurnoRequest(int ComercioId, int ServicioId, DateTime FechaHoraInicio, string ClienteNombre, string ClienteWhatsApp, string ClienteEmail, int? ProfesionalId = null);

@@ -14,11 +14,22 @@ export class Landing {
   facturacionAnual = false;
   menuMobileAbierto = false;
 
+  private tickeando = false;
+
   constructor(private router: Router) {}
 
   @HostListener('window:scroll', [])
   onWindowScroll() {
-    this.isScrolled = window.scrollY > 50;
+    // Se agrupa con requestAnimationFrame y solo se actualiza si el valor realmente
+    // cambió, para no disparar un ciclo de change detection en cada pixel de scroll
+    // (eso es lo que trababa el scroll en Safari iOS).
+    if (this.tickeando) return;
+    this.tickeando = true;
+    requestAnimationFrame(() => {
+      const scrolled = window.scrollY > 50;
+      if (scrolled !== this.isScrolled) this.isScrolled = scrolled;
+      this.tickeando = false;
+    });
   }
 
   toggleMenuMobile(): void {
