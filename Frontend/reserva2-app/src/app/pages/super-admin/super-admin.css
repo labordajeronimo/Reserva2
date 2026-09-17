@@ -57,6 +57,10 @@
 
 .panel-main { max-width: 1000px; margin: 0 auto; padding: 32px 24px 80px; }
 
+.panel-footer { text-align: center; padding: 0 24px 32px; }
+.panel-footer a { color: #7C879E; font-size: 0.8rem; text-decoration: none; }
+.panel-footer a:hover { color: #A6AFC6; text-decoration: underline; }
+
 .metricas {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

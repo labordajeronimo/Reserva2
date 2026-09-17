@@ -99,8 +99,16 @@ export interface GananciaPorProfesional {
   ingresos: number;
 }
 
+export interface GananciaPorSucursal {
+  sucursalId: number | null;
+  nombreSucursal: string;
+  cantidadTurnos: number;
+  ingresos: number;
+}
+
 export interface Ganancias {
   porProfesional: GananciaPorProfesional[];
+  porSucursal: GananciaPorSucursal[];
   cantidadTotal: number;
   ingresosTotal: number;
 }

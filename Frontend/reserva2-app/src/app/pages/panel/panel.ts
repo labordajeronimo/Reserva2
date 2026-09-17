@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { Api, Turno, Servicio, Horario, Profesional, Sucursal, LoginResponse, Historial, Ganancias, WhatsAppConfig, urlArchivo } from '../../core/api';
 import { Session } from '../../core/session';
+import { linkWhatsApp } from '../../core/whatsapp';
 import { PlanSelector } from '../../shared/plan-selector/plan-selector';
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -215,7 +216,11 @@ export class Panel {
 
   linkPagoWhatsApp(): string {
     const mensaje = `Hola! Quiero renovar mi plan de Reserva2. Comercio: ${this.sesion.nombre}. Plan: ${this.sesion.planActual} (${this.sesion.cicloFacturacion}). Profesionales: ${this.profesionales().length}. Monto estimado: ${this.montoEstimadoTexto()}.`;
-    return `https://wa.me/5492353410084?text=${encodeURIComponent(mensaje)}`;
+    return linkWhatsApp(mensaje);
+  }
+
+  linkAyudaWhatsApp(): string {
+    return linkWhatsApp(`Hola! Tengo una duda usando Reserva2. Comercio: ${this.sesion.nombre}.`);
   }
 
   copiarLink(): void {

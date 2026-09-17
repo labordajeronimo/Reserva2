@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 
 import { Api, ComercioAdmin, Metricas, SuperAdminSession } from '../../core/api';
 import { Session } from '../../core/session';
+import { linkWhatsApp } from '../../core/whatsapp';
 
 @Component({
   selector: 'app-super-admin',
@@ -36,6 +37,10 @@ export class SuperAdmin {
   cerrarSesion(): void {
     this.session.cerrarSesionSuperAdmin();
     this.router.navigateByUrl('/super-admin/login');
+  }
+
+  linkAyudaWhatsApp(): string {
+    return linkWhatsApp('Hola! Tengo una duda administrando Reserva2.');
   }
 
   private cargarTodo(): void {

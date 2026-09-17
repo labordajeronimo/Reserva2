@@ -966,7 +966,8 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
                 $"Hola {req.ClienteNombre},\n\n" +
                 $"Tu turno para \"{servicio.Nombre}\" en {comercio.Nombre} quedó pre-reservado para el {fechaTexto}.\n\n" +
                 "En breve te van a escribir por WhatsApp para coordinar la seña. Tenés 2 horas para confirmar antes de que el horario se libere.\n\n" +
-                $"¿No podés ir? Cancelalo acá: {linkCancelacion}\n\n" +
+                $"¿No podés ir? Cancelalo acá: {linkCancelacion}\n" +
+                "(¿Necesitás cancelar? Usá el link que te llega por mail apenas confirmás la reserva.)\n\n" +
                 "Gracias por reservar con Reserva2.");
         }
         catch (Exception ex)
@@ -1124,9 +1125,14 @@ app.MapGet("/api/comercios/{comercioId:int}/ganancias", async (AppDbContext cont
         .Where(t => t.ComercioId == comercioId && t.EstadoReserva == 2 && t.FechaHoraInicio >= inicio && t.FechaHoraInicio <= fin)
         .ToListAsync();
 
-    var nombresPorId = await context.Profesionales
+    var profesionales = await context.Profesionales
         .Where(p => p.ComercioId == comercioId)
-        .ToDictionaryAsync(p => p.Id, p => p.Nombre);
+        .ToListAsync();
+    var nombresPorId = profesionales.ToDictionary(p => p.Id, p => p.Nombre);
+    var sucursalPorProfesionalId = profesionales.ToDictionary(p => p.Id, p => p.SucursalId);
+    var nombresSucursalPorId = await context.Sucursales
+        .Where(s => s.ComercioId == comercioId)
+        .ToDictionaryAsync(s => s.Id, s => s.Nombre);
 
     var porProfesional = turnosDelPeriodo
         .GroupBy(t => t.ProfesionalId)
@@ -1138,7 +1144,20 @@ app.MapGet("/api/comercios/{comercioId:int}/ganancias", async (AppDbContext cont
         .OrderByDescending(x => x.Ingresos)
         .ToList();
 
-    return Results.Ok(new GananciasDto(porProfesional, turnosDelPeriodo.Count, turnosDelPeriodo.Sum(t => t.MontoCobrado ?? 0)));
+    // La sucursal de un turno sale de la sucursal del profesional que lo atendió (Turno no
+    // guarda SucursalId directo). Turnos sin profesional, o con un profesional sin sucursal
+    // asignada, se agrupan igual bajo "Sin sucursal asignada" en vez de perderse del total.
+    var porSucursal = turnosDelPeriodo
+        .GroupBy(t => t.ProfesionalId is not null && sucursalPorProfesionalId.TryGetValue(t.ProfesionalId.Value, out var suc) ? suc : null)
+        .Select(g => new GananciaPorSucursalDto(
+            g.Key,
+            g.Key is not null && nombresSucursalPorId.TryGetValue(g.Key.Value, out var nombreSucursal) ? nombreSucursal : "Sin sucursal asignada",
+            g.Count(),
+            g.Sum(t => t.MontoCobrado ?? 0)))
+        .OrderByDescending(x => x.Ingresos)
+        .ToList();
+
+    return Results.Ok(new GananciasDto(porProfesional, porSucursal, turnosDelPeriodo.Count, turnosDelPeriodo.Sum(t => t.MontoCobrado ?? 0)));
 }).RequireAuthorization("AdminCliente");
 
 // ==========================================
@@ -1315,5 +1334,6 @@ record AdminCrearTurnoRequest(int ServicioId, DateTime FechaHoraInicio, string C
 record HistorialItemDto(int Id, DateTime FechaHoraInicio, string ClienteNombre, string ServicioNombre, decimal Monto);
 record HistorialDto(List<HistorialItemDto> Items, decimal TotalHoy, decimal TotalSemana, decimal TotalMes);
 record GananciaPorProfesionalDto(int? ProfesionalId, string NombreProfesional, int CantidadTurnos, decimal Ingresos);
-record GananciasDto(List<GananciaPorProfesionalDto> PorProfesional, int CantidadTotal, decimal IngresosTotal);
+record GananciaPorSucursalDto(int? SucursalId, string NombreSucursal, int CantidadTurnos, decimal Ingresos);
+record GananciasDto(List<GananciaPorProfesionalDto> PorProfesional, List<GananciaPorSucursalDto> PorSucursal, int CantidadTotal, decimal IngresosTotal);
 record WhatsAppConfigDto(bool Activado);
