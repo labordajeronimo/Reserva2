@@ -58,6 +58,26 @@
 .header-actions a { color: #A6AFC6; text-decoration: none; font-size: 0.9rem; }
 .header-actions a:hover { color: #FB923C; }
 
+.banner-pendiente {
+  background: rgba(251, 146, 60, 0.14);
+  border-bottom: 1px solid rgba(251, 146, 60, 0.32);
+  color: #FFB98F;
+  font-size: 0.85rem;
+  padding: 12px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  text-align: center;
+}
+.banner-pendiente a {
+  color: #FB923C;
+  font-weight: 600;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
 .tabs {
   display: flex;
   gap: 4px;

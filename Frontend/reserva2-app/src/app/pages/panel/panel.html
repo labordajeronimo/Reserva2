@@ -9,6 +9,13 @@
     </div>
   </header>
 
+  @if (!sesion.activo) {
+    <div class="banner-pendiente">
+      Tu cuenta todavía no está activada — tu página pública no recibe reservas hasta que la confirmemos.
+      <a [href]="linkActivacionWhatsApp()" target="_blank" rel="noopener">Confirmar por WhatsApp</a>
+    </div>
+  }
+
   <nav class="tabs">
     <button [class.active]="tabActiva() === 'turnos'" (click)="abrirTab('turnos')">Turnos</button>
     <button [class.active]="tabActiva() === 'historial'" (click)="abrirTab('historial')">Historial</button>

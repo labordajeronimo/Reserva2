@@ -1,6 +1,7 @@
 import { Component, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
+import { linkWhatsApp } from '../../core/whatsapp';
 
 @Component({
   selector: 'app-landing',
@@ -42,5 +43,9 @@ export class Landing {
 
   irAlPanel(): void {
     this.router.navigate(['/panel']);
+  }
+
+  linkInteresWhatsApp(): string {
+    return linkWhatsApp('Hola! Me interesa Reserva2 para mi negocio.');
   }
 }

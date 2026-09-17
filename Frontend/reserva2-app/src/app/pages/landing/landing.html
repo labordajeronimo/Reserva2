@@ -23,7 +23,7 @@
   </ul>
   <div class="nav-actions">
     <a routerLink="/panel" class="nav-login">Iniciar sesión</a>
-    <button class="btn-naranja" (click)="irAlPanel()">Registrar mi negocio</button>
+    <a class="btn-naranja" [href]="linkInteresWhatsApp()" target="_blank" rel="noopener">Escribinos para arrancar</a>
     <button class="nav-menu-btn" type="button" aria-label="Abrir menú" [attr.aria-expanded]="menuMobileAbierto" (click)="toggleMenuMobile()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
@@ -49,10 +49,11 @@
     <p class="hero-subtitle">Centralizá tus reservas, automatizá recordatorios por WhatsApp y cobrá señas sin pagar comisiones extra. Tu negocio, tus reglas.</p>
     
     <div class="hero-buttons">
-      <button class="btn-naranja btn-largo" (click)="irAlPanel()">
-        Creá tu cuenta hoy
+      <a class="btn-naranja btn-largo" [href]="linkInteresWhatsApp()" target="_blank" rel="noopener">
+        Escribinos para arrancar
         <svg class="arrow-icon" style="width:18px;height:18px;vertical-align:-3px;margin-left:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
-      </button>
+      </a>
+      <a routerLink="/panel" class="hero-link-secundario">¿Preferís registrarte directo? Hacelo acá</a>
     </div>
 
     <div class="hero-phone-wrap">

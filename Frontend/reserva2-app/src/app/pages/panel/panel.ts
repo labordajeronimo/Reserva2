@@ -223,6 +223,13 @@ export class Panel {
     return linkWhatsApp(`Hola! Tengo una duda usando Reserva2. Comercio: ${this.sesion.nombre}.`);
   }
 
+  // Toda cuenta nueva entra pausada (sesion.activo = false): el dueño ya puede armar su
+  // panel, pero su página pública no recibe reservas hasta que se lo confirme por acá y
+  // el Super Admin lo active desde su panel.
+  linkActivacionWhatsApp(): string {
+    return linkWhatsApp(`Hola! Ya registré mi comercio en Reserva2 (${this.sesion.nombre} · ${this.sesion.aliasUrl}). ¿Podés activarme la cuenta?`);
+  }
+
   copiarLink(): void {
     const url = `${window.location.host}/${this.sesion.aliasUrl}`;
     navigator.clipboard?.writeText(url).then(() => {

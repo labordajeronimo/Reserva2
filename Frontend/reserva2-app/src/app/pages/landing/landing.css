@@ -273,6 +273,8 @@ body {
   cursor: pointer;
   box-shadow: 0 14px 34px rgba(234, 88, 12, 0.42);
   transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-block;
 }
 
 .btn-naranja:hover {
@@ -404,8 +406,11 @@ body {
 
 .hero-buttons {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
   width: 100%;
+  gap: 14px;
   margin-bottom: 2rem;
 }
 
@@ -415,7 +420,15 @@ body {
   padding: 18px 32px;
   font-size: 1.15rem;
   letter-spacing: 0.01em;
+  text-align: center;
 }
+
+.hero-link-secundario {
+  color: #A6AFC6;
+  font-size: 0.88rem;
+  text-decoration: underline;
+}
+.hero-link-secundario:hover { color: #FB923C; }
 
 .btn-largo .arrow-icon { transition: transform 0.2s ease; }
 .btn-largo:hover .arrow-icon { transform: translateX(4px); }

@@ -5,7 +5,8 @@ import { Observable } from 'rxjs';
 // Usa el mismo host desde el que se sirvió la página (localhost o la IP de la red local),
 // así funciona igual accediendo desde la compu o desde el celular en el mismo WiFi.
 // Ajustá el puerto si corrés el backend en otro (ver Properties/launchSettings.json).
-const API_ROOT = typeof window !== 'undefined' ? `http://${window.location.hostname}:5267` : 'http://localhost:5267';
+const esLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+const API_ROOT = esLocal ? 'http://localhost:5267' : '';
 const API_BASE = `${API_ROOT}/api`;
 
 // Las rutas de archivos (ej. LogoUrl) vienen relativas al backend ("/uploads/logos/1.png"),
@@ -136,6 +137,7 @@ export interface LoginResponse {
   datosBancarios: string;
   logoUrl: string | null;
   fechaProximoPago: string | null;
+  activo: boolean;
 }
 
 export interface MiPlan {

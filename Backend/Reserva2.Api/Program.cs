@@ -279,7 +279,11 @@ app.MapPost("/api/auth/register", async (AppDbContext context, RegistroRequest r
         PasswordHash = HashPassword(req.Password),
         PlanActual = planElegido,
         CicloFacturacion = cicloElegido,
-        FechaProximoPago = CalcularProximoPago(cicloElegido)
+        FechaProximoPago = CalcularProximoPago(cicloElegido),
+        // Todo registro nuevo entra pausado: el dueño ya puede loguearse y armar su panel,
+        // pero su página pública no recibe reservas de clientes reales hasta que el Super
+        // Admin lo active a mano (confirmado por WhatsApp), como filtro de entrada.
+        Activo = false
     };
 
     context.Comercios.Add(comercio);
@@ -287,7 +291,7 @@ app.MapPost("/api/auth/register", async (AppDbContext context, RegistroRequest r
 
     return Results.Created($"/api/comercios/{comercio.Id}",
         new LoginResponse(comercio.Id, comercio.Nombre, comercio.AliasUrl, GenerarToken("AdminCliente", comercio.Id), comercio.PlanActual, comercio.CicloFacturacion,
-            comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.LogoUrl, comercio.FechaProximoPago));
+            comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.LogoUrl, comercio.FechaProximoPago, comercio.Activo));
 }).RequireRateLimiting("login");
 
 app.MapPost("/api/auth/login", async (AppDbContext context, LoginRequest req) =>
@@ -297,7 +301,7 @@ app.MapPost("/api/auth/login", async (AppDbContext context, LoginRequest req) =>
         return Results.Unauthorized();
 
     return Results.Ok(new LoginResponse(comercio.Id, comercio.Nombre, comercio.AliasUrl, GenerarToken("AdminCliente", comercio.Id), comercio.PlanActual, comercio.CicloFacturacion,
-            comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.LogoUrl, comercio.FechaProximoPago));
+            comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.LogoUrl, comercio.FechaProximoPago, comercio.Activo));
 }).RequireRateLimiting("login");
 
 app.MapPost("/api/auth/forgot-password", async (AppDbContext context, IConfiguration config, ILogger<Program> logger, ForgotPasswordRequest req) =>
@@ -1322,7 +1326,7 @@ record LoginRequest(string Email, string Password);
 record ForgotPasswordRequest(string Email);
 record ResetPasswordRequest(string Token, string NuevaPassword);
 record LoginResponse(int ComercioId, string Nombre, string AliasUrl, string Token, string PlanActual, string CicloFacturacion,
-    string TelefonoNotificaciones, string DatosBancarios, string? LogoUrl, DateTime? FechaProximoPago);
+    string TelefonoNotificaciones, string DatosBancarios, string? LogoUrl, DateTime? FechaProximoPago, bool Activo);
 record SuperAdminLoginRequest(string Email, string Password);
 record SuperAdminLoginResponse(string Token);
 record ProfesionalRequest(string Nombre, int? SucursalId = null);
