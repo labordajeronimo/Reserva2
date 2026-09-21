@@ -6,8 +6,7 @@ using Reserva2.Api.Data;
 using Reserva2.Api.Models;
 using Reserva2.Api.Utils;
 using System.IdentityModel.Tokens.Jwt;
-using System.Net;
-using System.Net.Mail;
+using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -140,6 +139,40 @@ static int TopeProfesionales(string plan) => plan switch
     _ => int.MaxValue
 };
 
+// Gratuito y Básico: 1 sola sucursal. Premium: sin límite.
+static int TopeSucursales(string plan) => plan switch
+{
+    "Gratuito" => 1,
+    "Basico" => 1,
+    _ => int.MaxValue
+};
+
+// Precios de lista mensuales (los mismos que se muestran en la landing y en el selector de
+// plan compartido). El monto real que se le cobra a cada comercio puede diferir si el Super
+// Admin acordó un monto puntual (Comercio.MontoMensualAcordado); esto es la tarifa de lista.
+var PreciosPlanMensual = new Dictionary<string, (decimal Unico, decimal PorProfesional)>
+{
+    ["Gratuito"] = (0m, 0m),
+    ["Basico"] = (7000m, 4800m),
+    ["Premium"] = (11000m, 8500m)
+};
+
+// "Unidades" = profesionales + (sucursales - 1): la primera sucursal no suma nada, cada
+// sucursal extra pesa igual que un profesional más. Con 1 sola unidad se cobra la tarifa
+// "único profesional"; con 2 o más, la tarifa "por profesional" multiplicada por la
+// cantidad de unidades. El ciclo Anual aplica el mismo 25% de descuento que ya se muestra
+// en la landing (equivale a pagar 9 de 12 meses), calculado sobre este total en vez del
+// precio fijo de un solo profesional. Se va a reutilizar el lunes desde la integración de
+// MercadoPago, así que no hardcodear esta cuenta en ningún otro lado.
+decimal CalcularPrecioPlan(string plan, string ciclo, int cantidadProfesionales, int cantidadSucursales)
+{
+    var precios = PreciosPlanMensual.TryGetValue(plan, out var p) ? p : PreciosPlanMensual["Gratuito"];
+    var unidades = Math.Max(1, cantidadProfesionales + (cantidadSucursales - 1));
+    var totalMensual = unidades <= 1 ? precios.Unico : precios.PorProfesional * unidades;
+
+    return ciclo == "Anual" ? Math.Round(totalMensual * 12 * 0.75m, 2) : totalMensual;
+}
+
 // Turno.FechaHoraInicio/FechaHoraFin se guardan como hora local de Argentina "pelada" (sin
 // offset: el cliente manda literalmente "2026-09-14T16:00:00"), no como UTC. Argentina no
 // tiene horario de verano desde 2009 y su offset es siempre UTC-3, así que para comparar
@@ -199,33 +232,113 @@ static bool VerifyPassword(string password, string stored)
 // ==========================================
 // EMAIL (recuperación de contraseña, confirmación de turno)
 // ==========================================
-// Si no hay Smtp:Host configurado (ej. en desarrollo sin credenciales todavía), no falla:
+// DigitalOcean bloquea de fábrica los puertos SMTP salientes (25/465/587) por política
+// antiabuso — un SmtpClient directo nunca va a conectar ahí, no es arreglable desde acá ni
+// desde la config del droplet. Por eso se manda por la API HTTP de Brevo (HTTPS normal en
+// el puerto 443, no depende de ningún puerto SMTP). La configuración vieja de Smtp:Host/
+// Port/User/Password queda en appsettings.json sin usarse, por si hace falta en el futuro.
+var brevoHttpClient = new HttpClient();
+
+// Si no hay Brevo:ApiKey configurado (ej. en desarrollo sin credenciales todavía), no falla:
 // simplemente no se envía el mail y queda logueado el motivo.
 async Task EnviarEmail(IConfiguration config, ILogger logger, string destinatario, string asunto, string cuerpo)
 {
-    var host = config["Smtp:Host"];
-    if (string.IsNullOrWhiteSpace(host))
+    var apiKey = config["Brevo:ApiKey"];
+    if (string.IsNullOrWhiteSpace(apiKey))
     {
-        logger.LogWarning("Smtp:Host no está configurado; no se envió el email a {Destinatario} ({Asunto}).", destinatario, asunto);
+        logger.LogWarning("Brevo:ApiKey no está configurado; no se envió el email a {Destinatario} ({Asunto}).", destinatario, asunto);
         return;
     }
 
-    using var client = new SmtpClient(host, int.Parse(config["Smtp:Port"] ?? "587"))
-    {
-        Credentials = new NetworkCredential(config["Smtp:User"], config["Smtp:Password"]),
-        EnableSsl = true
-    };
+    var remitente = config["Smtp:From"] ?? config["Smtp:User"] ?? "no-reply@reservados2.com";
 
-    using var mensaje = new MailMessage
+    using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.brevo.com/v3/smtp/email")
     {
-        From = new MailAddress(config["Smtp:From"] ?? config["Smtp:User"] ?? "no-reply@reservados2.com", "Reserva2"),
-        Subject = asunto,
-        Body = cuerpo,
-        IsBodyHtml = false
+        Content = JsonContent.Create(new
+        {
+            sender = new { email = remitente, name = "Reserva2" },
+            to = new[] { new { email = destinatario } },
+            subject = asunto,
+            // Los cuerpos de acá se arman como texto plano con "\n"; Brevo espera HTML, así
+            // que se convierten los saltos de línea para que no quede todo el mail pegado.
+            htmlContent = cuerpo.Replace("\n", "<br>")
+        })
     };
-    mensaje.To.Add(destinatario);
+    request.Headers.Add("api-key", apiKey);
 
-    await client.SendMailAsync(mensaje);
+    var respuesta = await brevoHttpClient.SendAsync(request);
+    if (!respuesta.IsSuccessStatusCode)
+    {
+        var detalle = await respuesta.Content.ReadAsStringAsync();
+        logger.LogError("Brevo devolvió {StatusCode} al enviar el email a {Destinatario} ({Asunto}): {Detalle}",
+            respuesta.StatusCode, destinatario, asunto, detalle);
+    }
+}
+
+// ==========================================
+// WHATSAPP (confirmación de turno — exclusivo plan Premium)
+// ==========================================
+var whatsAppHttpClient = new HttpClient();
+
+// Saca espacios/guiones/paréntesis, antepone el código de país (54) si no lo tiene, y
+// asegura el "9" extra que los celulares argentinos necesitan después del 54 para que
+// WhatsApp entregue el mensaje (549 + código de área + número) — sin ese "9" el envío
+// falla silenciosamente del lado de Meta. Si el número ya lo trae (el cliente lo escribió
+// con 9 adelante, o ya venía como 549...), no se duplica.
+static string FormatearNumeroWhatsApp(string numero)
+{
+    var limpio = new string(numero.Where(char.IsDigit).ToArray());
+    if (!limpio.StartsWith("54")) limpio = "54" + limpio;
+    if (limpio.Length < 3 || limpio[2] != '9') limpio = limpio.Insert(2, "9");
+    return limpio;
+}
+
+// Si falta configuración (ej. en desarrollo sin credenciales todavía), no falla: simplemente
+// no se envía nada y queda logueado el motivo. "parametros" van en el mismo orden que las
+// variables numeradas de la plantilla en WhatsApp Business.
+async Task EnviarPlantillaWhatsApp(IConfiguration config, ILogger logger, string numeroDestino, string nombrePlantilla, IEnumerable<string> parametros)
+{
+    var token = config["WhatsApp:Token"];
+    var phoneNumberId = config["WhatsApp:PhoneNumberId"];
+    if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(phoneNumberId))
+    {
+        logger.LogWarning("WhatsApp:Token o WhatsApp:PhoneNumberId no están configurados; no se envió la plantilla {Plantilla} a {Numero}.", nombrePlantilla, numeroDestino);
+        return;
+    }
+
+    var numeroFormateado = FormatearNumeroWhatsApp(numeroDestino);
+
+    using var request = new HttpRequestMessage(HttpMethod.Post, $"https://graph.facebook.com/v21.0/{phoneNumberId}/messages")
+    {
+        Content = JsonContent.Create(new
+        {
+            messaging_product = "whatsapp",
+            to = numeroFormateado,
+            type = "template",
+            template = new
+            {
+                name = nombrePlantilla,
+                language = new { code = "es_AR" },
+                components = new[]
+                {
+                    new
+                    {
+                        type = "body",
+                        parameters = parametros.Select(p => new { type = "text", text = p }).ToArray()
+                    }
+                }
+            }
+        })
+    };
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+    var respuesta = await whatsAppHttpClient.SendAsync(request);
+    if (!respuesta.IsSuccessStatusCode)
+    {
+        var detalle = await respuesta.Content.ReadAsStringAsync();
+        logger.LogError("WhatsApp Cloud API devolvió {StatusCode} al enviar la plantilla {Plantilla} a {Numero}: {Detalle}",
+            respuesta.StatusCode, nombrePlantilla, numeroFormateado, detalle);
+    }
 }
 
 // ==========================================
@@ -249,6 +362,20 @@ string GenerarToken(string rol, int? comercioId = null)
 static int? ComercioIdDelToken(ClaimsPrincipal user) =>
     int.TryParse(user.FindFirst("comercioId")?.Value, out var id) ? id : null;
 
+// Público (se usa desde el formulario de registro, antes de que exista una sesión) para
+// mostrar el precio en tiempo real a medida que el usuario cambia plan/ciclo/cantidades.
+// Misma cuenta que se va a reutilizar el lunes desde la integración de MercadoPago.
+app.MapGet("/api/precio-plan", (string plan, string ciclo, int profesionales, int sucursales) =>
+{
+    if (!PlanesValidos.Contains(plan))
+        return Results.BadRequest(new { mensaje = "Plan inválido. Tiene que ser Gratuito, Basico o Premium." });
+    if (ciclo != "Mensual" && ciclo != "Anual")
+        return Results.BadRequest(new { mensaje = "El ciclo de facturación tiene que ser Mensual o Anual." });
+
+    var precio = CalcularPrecioPlan(plan, ciclo, Math.Max(1, profesionales), Math.Max(1, sucursales));
+    return Results.Ok(new { precio });
+});
+
 // ==========================================
 // ENDPOINTS DE AUTENTICACIÓN (panel de admin)
 // ==========================================
@@ -268,6 +395,13 @@ app.MapPost("/api/auth/register", async (AppDbContext context, RegistroRequest r
     if (cicloElegido != "Mensual" && cicloElegido != "Anual")
         return Results.BadRequest(new { mensaje = "El ciclo de facturación tiene que ser Mensual o Anual." });
 
+    var cantidadProfesionales = Math.Max(1, req.CantidadProfesionales ?? 1);
+    var cantidadSucursales = Math.Max(1, req.CantidadSucursales ?? 1);
+
+    var topeSucursalesRegistro = TopeSucursales(planElegido);
+    if (cantidadSucursales > topeSucursalesRegistro)
+        return Results.BadRequest(new { mensaje = $"El plan {planElegido} permite hasta {topeSucursalesRegistro} sucursal(es)." });
+
     var comercio = new Comercio
     {
         Nombre = req.Nombre,
@@ -280,6 +414,8 @@ app.MapPost("/api/auth/register", async (AppDbContext context, RegistroRequest r
         PlanActual = planElegido,
         CicloFacturacion = cicloElegido,
         FechaProximoPago = CalcularProximoPago(cicloElegido),
+        CantidadProfesionalesContratada = cantidadProfesionales,
+        CantidadSucursalesContratada = cantidadSucursales,
         // Todo registro nuevo entra pausado: el dueño ya puede loguearse y armar su panel,
         // pero su página pública no recibe reservas de clientes reales hasta que el Super
         // Admin lo active a mano (confirmado por WhatsApp), como filtro de entrada.
@@ -394,6 +530,7 @@ app.MapPatch("/api/comercios/{id:int}/estado", async (AppDbContext context, int 
     if (comercio is null) return Results.NotFound();
 
     comercio.Activo = req.Activo;
+    if (req.Activo) comercio.FechaActivacion ??= AhoraArgentina();
     await context.SaveChangesAsync();
 
     return Results.Ok(new ComercioDto(comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla,
@@ -456,6 +593,7 @@ app.MapPatch("/api/comercios/{id:int}/renovar", async (AppDbContext context, int
 
     comercio.FechaProximoPago = CalcularProximoPago(comercio.CicloFacturacion);
     comercio.Activo = true;
+    comercio.FechaActivacion ??= AhoraArgentina();
     await context.SaveChangesAsync();
 
     return Results.Ok(new ComercioDto(comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla,
@@ -477,14 +615,114 @@ app.MapGet("/api/admin/metricas", async (AppDbContext context) =>
     return Results.Ok(new MetricasDto(totalComercios, comerciosActivos, totalComercios - comerciosActivos, turnosDelMes));
 }).RequireAuthorization("SuperAdmin");
 
+// Dashboard de estadísticas del Super Admin: mismo espíritu que /api/admin/metricas pero con
+// el desglose completo que necesita la sección nueva del panel (por estado, por plan,
+// ingreso mensual estimado y tendencia de altas).
+app.MapGet("/api/admin/dashboard", async (AppDbContext context) =>
+{
+    var comercios = await context.Comercios.ToListAsync();
+
+    var activos = comercios.Count(c => c.Activo);
+    // "Pendiente de activación" = nunca se activó (FechaActivacion nula); si ya se activó
+    // alguna vez y ahora está pausado, es un comercio inactivo común, no un alta pendiente.
+    var pendientes = comercios.Count(c => !c.Activo && c.FechaActivacion is null);
+    var inactivos = comercios.Count(c => !c.Activo) - pendientes;
+
+    var porPlan = comercios
+        .GroupBy(c => c.PlanActual)
+        .Select(g => new PlanCantidadDto(g.Key, g.Count()))
+        .OrderByDescending(x => x.Cantidad)
+        .ToList();
+
+    // MontoMensualAcordado ya representa el equivalente mensual sin importar el ciclo de
+    // facturación (así se carga en el panel), así que se suma directo, sin prorratear.
+    var ingresoMensualEstimado = comercios.Where(c => c.Activo).Sum(c => c.MontoMensualAcordado ?? 0);
+
+    var ahora = AhoraArgentina();
+    var inicioMes = new DateTime(ahora.Year, ahora.Month, 1);
+    var turnosDelMes = await context.Turnos.CountAsync(t =>
+        t.EstadoReserva != 3 && t.FechaHoraInicio >= inicioMes && t.FechaHoraInicio < inicioMes.AddMonths(1));
+
+    // Altas de los últimos 6 meses (incluye el actual), un balde por mes en orden cronológico.
+    var altasPorMes = new List<AltaMesDto>();
+    for (var i = 5; i >= 0; i--)
+    {
+        var mesInicio = inicioMes.AddMonths(-i);
+        var mesFin = mesInicio.AddMonths(1);
+        var cantidad = comercios.Count(c => c.FechaAlta >= mesInicio && c.FechaAlta < mesFin);
+        altasPorMes.Add(new AltaMesDto(mesInicio.Year, mesInicio.Month, cantidad));
+    }
+
+    return Results.Ok(new DashboardDto(
+        comercios.Count, activos, inactivos, pendientes,
+        porPlan, ingresoMensualEstimado, turnosDelMes, altasPorMes));
+}).RequireAuthorization("SuperAdmin");
+
+// Ficha de detalle de un comercio puntual para el Super Admin (distinto de /historial y
+// /ganancias, que son AdminCliente-only y solo dejan ver el propio comercio logueado).
+app.MapGet("/api/admin/comercios/{id:int}/detalle", async (AppDbContext context, int id) =>
+{
+    var comercio = await context.Comercios.FindAsync(id);
+    if (comercio is null) return Results.NotFound();
+
+    var sucursales = await context.Sucursales.Where(s => s.ComercioId == id).OrderBy(s => s.Nombre).ToListAsync();
+    var profesionales = await context.Profesionales.Where(p => p.ComercioId == id).OrderBy(p => p.Nombre).ToListAsync();
+
+    var ahora = AhoraArgentina();
+    var inicioMes = new DateTime(ahora.Year, ahora.Month, 1);
+
+    var turnosHistoricosTotal = await context.Turnos.CountAsync(t => t.ComercioId == id && t.EstadoReserva != 3);
+    var turnosDelMes = await context.Turnos.CountAsync(t =>
+        t.ComercioId == id && t.EstadoReserva != 3 && t.FechaHoraInicio >= inicioMes && t.FechaHoraInicio < inicioMes.AddMonths(1));
+
+    // La facturación histórica es parte de Ganancias, que es exclusivo del plan Premium —
+    // mismo criterio que la pestaña Ganancias del panel del propio comercio.
+    decimal? facturacionHistorica = null;
+    if (comercio.PlanActual == "Premium")
+    {
+        facturacionHistorica = await context.Turnos
+            .Where(t => t.ComercioId == id && t.EstadoReserva == 2)
+            .SumAsync(t => (decimal?)t.MontoCobrado) ?? 0;
+    }
+
+    // Turnos por semana del último mes (4 baldes de 7 días terminando hoy), para el gráfico.
+    var turnosPorSemana = new List<TurnosPorSemanaDto>();
+    var finBalde = ahora.Date.AddDays(1); // hasta el final del día de hoy
+    for (var i = 3; i >= 0; i--)
+    {
+        var semanaFin = finBalde.AddDays(-7 * i);
+        var semanaInicio = semanaFin.AddDays(-7);
+        var cantidad = await context.Turnos.CountAsync(t =>
+            t.ComercioId == id && t.EstadoReserva != 3 && t.FechaHoraInicio >= semanaInicio && t.FechaHoraInicio < semanaFin);
+        turnosPorSemana.Add(new TurnosPorSemanaDto(DateOnly.FromDateTime(semanaInicio), DateOnly.FromDateTime(semanaFin.AddDays(-1)), cantidad));
+    }
+
+    return Results.Ok(new ComercioDetalleDto(
+        comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla, comercio.PlanActual, comercio.CicloFacturacion,
+        comercio.MontoMensualAcordado, comercio.FechaAlta, comercio.FechaProximoPago, comercio.Activo,
+        profesionales.Count, sucursales.Count,
+        turnosHistoricosTotal, turnosDelMes, facturacionHistorica,
+        sucursales, profesionales, turnosPorSemana));
+}).RequireAuthorization("SuperAdmin");
+
 app.MapGet("/api/comercios/alias/{alias}", async (AppDbContext context, string alias) =>
 {
     var comercio = await context.Comercios.FirstOrDefaultAsync(c => c.AliasUrl == alias);
     if (comercio is null) return Results.NotFound();
     if (!comercio.Activo) return ResultadoComercioInactivo();
 
+    // El bot de WhatsApp es exclusivo de Premium; si el comercio bajó de plan pero había
+    // dejado el toggle activado, igual no cuenta como activo (mismo criterio que los
+    // endpoints de whatsapp-config, que lo apagan implícitamente fuera de Premium).
+    var whatsAppActivo = false;
+    if (comercio.PlanActual == "Premium")
+    {
+        var whatsAppConfig = await context.WhatsAppConfigs.FirstOrDefaultAsync(w => w.ComercioId == comercio.Id);
+        whatsAppActivo = whatsAppConfig?.Activado ?? false;
+    }
+
     return Results.Ok(new ComercioPublicoDto(
-        comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla, comercio.TelefonoNotificaciones, comercio.LogoUrl));
+        comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla, comercio.TelefonoNotificaciones, comercio.LogoUrl, whatsAppActivo));
 });
 
 // Autogestión de plan: el propio dueño del comercio cambia su plan y ciclo de facturación
@@ -713,6 +951,16 @@ app.MapPost("/api/comercios/{comercioId:int}/sucursales", async (AppDbContext co
     if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
     if (string.IsNullOrWhiteSpace(req.Nombre))
         return Results.BadRequest(new { mensaje = "El nombre no puede estar vacío." });
+
+    var comercio = await context.Comercios.FindAsync(comercioId);
+    if (comercio is null) return Results.NotFound();
+
+    // El tope aplica para altas nuevas; si un comercio ya tenía más sucursales cargadas de
+    // antes de esta regla (no debería, pero por las dudas), esas no se tocan ni se borran.
+    var tope = TopeSucursales(comercio.PlanActual);
+    var cantidadActual = await context.Sucursales.CountAsync(s => s.ComercioId == comercioId);
+    if (cantidadActual >= tope)
+        return Results.Conflict(new { mensaje = $"Tu plan {comercio.PlanActual} permite hasta {tope} sucursal(es). Actualizá a Premium para agregar más." });
 
     var sucursal = new Sucursal
     {
@@ -961,42 +1209,98 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
 
     if (!string.IsNullOrWhiteSpace(req.ClienteEmail))
     {
-        try
-        {
-            var fechaTexto = req.FechaHoraInicio.ToString("dddd d 'de' MMMM 'a las' HH:mm", new System.Globalization.CultureInfo("es-AR"));
-            var baseUrlCancelacion = config["Frontend:BaseUrl"] ?? "http://localhost:4200";
-            var linkCancelacion = $"{baseUrlCancelacion}/cancelar-turno?token={turno.TokenCancelacion}";
-            await EnviarEmail(config, logger, req.ClienteEmail, $"Turno pre-reservado en {comercio.Nombre}",
-                $"Hola {req.ClienteNombre},\n\n" +
-                $"Tu turno para \"{servicio.Nombre}\" en {comercio.Nombre} quedó pre-reservado para el {fechaTexto}.\n\n" +
-                "En breve te van a escribir por WhatsApp para coordinar la seña. Tenés 2 horas para confirmar antes de que el horario se libere.\n\n" +
-                $"¿No podés ir? Cancelalo acá: {linkCancelacion}\n" +
-                "(¿Necesitás cancelar? Usá el link que te llega por mail apenas confirmás la reserva.)\n\n" +
-                "Gracias por reservar con Reserva2.");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "No se pudo enviar el email de confirmación de turno.");
-        }
+        // El turno YA está guardado en este punto — lo que pase con el mail de acá en más
+        // no puede hacer fallar la respuesta al cliente. Se dispara sin esperarlo (fire-and-
+        // forget) para que ni siquiera lo demore: si el envío tarda o el SMTP no responde
+        // (con el timeout ya puesto en EnviarEmail, como mucho 8s), el cliente ya tiene su
+        // confirmación hace rato. Se capturan los valores que hacen falta antes de arrancar
+        // la tarea de fondo porque "req"/"comercio"/"servicio" pueden no seguir vivos igual
+        // de simple una vez que termina este request.
+        var clienteEmail = req.ClienteEmail;
+        var clienteNombre = req.ClienteNombre;
+        var fechaHoraInicio = req.FechaHoraInicio;
+        var nombreComercio = comercio.Nombre;
+        var nombreServicio = servicio.Nombre;
+        var tokenCancelacion = turno.TokenCancelacion;
 
-        // PUNTO DE ENGANCHE DEL BOT DE WHATSAPP (Premium, todavía sin implementar).
-        //
-        // Diseño ya decidido, no volver a discutirlo al implementar: UN SOLO mensaje de
-        // WhatsApp por turno, no un recordatorio + una confirmación separados. Ese único
-        // mensaje ES la confirmación de la reserva, y solo si el servicio tiene seña
-        // configurada (servicio.MontoSeña != null) incluye el alias/monto de la seña; si
-        // el servicio no tiene seña, confirma el turno sin esa parte.
-        //
-        // Por qué un solo mensaje: Meta cobra por mensaje de WhatsApp Business enviado.
-        // Con dos mensajes por turno (recordatorio + confirmación) el margen del plan
-        // Premium se comía rápido en comercios con mucho movimiento diario. Con uno solo,
-        // el margen aguanta cómodo incluso con varios turnos por día.
-        //
-        // Cuándo dispararlo: acá mismo, justo después del mail de confirmación, si
-        // comercio.PlanActual == "Premium" y el WhatsAppConfig del comercio tiene
-        // Activado == true. Todavía no está conectado a la Cloud API real de Meta:
-        // falta cargar las credenciales (WhatsApp Business Account, número verificado,
-        // token de acceso) cuando estén disponibles.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var fechaTexto = fechaHoraInicio.ToString("dddd d 'de' MMMM 'a las' HH:mm", new System.Globalization.CultureInfo("es-AR"));
+                var baseUrlCancelacion = config["Frontend:BaseUrl"] ?? "http://localhost:4200";
+                var linkCancelacion = $"{baseUrlCancelacion}/cancelar-turno?token={tokenCancelacion}";
+                await EnviarEmail(config, logger, clienteEmail, $"Turno pre-reservado en {nombreComercio}",
+                    $"Hola {clienteNombre},\n\n" +
+                    $"Tu turno para \"{nombreServicio}\" en {nombreComercio} quedó pre-reservado para el {fechaTexto}.\n\n" +
+                    "En breve te van a escribir por WhatsApp para coordinar la seña. Tenés 2 horas para confirmar antes de que el horario se libere.\n\n" +
+                    $"¿No podés ir? Cancelalo acá: {linkCancelacion}\n" +
+                    "(¿Necesitás cancelar? Usá el link que te llega por mail apenas confirmás la reserva.)\n\n" +
+                    "Gracias por reservar con Reserva2.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "No se pudo enviar el email de confirmación de turno.");
+            }
+        });
+
+    }
+
+    // Confirmación de turno por WhatsApp — exclusivo plan Premium, y solo si el comercio
+    // activó el bot. Si no se cumple cualquiera de las dos, no se intenta nada (ni se
+    // loguea): simplemente no aplica para este comercio.
+    if (comercio.PlanActual == "Premium")
+    {
+        var whatsAppConfig = await context.WhatsAppConfigs.FirstOrDefaultAsync(w => w.ComercioId == req.ComercioId);
+        if (whatsAppConfig?.Activado == true)
+        {
+            // Mismo criterio que en el mail: se capturan los valores antes de arrancar la
+            // tarea de fondo, y el envío es fire-and-forget con su propio try/catch — un
+            // error de la API de WhatsApp (ej. plantilla todavía no aprobada) no puede
+            // demorar ni hacer fallar la respuesta al cliente, que ya tiene su turno guardado.
+            var clienteWhatsApp = req.ClienteWhatsApp;
+            var clienteNombre = req.ClienteNombre;
+            var fechaHoraInicio = req.FechaHoraInicio;
+            var nombreComercio = comercio.Nombre;
+            var datosBancarios = comercio.DatosBancarios;
+            var montoSenia = servicio.MontoSeña;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var fechaTexto = fechaHoraInicio.ToString("dddd d 'de' MMMM", new System.Globalization.CultureInfo("es-AR"));
+                    var horaTexto = fechaHoraInicio.ToString("HH:mm");
+
+                    if (montoSenia is not null)
+                    {
+                        await EnviarPlantillaWhatsApp(config, logger, clienteWhatsApp, "confirmacion_turno_sena", new[]
+                        {
+                            clienteNombre,
+                            nombreComercio,
+                            fechaTexto,
+                            horaTexto,
+                            montoSenia.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),
+                            datosBancarios
+                        });
+                    }
+                    else
+                    {
+                        await EnviarPlantillaWhatsApp(config, logger, clienteWhatsApp, "confirmacion_turno", new[]
+                        {
+                            clienteNombre,
+                            nombreComercio,
+                            fechaTexto,
+                            horaTexto
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "No se pudo enviar la confirmación de turno por WhatsApp.");
+                }
+            });
+        }
     }
 
     return Results.Created($"/api/turnos/{turno.Id}", turno);
@@ -1306,7 +1610,7 @@ app.Run();
 // DTOs (Data Transfer Objects)
 // (Acá es donde tienen que ir los 'record' y 'class' para que C# 9+ no tire error CS8803)
 // ==========================================
-record ComercioPublicoDto(int Id, string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string? LogoUrl);
+record ComercioPublicoDto(int Id, string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string? LogoUrl, bool WhatsAppActivo);
 record ComercioDto(int Id, string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones,
     string DatosBancarios, string Email, bool Activo, string PlanActual, DateTime? FechaProximoPago, decimal? MontoMensualAcordado, string CicloFacturacion);
 record ActualizarEstadoRequest(bool Activo);
@@ -1314,7 +1618,19 @@ record ActualizarPlanRequest(string PlanActual);
 record ActualizarMontoAcordadoRequest(decimal? MontoMensualAcordado);
 record ActualizarCicloFacturacionRequest(string CicloFacturacion);
 record MetricasDto(int TotalComercios, int ComerciosActivos, int ComerciosInactivos, int TurnosDelMes);
-record RegistroRequest(string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string DatosBancarios, string Email, string Password, string? PlanActual = null, string? CicloFacturacion = null);
+record PlanCantidadDto(string Plan, int Cantidad);
+record AltaMesDto(int Anio, int Mes, int Cantidad);
+record DashboardDto(
+    int TotalComercios, int ComerciosActivos, int ComerciosInactivos, int ComerciosPendientes,
+    List<PlanCantidadDto> PorPlan, decimal IngresoMensualEstimado, int TurnosDelMes, List<AltaMesDto> AltasPorMes);
+record TurnosPorSemanaDto(DateOnly Desde, DateOnly Hasta, int Cantidad);
+record ComercioDetalleDto(
+    int Id, string Nombre, string AliasUrl, string TipoPlantilla, string PlanActual, string CicloFacturacion,
+    decimal? MontoMensualAcordado, DateTime FechaAlta, DateTime? FechaProximoPago, bool Activo,
+    int CantidadProfesionales, int CantidadSucursales,
+    int TurnosHistoricosTotal, int TurnosDelMes, decimal? FacturacionHistorica,
+    List<Sucursal> Sucursales, List<Profesional> Profesionales, List<TurnosPorSemanaDto> TurnosPorSemana);
+record RegistroRequest(string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string DatosBancarios, string Email, string Password, string? PlanActual = null, string? CicloFacturacion = null, int? CantidadProfesionales = null, int? CantidadSucursales = null);
 record MiPlanRequest(string PlanActual, string CicloFacturacion);
 record MiPlanDto(string PlanActual, string CicloFacturacion, DateTime? FechaProximoPago);
 record PerfilRequest(string Nombre, string TelefonoNotificaciones, string DatosBancarios);

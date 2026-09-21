@@ -46,7 +46,28 @@
       </div>
       <div class="field">
         <label>Elegí tu plan</label>
-        <app-plan-selector [(plan)]="regPlan" [(ciclo)]="regCiclo"></app-plan-selector>
+        <app-plan-selector
+          [plan]="regPlan" (planChange)="regPlan = $event; onPlanOCicloCambio()"
+          [ciclo]="regCiclo" (cicloChange)="regCiclo = $event; onPlanOCicloCambio()">
+        </app-plan-selector>
+      </div>
+      <div class="field-inline">
+        <div class="field">
+          <label>¿Cuántos profesionales trabajan en tu negocio?</label>
+          <input type="number" min="1" [(ngModel)]="regCantidadProfesionales" (ngModelChange)="actualizarPrecio()">
+        </div>
+        <div class="field">
+          <label>¿Cuántas sucursales tenés?</label>
+          @if (regPlan === 'Premium') {
+            <input type="number" min="1" [(ngModel)]="regCantidadSucursales" (ngModelChange)="actualizarPrecio()">
+          } @else {
+            <input type="number" value="1" disabled title="Múltiples sucursales es exclusivo del plan Premium">
+          }
+        </div>
+      </div>
+      <div class="precio-preview">
+        <span class="precio-preview-etiqueta">Precio de tu plan</span>
+        <span class="precio-preview-monto">{{ precioTexto() }}</span>
       </div>
       <div class="field">
         <label>WhatsApp de notificaciones</label>

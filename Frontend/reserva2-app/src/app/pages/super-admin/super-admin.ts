@@ -1,16 +1,16 @@
-import { Component, signal } from '@angular/core';
+import { Component, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
-import { Api, ComercioAdmin, Metricas, SuperAdminSession } from '../../core/api';
+import { Api, ComercioAdmin, Dashboard, SuperAdminSession } from '../../core/api';
 import { Session } from '../../core/session';
 import { linkWhatsApp } from '../../core/whatsapp';
 
 @Component({
   selector: 'app-super-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './super-admin.html',
   styleUrls: ['./super-admin.css']
 })
@@ -20,13 +20,34 @@ export class SuperAdmin {
 
   sesion: SuperAdminSession;
 
-  metricas = signal<Metricas | null>(null);
+  dashboard = signal<Dashboard | null>(null);
+  meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   comercios = signal<ComercioAdmin[]>([]);
   cargandoComercios = signal(false);
   errorComercios = signal<string | null>(null);
   actualizandoEstadoId = signal<number | null>(null);
   actualizandoMontoId = signal<number | null>(null);
   renovandoId = signal<number | null>(null);
+
+  // --- Búsqueda y filtros ---
+  busqueda = signal('');
+  filtroPlan = signal('Todos');
+  filtroEstado = signal('Todos');
+
+  comerciosFiltrados = computed(() => {
+    const termino = this.busqueda().trim().toLowerCase();
+    const plan = this.filtroPlan();
+    const estado = this.filtroEstado();
+
+    return this.comercios().filter(c => {
+      const coincideTexto = !termino
+        || c.nombre.toLowerCase().includes(termino)
+        || c.aliasUrl.toLowerCase().includes(termino);
+      const coincidePlan = plan === 'Todos' || c.planActual === plan;
+      const coincideEstado = estado === 'Todos' || (estado === 'Activo' ? c.activo : !c.activo);
+      return coincideTexto && coincidePlan && coincideEstado;
+    });
+  });
 
   constructor(private api: Api, private session: Session, private router: Router) {
     // El guard de la ruta ya garantiza que hay sesión antes de llegar acá.
@@ -44,7 +65,7 @@ export class SuperAdmin {
   }
 
   private cargarTodo(): void {
-    this.api.getMetricas().subscribe(m => this.metricas.set(m));
+    this.api.getDashboard().subscribe(d => this.dashboard.set(d));
 
     this.errorComercios.set(null);
     this.cargandoComercios.set(true);
@@ -66,7 +87,7 @@ export class SuperAdmin {
       next: actualizado => {
         this.comercios.update(lista => lista.map(x => x.id === actualizado.id ? actualizado : x));
         this.actualizandoEstadoId.set(null);
-        this.api.getMetricas().subscribe(m => this.metricas.set(m));
+        this.api.getDashboard().subscribe(d => this.dashboard.set(d));
       },
       error: () => this.actualizandoEstadoId.set(null)
     });
@@ -126,9 +147,27 @@ export class SuperAdmin {
       next: actualizado => {
         this.comercios.update(lista => lista.map(x => x.id === actualizado.id ? actualizado : x));
         this.renovandoId.set(null);
-        this.api.getMetricas().subscribe(m => this.metricas.set(m));
+        this.api.getDashboard().subscribe(d => this.dashboard.set(d));
       },
       error: () => this.renovandoId.set(null)
     });
+  }
+
+  // ================= GRÁFICOS (CSS/SVG simple, sin librería) =================
+  etiquetaMes(m: { anio: number; mes: number }): string {
+    return this.meses[m.mes - 1];
+  }
+
+  // Altura de cada barra del gráfico de altas, como % del máximo del período (mínimo 4%
+  // para que un mes en 0 siga mostrando el trazo de la barra, no quede invisible).
+  alturaBarraAltas(cantidad: number): number {
+    const max = Math.max(1, ...(this.dashboard()?.altasPorMes.map(m => m.cantidad) ?? [1]));
+    return Math.max(4, Math.round((cantidad / max) * 100));
+  }
+
+  anchoBarraPlan(cantidad: number): number {
+    const total = this.dashboard()?.totalComercios ?? 0;
+    if (total === 0) return 0;
+    return Math.round((cantidad / total) * 100);
   }
 }

@@ -46,6 +46,11 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/super-admin/super-admin').then(m => m.SuperAdmin)
   },
   {
+    path: 'super-admin/comercios/:id',
+    canActivate: [superAdminGuard],
+    loadComponent: () => import('./pages/super-admin-detalle/super-admin-detalle').then(m => m.SuperAdminDetalle)
+  },
+  {
     // Página pública de cada comercio: reservados2.com/peluqueria-bella
     path: ':alias',
     loadComponent: () => import('./pages/reserva-publica/reserva-publica').then(m => m.ReservaPublica)

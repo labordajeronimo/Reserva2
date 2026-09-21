@@ -31,9 +31,43 @@ export class PanelLogin {
   regPassword = '';
   regPlan = 'Gratuito';
   regCiclo = 'Mensual';
+  regCantidadProfesionales = 1;
+  regCantidadSucursales = 1;
+
+  precioCalculado = signal<number | null>(null);
+  private precioRequestId = 0;
 
   constructor(private api: Api, private session: Session, private router: Router) {
     if (this.session.estaLogueado()) this.router.navigateByUrl('/panel');
+    this.actualizarPrecio();
+  }
+
+  // Sucursales > 1 solo tiene sentido en Premium (Gratuito y Básico tienen tope de 1). Al
+  // cambiar a un plan que no la permite, se resetea para no dejar cargado un valor inválido.
+  onPlanOCicloCambio(): void {
+    if (this.regPlan !== 'Premium') this.regCantidadSucursales = 1;
+    this.actualizarPrecio();
+  }
+
+  actualizarPrecio(): void {
+    if (this.regCantidadProfesionales < 1) this.regCantidadProfesionales = 1;
+    if (this.regCantidadSucursales < 1) this.regCantidadSucursales = 1;
+
+    // Descarta respuestas que lleguen desordenadas (ej. el usuario cambia varios campos
+    // rápido y una request vieja tarda más que una nueva): solo se aplica la última pedida.
+    const idPedido = ++this.precioRequestId;
+    this.api.getPrecioPlan(this.regPlan, this.regCiclo, this.regCantidadProfesionales, this.regCantidadSucursales).subscribe({
+      next: r => { if (idPedido === this.precioRequestId) this.precioCalculado.set(r.precio); },
+      error: () => { if (idPedido === this.precioRequestId) this.precioCalculado.set(null); }
+    });
+  }
+
+  precioTexto(): string {
+    const precio = this.precioCalculado();
+    if (precio === null) return '...';
+    if (precio <= 0) return 'Gratis';
+    const periodo = this.regCiclo === 'Anual' ? '/año' : '/mes';
+    return `$${precio.toLocaleString('es-AR')}${periodo}`;
   }
 
   login(): void {
@@ -64,7 +98,9 @@ export class PanelLogin {
       email: this.regEmail.trim(),
       password: this.regPassword,
       planActual: this.regPlan,
-      cicloFacturacion: this.regCiclo
+      cicloFacturacion: this.regCiclo,
+      cantidadProfesionales: this.regCantidadProfesionales,
+      cantidadSucursales: this.regCantidadSucursales
     }).subscribe({
       next: resp => {
         this.session.iniciarSesion(resp);

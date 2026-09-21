@@ -83,3 +83,24 @@
 .switch { text-align: center; font-size: 0.85rem; color: #A6AFC6; margin-top: 18px; }
 .switch a { color: #FB923C; font-weight: 600; cursor: pointer; text-decoration: none; }
 .switch a:hover { text-decoration: underline; }
+
+.field-inline { display: flex; gap: 14px; }
+.field-inline .field { flex: 1; margin-bottom: 16px; }
+.field input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.precio-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 20px;
+}
+.precio-preview-etiqueta { font-size: 0.85rem; color: #A6AFC6; }
+.precio-preview-monto { font-family: 'Sora', sans-serif; font-size: 1.4rem; font-weight: 800; color: #6EE7B7; }
+
+@media (max-width: 520px) {
+  .field-inline { flex-direction: column; gap: 0; }
+}

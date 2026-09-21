@@ -115,6 +115,26 @@ export class ReservaPublica implements OnInit {
       this.formularioValido();
   }
 
+  // El texto de la pantalla de confirmación depende de si ESTE comercio tiene el bot de
+  // WhatsApp activado (exclusivo Premium) y si EL SERVICIO elegido tiene seña configurada —
+  // no todos los comercios ni todos los servicios tienen ninguna de las dos cosas, así que
+  // no hay que prometer ninguna que no vaya a pasar.
+  mensajeConfirmacion(): string {
+    const whatsAppActivo = this.comercio()?.whatsAppActivo ?? false;
+    const tieneSenia = !!this.servicioSeleccionado()?.['montoSeña'];
+
+    if (whatsAppActivo && tieneSenia) {
+      return `Te vamos a escribir por WhatsApp al ${this.clienteWhatsApp} con el alias para la seña. Tenés 2 horas para transferir antes de que el horario se libere.`;
+    }
+    if (!whatsAppActivo && tieneSenia) {
+      return 'Te enviamos por mail los datos para la seña. Tenés 2 horas para transferir antes de que el horario se libere.';
+    }
+    if (whatsAppActivo && !tieneSenia) {
+      return `Te vamos a escribir por WhatsApp al ${this.clienteWhatsApp} para confirmar tu turno.`;
+    }
+    return 'Te enviamos la confirmación de tu turno por mail.';
+  }
+
   constructor(private route: ActivatedRoute, private api: Api) {}
 
   ngOnInit(): void {

@@ -1,0 +1,145 @@
+<div class="panel-shell">
+  <header class="panel-header">
+    <div class="brand-row">
+      <img src="/reserva2_icono_navy.png" alt="Reserva2" class="brand-icon">
+      <div class="brand">Super Admin</div>
+    </div>
+    <button class="btn-outline" (click)="volver()">← Volver a comercios</button>
+  </header>
+
+  <main class="panel-main">
+    @if (cargando()) {
+      <p class="empty">Cargando...</p>
+    } @else if (error()) {
+      <div class="error-msg">{{ error() }}</div>
+    } @else if (detalle(); as d) {
+
+      <div class="panel-card detalle-header">
+        <div>
+          <h2>{{ d.nombre }}</h2>
+          <p class="sub-info">
+            {{ d.aliasUrl }} · {{ d.tipoPlantilla }} · Alta: {{ d.fechaAlta | date:'d/M/yyyy' }}
+          </p>
+        </div>
+        <span class="badge" [class.badge-ok]="d.activo" [class.badge-danger]="!d.activo">{{ d.activo ? 'Activo' : 'Pausado' }}</span>
+      </div>
+
+      <div class="metricas">
+        <div class="metrica-card">
+          <div class="valor">{{ d.turnosDelMes }}</div>
+          <div class="etiqueta">Turnos este mes</div>
+        </div>
+        <div class="metrica-card">
+          <div class="valor">{{ d.turnosHistoricosTotal }}</div>
+          <div class="etiqueta">Turnos históricos</div>
+        </div>
+        <div class="metrica-card">
+          @if (d.facturacionHistorica !== null) {
+            <div class="valor ok">{{ d.facturacionHistorica | currency:'ARS':'$' }}</div>
+            <div class="etiqueta">Facturación histórica</div>
+          } @else {
+            <div class="valor sin-vencimiento">—</div>
+            <div class="etiqueta">Facturación histórica (no Premium)</div>
+          }
+        </div>
+        <div class="metrica-card">
+          <div class="valor">{{ d.cantidadProfesionales }}</div>
+          <div class="etiqueta">Profesionales</div>
+        </div>
+        <div class="metrica-card">
+          <div class="valor">{{ d.cantidadSucursales }}</div>
+          <div class="etiqueta">Sucursales</div>
+        </div>
+        <div class="metrica-card">
+          @if (d.fechaProximoPago) {
+            <div class="valor" [class.danger]="diasParaVencimiento()! <= 7">{{ etiquetaVencimiento() }}</div>
+          } @else {
+            <div class="valor sin-vencimiento">Sin definir</div>
+          }
+          <div class="etiqueta">Próxima renovación</div>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <h2>Datos y acciones</h2>
+        <div class="acciones-detalle">
+          <div class="campo-detalle">
+            <label>Plan</label>
+            <select class="plan-select" [ngModel]="d.planActual" [disabled]="actualizandoPlan()" (ngModelChange)="cambiarPlan($event)">
+              @for (p of planes; track p) {
+                <option [value]="p">{{ p }}</option>
+              }
+            </select>
+          </div>
+          <div class="campo-detalle">
+            <label>Ciclo</label>
+            <div class="valor-simple">{{ d.cicloFacturacion }}</div>
+          </div>
+          <div class="campo-detalle">
+            <label>Monto mensual acordado</label>
+            <div class="valor-simple">{{ d.montoMensualAcordado ? (d.montoMensualAcordado | currency:'ARS':'$') : 'Sin definir' }}</div>
+          </div>
+          <div class="campo-detalle acciones-botones">
+            <button
+              class="mini"
+              [class.ok]="!d.activo"
+              [class.danger]="d.activo"
+              [disabled]="actualizandoEstado()"
+              (click)="toggleEstado()">
+              {{ d.activo ? 'Pausar' : 'Activar' }}
+            </button>
+            <button class="mini ok" [disabled]="renovando()" (click)="renovar()">
+              {{ renovando() ? '...' : 'Marcar como renovado' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-card grafico-card">
+        <h2>Turnos por semana (último mes)</h2>
+        <div class="grafico-barras">
+          @for (s of d.turnosPorSemana; track s.desde) {
+            <div class="barra-col">
+              <div class="barra-valor">{{ s.cantidad }}</div>
+              <div class="barra" [style.height.%]="alturaBarraSemana(s.cantidad)"></div>
+              <div class="barra-etiqueta">{{ etiquetaSemana(s.desde, s.hasta) }}</div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="detalle-listas">
+        <div class="panel-card">
+          <h2>Sucursales</h2>
+          @if (d.sucursales.length === 0) {
+            <p class="empty">No cargó ninguna.</p>
+          } @else {
+            <ul class="lista-simple">
+              @for (s of d.sucursales; track s.id) {
+                <li>
+                  <strong>{{ s.nombre }}</strong>
+                  <span class="badge" [class.badge-ok]="s.activa" [class.badge-danger]="!s.activa">{{ s.activa ? 'Activa' : 'Inactiva' }}</span>
+                  @if (s.direccion) { <div class="sub-info">{{ s.direccion }}</div> }
+                </li>
+              }
+            </ul>
+          }
+        </div>
+
+        <div class="panel-card">
+          <h2>Profesionales</h2>
+          @if (d.profesionales.length === 0) {
+            <p class="empty">No cargó ninguno.</p>
+          } @else {
+            <ul class="lista-simple">
+              @for (p of d.profesionales; track p.id) {
+                <li>{{ p.nombre }}</li>
+              }
+            </ul>
+          }
+        </div>
+      </div>
+
+    }
+  </main>
+</div>

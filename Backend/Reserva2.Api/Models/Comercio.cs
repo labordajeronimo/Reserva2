@@ -36,5 +36,23 @@ namespace Reserva2.Api.Models
         // "Mensual" | "Anual". Solo registro informativo para que el Super Admin sepa cómo
         // cobrarle a cada comercio; no dispara ninguna renovación ni cobro automático todavía.
         public string CicloFacturacion { get; set; } = "Mensual";
+
+        // Fecha de registro del comercio (para la tendencia de altas del dashboard del
+        // Super Admin y la ficha de detalle). Los comercios que ya existían antes de este
+        // campo quedaron con la fecha de la migración, no con su alta real.
+        public DateTime FechaAlta { get; set; } = DateTime.UtcNow;
+
+        // Nula hasta que el Super Admin activa el comercio por primera vez (todo registro
+        // nuevo entra pausado, ver Activo más arriba). Sirve para distinguir "pendiente de
+        // activación" (Activo == false && FechaActivacion == null) de "pausado después de
+        // haber estado activo" (Activo == false && FechaActivacion != null).
+        public DateTime? FechaActivacion { get; set; }
+
+        // Cantidad de profesionales y sucursales que el comercio declaró tener al
+        // registrarse (no es lo mismo que la cantidad real cargada en Profesionales/
+        // Sucursales, que puede cambiar después). Sirve para saber cuánto cobrarle sin
+        // tener que volver a pedírselo cuando se conecte el cobro real (MercadoPago).
+        public int CantidadProfesionalesContratada { get; set; } = 1;
+        public int CantidadSucursalesContratada { get; set; } = 1;
     }
 }

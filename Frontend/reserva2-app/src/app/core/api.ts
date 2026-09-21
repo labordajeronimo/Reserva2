@@ -22,6 +22,7 @@ export interface ComercioPublico {
   tipoPlantilla: string;
   telefonoNotificaciones: string;
   logoUrl: string | null;
+  whatsAppActivo: boolean;
 }
 
 export interface Servicio {
@@ -163,6 +164,8 @@ export interface RegistroRequest {
   password: string;
   planActual?: string;
   cicloFacturacion?: string;
+  cantidadProfesionales?: number;
+  cantidadSucursales?: number;
 }
 
 export interface SuperAdminSession {
@@ -184,11 +187,60 @@ export interface ComercioAdmin {
   cicloFacturacion: string;
 }
 
+export interface TurnosPorSemana {
+  desde: string;
+  hasta: string;
+  cantidad: number;
+}
+
+export interface ComercioDetalle {
+  id: number;
+  nombre: string;
+  aliasUrl: string;
+  tipoPlantilla: string;
+  planActual: string;
+  cicloFacturacion: string;
+  montoMensualAcordado: number | null;
+  fechaAlta: string;
+  fechaProximoPago: string | null;
+  activo: boolean;
+  cantidadProfesionales: number;
+  cantidadSucursales: number;
+  turnosHistoricosTotal: number;
+  turnosDelMes: number;
+  facturacionHistorica: number | null;
+  sucursales: Sucursal[];
+  profesionales: Profesional[];
+  turnosPorSemana: TurnosPorSemana[];
+}
+
 export interface Metricas {
   totalComercios: number;
   comerciosActivos: number;
   comerciosInactivos: number;
   turnosDelMes: number;
+}
+
+export interface PlanCantidad {
+  plan: string;
+  cantidad: number;
+}
+
+export interface AltaMes {
+  anio: number;
+  mes: number;
+  cantidad: number;
+}
+
+export interface Dashboard {
+  totalComercios: number;
+  comerciosActivos: number;
+  comerciosInactivos: number;
+  comerciosPendientes: number;
+  porPlan: PlanCantidad[];
+  ingresoMensualEstimado: number;
+  turnosDelMes: number;
+  altasPorMes: AltaMes[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -202,6 +254,12 @@ export class Api {
 
   registrar(datos: RegistroRequest): Observable<LoginResponse> {
     return this.http.post<LoginResponse>(`${API_BASE}/auth/register`, datos);
+  }
+
+  getPrecioPlan(plan: string, ciclo: string, profesionales: number, sucursales: number): Observable<{ precio: number }> {
+    return this.http.get<{ precio: number }>(`${API_BASE}/precio-plan`, {
+      params: { plan, ciclo, profesionales, sucursales }
+    });
   }
 
   superAdminLogin(email: string, password: string): Observable<SuperAdminSession> {
@@ -261,6 +319,14 @@ export class Api {
 
   getMetricas(): Observable<Metricas> {
     return this.http.get<Metricas>(`${API_BASE}/admin/metricas`);
+  }
+
+  getDashboard(): Observable<Dashboard> {
+    return this.http.get<Dashboard>(`${API_BASE}/admin/dashboard`);
+  }
+
+  getComercioDetalle(id: number): Observable<ComercioDetalle> {
+    return this.http.get<ComercioDetalle>(`${API_BASE}/admin/comercios/${id}/detalle`);
   }
 
   // --- Comercios ---

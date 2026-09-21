@@ -9,44 +9,109 @@
 
   <main class="panel-main">
 
-    @if (metricas(); as m) {
+    @if (dashboard(); as d) {
       <div class="metricas">
         <div class="metrica-card">
-          <div class="valor">{{ m.totalComercios }}</div>
+          <div class="valor">{{ d.totalComercios }}</div>
           <div class="etiqueta">Comercios totales</div>
         </div>
         <div class="metrica-card">
-          <div class="valor ok">{{ m.comerciosActivos }}</div>
+          <div class="valor ok">{{ d.comerciosActivos }}</div>
           <div class="etiqueta">Activos</div>
         </div>
         <div class="metrica-card">
-          <div class="valor danger">{{ m.comerciosInactivos }}</div>
+          <div class="valor danger">{{ d.comerciosInactivos }}</div>
           <div class="etiqueta">Pausados</div>
         </div>
         <div class="metrica-card">
-          <div class="valor">{{ m.turnosDelMes }}</div>
+          <div class="valor">{{ d.comerciosPendientes }}</div>
+          <div class="etiqueta">Pendientes de activación</div>
+        </div>
+        <div class="metrica-card">
+          <div class="valor ok">{{ d.ingresoMensualEstimado | currency:'ARS':'$' }}</div>
+          <div class="etiqueta">Ingreso mensual estimado</div>
+        </div>
+        <div class="metrica-card">
+          <div class="valor">{{ d.turnosDelMes }}</div>
           <div class="etiqueta">Turnos este mes</div>
+        </div>
+      </div>
+
+      <div class="graficos-row">
+        <div class="panel-card grafico-card">
+          <h2>Altas de comercios por mes</h2>
+          <div class="grafico-barras">
+            @for (m of d.altasPorMes; track m.anio + '-' + m.mes) {
+              <div class="barra-col">
+                <div class="barra-valor">{{ m.cantidad }}</div>
+                <div class="barra" [style.height.%]="alturaBarraAltas(m.cantidad)"></div>
+                <div class="barra-etiqueta">{{ etiquetaMes(m) }}</div>
+              </div>
+            }
+          </div>
+        </div>
+
+        <div class="panel-card grafico-card">
+          <h2>Comercios por plan</h2>
+          @if (d.porPlan.length === 0) {
+            <p class="empty">Todavía no hay comercios registrados.</p>
+          } @else {
+            <div class="grafico-barras-h">
+              @for (p of d.porPlan; track p.plan) {
+                <div class="barra-h-fila">
+                  <div class="barra-h-etiqueta">{{ p.plan }}</div>
+                  <div class="barra-h-pista">
+                    <div class="barra-h" [style.width.%]="anchoBarraPlan(p.cantidad)"></div>
+                  </div>
+                  <div class="barra-h-valor">{{ p.cantidad }}</div>
+                </div>
+              }
+            </div>
+          }
         </div>
       </div>
     }
 
     <div class="panel-card">
       <h2>Comercios</h2>
+
+      <div class="filtros-row">
+        <input
+          type="text"
+          class="filtro-busqueda"
+          placeholder="Buscar por nombre o link..."
+          [ngModel]="busqueda()"
+          (ngModelChange)="busqueda.set($event)">
+        <select class="plan-select" [ngModel]="filtroPlan()" (ngModelChange)="filtroPlan.set($event)">
+          <option value="Todos">Todos los planes</option>
+          @for (p of planes; track p) {
+            <option [value]="p">{{ p }}</option>
+          }
+        </select>
+        <select class="plan-select" [ngModel]="filtroEstado()" (ngModelChange)="filtroEstado.set($event)">
+          <option value="Todos">Todos los estados</option>
+          <option value="Activo">Activo</option>
+          <option value="Inactivo">Inactivo</option>
+        </select>
+      </div>
+
       @if (errorComercios()) {
         <div class="error-msg">{{ errorComercios() }}</div>
       } @else if (cargandoComercios()) {
         <p class="empty">Cargando...</p>
       } @else if (comercios().length === 0) {
         <p class="empty">Todavía no hay comercios registrados.</p>
+      } @else if (comerciosFiltrados().length === 0) {
+        <p class="empty">Ningún comercio coincide con la búsqueda o los filtros.</p>
       } @else {
         <table class="tabla">
           <thead>
             <tr><th>Nombre</th><th>Link</th><th>Plan</th><th>Ciclo</th><th>Monto mensual acordado</th><th>Vencimiento</th><th>Estado</th><th></th></tr>
           </thead>
           <tbody>
-            @for (c of comercios(); track c.id) {
+            @for (c of comerciosFiltrados(); track c.id) {
               <tr>
-                <td>{{ c.nombre }}</td>
+                <td><a class="nombre-link" [routerLink]="['/super-admin/comercios', c.id]">{{ c.nombre }}</a></td>
                 <td>{{ c.aliasUrl }}</td>
                 <td>
                   <select class="plan-select" [ngModel]="c.planActual" (ngModelChange)="cambiarPlan(c, $event)">

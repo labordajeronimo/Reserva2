@@ -69,8 +69,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
       </div>
       <h2>¡Turno pre-reservado!</h2>
-      <p>Te vamos a escribir por WhatsApp al {{ clienteWhatsApp }} con el alias para la seña.</p>
-      <p>Tenés 2 horas para transferir antes de que el horario se libere.</p>
+      <p>{{ mensajeConfirmacion() }}</p>
       <p class="note">¿Necesitás cancelar? Usá el link que te llega por mail apenas confirmás la reserva.</p>
       <button class="again" type="button" (click)="reservarOtroTurno()">Reservar otro turno</button>
     </div>
