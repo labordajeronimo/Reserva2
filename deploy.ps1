@@ -78,9 +78,11 @@ Invoke-Step "Subir frontend a carpeta temporal en el servidor" {
     scp -r "$FrontendDir\dist\reserva2-app\browser" "${Server}:${RemoteFrontendTemp}"
 }
 
-# 6. Reemplazar el contenido de /var/www/reserva2 por el nuevo build
+# 6. Reemplazar el contenido de /var/www/reserva2 por el nuevo build. El chmod es necesario
+#    porque scp -r a veces preserva permisos restrictivos (700) del origen en Windows, y con
+#    eso nginx (que corre como usuario sin privilegios) no puede leer los archivos -> 403.
 Invoke-Step "Reemplazar contenido de $RemoteFrontendPath" {
-    ssh $Server "rm -rf $RemoteFrontendPath && mv $RemoteFrontendTemp $RemoteFrontendPath"
+    ssh $Server "rm -rf $RemoteFrontendPath && mv $RemoteFrontendTemp $RemoteFrontendPath && chmod -R 755 $RemoteFrontendPath"
 }
 
 # 7. Verificar que el sitio responde
