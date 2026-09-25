@@ -35,8 +35,38 @@
 
     @if (tabActiva() === 'turnos') {
       <div class="panel-card">
-        <h2>Turnos</h2>
-        @if (turnos().length === 0) {
+        <div class="historial-header">
+          <h2>Turnos</h2>
+          <button class="btn-outline" (click)="vistaAgenda.set(!vistaAgenda())">
+            {{ vistaAgenda() ? 'Ver como lista' : 'Ver agenda' }}
+          </button>
+        </div>
+
+        @if (vistaAgenda()) {
+          <div class="agenda-nav">
+            <button class="mini" (click)="agendaDiaAnterior()">← Día anterior</button>
+            <span class="agenda-rango">{{ etiquetaDiaAgenda() }}</span>
+            <button class="mini" (click)="agendaHoy()">Hoy</button>
+            <button class="mini" (click)="agendaDiaSiguiente()">Día siguiente →</button>
+          </div>
+          <div class="agenda-grilla-profesionales" [style.grid-template-columns]="'repeat(' + columnasAgenda().length + ', minmax(180px, 1fr))'">
+            @for (col of columnasAgenda(); track col.id) {
+              <div class="agenda-dia">
+                <div class="agenda-dia-header">{{ col.nombre }}</div>
+                @if (turnosColumnaAgenda(col.id).length === 0) {
+                  <p class="agenda-vacio">Sin turnos</p>
+                } @else {
+                  @for (t of turnosColumnaAgenda(col.id); track t.id) {
+                    <div class="agenda-turno" [class]="'estado-' + t.estadoReserva">
+                      <div class="agenda-turno-hora">{{ t.fechaHoraInicio | date:'HH:mm' }}</div>
+                      <div class="agenda-turno-cliente">{{ t.clienteNombre }}</div>
+                    </div>
+                  }
+                }
+              </div>
+            }
+          </div>
+        } @else if (turnos().length === 0) {
           <p class="empty">Todavía no tenés turnos reservados.</p>
         } @else {
           <table class="tabla">
@@ -157,9 +187,128 @@
           <button class="btn-naranja" (click)="abrirTab('plan')">Actualizar mi plan</button>
         </div>
       } @else {
+        @if (ganancias(); as g) {
+          <div class="metricas metricas-dashboard">
+            <div class="metrica-card">
+              <div class="valor ok">{{ g.facturadoHoy | currency:'ARS':'$':'1.0-0' }}</div>
+              <div class="etiqueta">Facturado hoy</div>
+            </div>
+            <div class="metrica-card">
+              <div class="valor ok">{{ g.facturadoUltimos7Dias | currency:'ARS':'$':'1.0-0' }}</div>
+              <div class="etiqueta">Últimos 7 días</div>
+            </div>
+            <div class="metrica-card">
+              <div class="valor ok">{{ g.facturadoEsteMes | currency:'ARS':'$':'1.0-0' }}</div>
+              <div class="etiqueta">Este mes</div>
+            </div>
+            <div class="metrica-card">
+              <div class="valor">{{ g.cortesTotales }}</div>
+              <div class="etiqueta">Cortes totales</div>
+            </div>
+          </div>
+
+          <div class="panel-card grafico-card" style="margin-bottom:20px;">
+            <h2>Facturación · últimos 7 días</h2>
+            <div class="grafico-barras">
+              @for (d of g.facturacionPorDia; track d.fecha) {
+                <div class="barra-col">
+                  <div class="barra-valor">{{ d.total > 0 ? (d.total | currency:'ARS':'$':'1.0-0') : '' }}</div>
+                  <div class="barra" [style.height.%]="alturaBarraFacturacion(d.total, g.facturacionPorDia)"></div>
+                  <div class="barra-etiqueta">{{ etiquetaDiaFacturacion(d.fecha) }}</div>
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="dashboard-columnas" style="margin-bottom:20px;">
+            <div class="panel-card">
+              <h2>Servicio más pedido</h2>
+              @if (g.servicioMasPedido.length === 0) {
+                <p class="empty">Todavía no hay turnos confirmados.</p>
+              } @else {
+                <div class="ranking-lista">
+                  @for (s of g.servicioMasPedido; track s.servicioId) {
+                    <div class="ranking-item">
+                      <div class="ranking-header">
+                        <span>{{ s.nombreServicio }}</span>
+                        <span>{{ s.cantidad }}</span>
+                      </div>
+                      <div class="ranking-barra-fondo">
+                        <div class="ranking-barra" [style.width.%]="alturaBarraFacturacion(s.cantidad, g.servicioMasPedido, 'cantidad')"></div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="panel-card">
+              <h2>Clientes más frecuentes</h2>
+              @if (g.clientesFrecuentes.length === 0) {
+                <p class="empty">Todavía no hay turnos confirmados.</p>
+              } @else {
+                <table class="tabla">
+                  <thead>
+                    <tr><th>Cliente</th><th>Visitas</th><th>Última visita</th></tr>
+                  </thead>
+                  <tbody>
+                    @for (c of g.clientesFrecuentes; track c.nombre) {
+                      <tr>
+                        <td>{{ c.nombre }}</td>
+                        <td>{{ c.cantidadTurnos }}</td>
+                        <td>{{ c.ultimaVisita | date:'dd/MM/yyyy' }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+            </div>
+          </div>
+
+          <div class="panel-card" style="margin-bottom:20px;">
+            <h2>Para reactivar</h2>
+            <p class="sub-info">Clientes que no vuelven hace 30 días o más. Un mensaje corto por WhatsApp puede traerlos de vuelta.</p>
+            @if (g.paraReactivar.length === 0) {
+              <p class="empty">No hay clientes para reactivar por ahora.</p>
+            } @else {
+              <table class="tabla">
+                <thead>
+                  <tr><th>Cliente</th><th>Visitas</th><th>Última visita</th></tr>
+                </thead>
+                <tbody>
+                  @for (c of g.paraReactivar; track c.nombre) {
+                    <tr>
+                      <td>{{ c.nombre }}</td>
+                      <td>{{ c.cantidadTurnos }}</td>
+                      <td>{{ c.ultimaVisita | date:'dd/MM/yyyy' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+
+          <div class="panel-card grafico-card" style="margin-bottom:20px;">
+            <h2>Horarios ocupados</h2>
+            @if (g.horariosOcupados.length === 0) {
+              <p class="empty">Todavía no hay turnos confirmados.</p>
+            } @else {
+              <div class="grafico-barras">
+                @for (h of g.horariosOcupados; track h.hora) {
+                  <div class="barra-col">
+                    <div class="barra-valor">{{ h.cantidad }}</div>
+                    <div class="barra" [style.height.%]="alturaBarraFacturacion(h.cantidad, g.horariosOcupados, 'cantidad')"></div>
+                    <div class="barra-etiqueta">{{ h.hora }}h</div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+
         <div class="panel-card">
           <div class="historial-header">
-            <h2>Ganancias</h2>
+            <h2>Ganancias por período</h2>
             <div class="rango-fechas">
               <input type="date" [(ngModel)]="gananciasDesde">
               <span>a</span>

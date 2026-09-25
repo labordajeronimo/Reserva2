@@ -29,6 +29,13 @@ if (args.Length > 0 && args[0] == "hash-password")
     return;
 }
 
+// wwwroot nunca se commitea (solo tiene contenido subido por usuarios, ej. logos), pero
+// WebApplication.CreateBuilder ya necesita que la carpeta EXISTA en este punto — si no,
+// tira DirectoryNotFoundException al arrancar (StaticWebAssetsLoader la busca de entrada).
+// Por eso se crea acá, antes de todo lo demás, no de forma perezosa en el endpoint de
+// subida ni más adelante en el pipeline: para entonces ya es tarde en los dos casos.
+Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "logos"));
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Configuración de la base de datos SQL Server
@@ -240,8 +247,9 @@ static bool VerifyPassword(string password, string stored)
 var brevoHttpClient = new HttpClient();
 
 // Si no hay Brevo:ApiKey configurado (ej. en desarrollo sin credenciales todavía), no falla:
-// simplemente no se envía el mail y queda logueado el motivo.
-async Task EnviarEmail(IConfiguration config, ILogger logger, string destinatario, string asunto, string cuerpo)
+// simplemente no se envía el mail y queda logueado el motivo. "adjunto" es opcional (ej. el
+// .ics de un turno) — Brevo lo soporta nativo en el mismo POST, en base64.
+async Task EnviarEmail(IConfiguration config, ILogger logger, string destinatario, string asunto, string cuerpo, (string NombreArchivo, string ContenidoBase64)? adjunto = null)
 {
     var apiKey = config["Brevo:ApiKey"];
     if (string.IsNullOrWhiteSpace(apiKey))
@@ -252,17 +260,21 @@ async Task EnviarEmail(IConfiguration config, ILogger logger, string destinatari
 
     var remitente = config["Smtp:From"] ?? config["Smtp:User"] ?? "no-reply@reservados2.com";
 
+    var body = new Dictionary<string, object>
+    {
+        ["sender"] = new { email = remitente, name = "Reserva2" },
+        ["to"] = new[] { new { email = destinatario } },
+        ["subject"] = asunto,
+        // Los cuerpos de acá se arman como texto plano con "\n"; Brevo espera HTML, así
+        // que se convierten los saltos de línea para que no quede todo el mail pegado.
+        ["htmlContent"] = cuerpo.Replace("\n", "<br>")
+    };
+    if (adjunto is not null)
+        body["attachment"] = new[] { new { name = adjunto.Value.NombreArchivo, content = adjunto.Value.ContenidoBase64 } };
+
     using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.brevo.com/v3/smtp/email")
     {
-        Content = JsonContent.Create(new
-        {
-            sender = new { email = remitente, name = "Reserva2" },
-            to = new[] { new { email = destinatario } },
-            subject = asunto,
-            // Los cuerpos de acá se arman como texto plano con "\n"; Brevo espera HTML, así
-            // que se convierten los saltos de línea para que no quede todo el mail pegado.
-            htmlContent = cuerpo.Replace("\n", "<br>")
-        })
+        Content = JsonContent.Create(body)
     };
     request.Headers.Add("api-key", apiKey);
 
@@ -273,6 +285,59 @@ async Task EnviarEmail(IConfiguration config, ILogger logger, string destinatari
         logger.LogError("Brevo devolvió {StatusCode} al enviar el email a {Destinatario} ({Asunto}): {Detalle}",
             respuesta.StatusCode, destinatario, asunto, detalle);
     }
+}
+
+// ==========================================
+// CALENDARIO (link "Agregar a Google Calendar" + archivo .ics adjunto al mail de
+// confirmación). Sin credenciales de Google: es solo un link con el evento precargado y un
+// archivo .ics estándar, que funciona igual con Google/Apple/Outlook/lo que sea.
+// ==========================================
+// FechaHoraInicio/Fin de Turno se guardan en hora Argentina "pelada" (ver AhoraArgentina más
+// arriba); para un link o archivo de calendario hace falta UTC real, así que se le suman las
+// 3 horas de vuelta.
+static string EscaparTextoIcs(string texto) =>
+    texto.Replace("\\", "\\\\").Replace(",", "\\,").Replace(";", "\\;").Replace("\n", "\\n");
+
+static string GenerarIcs(string titulo, DateTime inicioLocal, DateTime finLocal, string descripcion, string ubicacion)
+{
+    string Fmt(DateTime d) => d.ToString("yyyyMMdd'T'HHmmss'Z'");
+    var inicioUtc = inicioLocal.AddHours(3);
+    var finUtc = finLocal.AddHours(3);
+
+    var ics =
+        "BEGIN:VCALENDAR\r\n" +
+        "VERSION:2.0\r\n" +
+        "PRODID:-//Reserva2//ES\r\n" +
+        "CALSCALE:GREGORIAN\r\n" +
+        "BEGIN:VEVENT\r\n" +
+        $"UID:{Guid.NewGuid()}@reservados2.com\r\n" +
+        $"DTSTAMP:{Fmt(DateTime.UtcNow)}\r\n" +
+        $"DTSTART:{Fmt(inicioUtc)}\r\n" +
+        $"DTEND:{Fmt(finUtc)}\r\n" +
+        $"SUMMARY:{EscaparTextoIcs(titulo)}\r\n" +
+        $"DESCRIPTION:{EscaparTextoIcs(descripcion)}\r\n" +
+        $"LOCATION:{EscaparTextoIcs(ubicacion)}\r\n" +
+        "END:VEVENT\r\n" +
+        "END:VCALENDAR\r\n";
+
+    return ics;
+}
+
+static string LinkGoogleCalendar(string titulo, DateTime inicioLocal, DateTime finLocal, string descripcion, string ubicacion)
+{
+    string Fmt(DateTime d) => d.ToString("yyyyMMdd'T'HHmmss'Z'");
+    var inicioUtc = inicioLocal.AddHours(3);
+    var finUtc = finLocal.AddHours(3);
+
+    var query = string.Join("&", new[]
+    {
+        "action=TEMPLATE",
+        $"text={Uri.EscapeDataString(titulo)}",
+        $"dates={Fmt(inicioUtc)}/{Fmt(finUtc)}",
+        $"details={Uri.EscapeDataString(descripcion)}",
+        $"location={Uri.EscapeDataString(ubicacion)}"
+    });
+    return $"https://calendar.google.com/calendar/render?{query}";
 }
 
 // ==========================================
@@ -600,6 +665,31 @@ app.MapPatch("/api/comercios/{id:int}/renovar", async (AppDbContext context, int
         comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.Email, comercio.Activo, comercio.PlanActual, comercio.FechaProximoPago, comercio.MontoMensualAcordado, comercio.CicloFacturacion));
 }).RequireAuthorization("SuperAdmin");
 
+// Borrado definitivo de un comercio (ej. quedó pausado y nunca más pagó). Solo se permite
+// si ya está pausado — de última salvaguarda contra un borrado accidental de un comercio
+// activo; para eso primero hay que pausarlo. No hay FKs reales en la base (por diseño, cada
+// tabla solo guarda el ComercioId suelto), así que hay que borrar a mano todo lo que cuelga
+// de este comercio para no dejar filas huérfanas.
+app.MapDelete("/api/comercios/{id:int}", async (AppDbContext context, int id) =>
+{
+    var comercio = await context.Comercios.FindAsync(id);
+    if (comercio is null) return Results.NotFound();
+    if (comercio.Activo)
+        return Results.Conflict(new { mensaje = "Solo se puede eliminar un comercio que ya esté pausado." });
+
+    context.Turnos.RemoveRange(context.Turnos.Where(t => t.ComercioId == id));
+    context.Servicios.RemoveRange(context.Servicios.Where(s => s.ComercioId == id));
+    context.Horarios.RemoveRange(context.Horarios.Where(h => h.ComercioId == id));
+    context.Profesionales.RemoveRange(context.Profesionales.Where(p => p.ComercioId == id));
+    context.Sucursales.RemoveRange(context.Sucursales.Where(s => s.ComercioId == id));
+    context.WhatsAppConfigs.RemoveRange(context.WhatsAppConfigs.Where(w => w.ComercioId == id));
+    context.PasswordResetTokens.RemoveRange(context.PasswordResetTokens.Where(t => t.ComercioId == id));
+    context.Comercios.Remove(comercio);
+
+    await context.SaveChangesAsync();
+    return Results.NoContent();
+}).RequireAuthorization("SuperAdmin");
+
 app.MapGet("/api/admin/metricas", async (AppDbContext context) =>
 {
     var totalComercios = await context.Comercios.CountAsync();
@@ -825,7 +915,12 @@ app.MapPost("/api/comercios/{comercioId:int}/logo", async (AppDbContext context,
     await context.SaveChangesAsync();
 
     return Results.Ok(new { logoUrl = comercio.LogoUrl });
-}).RequireAuthorization("AdminCliente");
+})
+// Los endpoints que reciben IFormFile piden por default el middleware de antiforgery (pensado
+// para forms con cookies). Esta API es 100% JWT bearer sin cookies, así que no aplica — sin
+// esto, cualquier subida de archivo tira 500 porque el middleware nunca se registró.
+.DisableAntiforgery()
+.RequireAuthorization("AdminCliente");
 
 // ==========================================
 // ENDPOINTS PARA SERVICIOS
@@ -1219,6 +1314,7 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
         var clienteEmail = req.ClienteEmail;
         var clienteNombre = req.ClienteNombre;
         var fechaHoraInicio = req.FechaHoraInicio;
+        var fechaHoraFin = finTurno;
         var nombreComercio = comercio.Nombre;
         var nombreServicio = servicio.Nombre;
         var tokenCancelacion = turno.TokenCancelacion;
@@ -1230,13 +1326,23 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
                 var fechaTexto = fechaHoraInicio.ToString("dddd d 'de' MMMM 'a las' HH:mm", new System.Globalization.CultureInfo("es-AR"));
                 var baseUrlCancelacion = config["Frontend:BaseUrl"] ?? "http://localhost:4200";
                 var linkCancelacion = $"{baseUrlCancelacion}/cancelar-turno?token={tokenCancelacion}";
+
+                var tituloEvento = $"{nombreServicio} en {nombreComercio}";
+                var descripcionEvento = $"Turno reservado con Reserva2. Cancelalo acá: {linkCancelacion}";
+                var linkGoogleCalendar = LinkGoogleCalendar(tituloEvento, fechaHoraInicio, fechaHoraFin, descripcionEvento, nombreComercio);
+                var icsBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(
+                    GenerarIcs(tituloEvento, fechaHoraInicio, fechaHoraFin, descripcionEvento, nombreComercio)));
+
                 await EnviarEmail(config, logger, clienteEmail, $"Turno pre-reservado en {nombreComercio}",
                     $"Hola {clienteNombre},\n\n" +
                     $"Tu turno para \"{nombreServicio}\" en {nombreComercio} quedó pre-reservado para el {fechaTexto}.\n\n" +
                     "En breve te van a escribir por WhatsApp para coordinar la seña. Tenés 2 horas para confirmar antes de que el horario se libere.\n\n" +
                     $"¿No podés ir? Cancelalo acá: {linkCancelacion}\n" +
                     "(¿Necesitás cancelar? Usá el link que te llega por mail apenas confirmás la reserva.)\n\n" +
-                    "Gracias por reservar con Reserva2.");
+                    $"¿Querés agregarlo a tu calendario? {linkGoogleCalendar}\n" +
+                    "(También te dejamos un archivo adjunto que sirve para cualquier calendario, no solo Google.)\n\n" +
+                    "Gracias por reservar con Reserva2.",
+                    ("turno.ics", icsBase64));
             }
             catch (Exception ex)
             {
@@ -1433,6 +1539,34 @@ app.MapGet("/api/comercios/{comercioId:int}/ganancias", async (AppDbContext cont
         .Where(t => t.ComercioId == comercioId && t.EstadoReserva == 2 && t.FechaHoraInicio >= inicio && t.FechaHoraInicio <= fin)
         .ToListAsync();
 
+    // Resumen del dashboard (KPIs de arriba de la pestaña Ganancias): son fijos —hoy, últimos
+    // 7 días, este mes, total histórico— sin importar qué "desde/hasta" se esté mirando en el
+    // resto de la pantalla. "Últimos 7 días" es una ventana corrediza (hoy y los 6 anteriores),
+    // no la semana calendario, para que coincida con lo que se ve en el gráfico de barras.
+    var inicioHoy = hoy.ToDateTime(TimeOnly.MinValue);
+    var finHoy = hoy.ToDateTime(TimeOnly.MaxValue);
+    var inicioUltimos7Dias = hoy.AddDays(-6).ToDateTime(TimeOnly.MinValue);
+
+    var turnosConfirmadosTodos = await context.Turnos
+        .Where(t => t.ComercioId == comercioId && t.EstadoReserva == 2)
+        .Select(t => new { t.FechaHoraInicio, t.MontoCobrado, t.ClienteNombre, t.ClienteWhatsApp })
+        .ToListAsync();
+
+    var facturadoHoy = turnosConfirmadosTodos.Where(t => t.FechaHoraInicio >= inicioHoy && t.FechaHoraInicio <= finHoy).Sum(t => t.MontoCobrado ?? 0);
+    var facturadoUltimos7Dias = turnosConfirmadosTodos.Where(t => t.FechaHoraInicio >= inicioUltimos7Dias && t.FechaHoraInicio <= finHoy).Sum(t => t.MontoCobrado ?? 0);
+    var facturadoEsteMes = turnosConfirmadosTodos.Where(t => t.FechaHoraInicio >= new DateOnly(hoy.Year, hoy.Month, 1).ToDateTime(TimeOnly.MinValue) && t.FechaHoraInicio <= finHoy).Sum(t => t.MontoCobrado ?? 0);
+    var cortesTotales = turnosConfirmadosTodos.Count;
+
+    var facturacionPorDia = new List<FacturacionDiaDto>();
+    for (var i = 6; i >= 0; i--)
+    {
+        var dia = hoy.AddDays(-i);
+        var inicioDia = dia.ToDateTime(TimeOnly.MinValue);
+        var finDia = dia.ToDateTime(TimeOnly.MaxValue);
+        var totalDia = turnosConfirmadosTodos.Where(t => t.FechaHoraInicio >= inicioDia && t.FechaHoraInicio <= finDia).Sum(t => t.MontoCobrado ?? 0);
+        facturacionPorDia.Add(new FacturacionDiaDto(dia, totalDia));
+    }
+
     var profesionales = await context.Profesionales
         .Where(p => p.ComercioId == comercioId)
         .ToListAsync();
@@ -1441,6 +1575,55 @@ app.MapGet("/api/comercios/{comercioId:int}/ganancias", async (AppDbContext cont
     var nombresSucursalPorId = await context.Sucursales
         .Where(s => s.ComercioId == comercioId)
         .ToDictionaryAsync(s => s.Id, s => s.Nombre);
+
+    var servicios = await context.Servicios
+        .Where(s => s.ComercioId == comercioId)
+        .ToDictionaryAsync(s => s.Id, s => s.Nombre);
+
+    var servicioMasPedido = turnosDelPeriodo
+        .GroupBy(t => t.ServicioId)
+        .Select(g => new ServicioPedidoDto(
+            g.Key,
+            g.Key is not null && servicios.TryGetValue(g.Key.Value, out var nombreServicio) ? nombreServicio : "Sin servicio",
+            g.Count()))
+        .OrderByDescending(x => x.Cantidad)
+        .Take(5)
+        .ToList();
+
+    var horariosOcupados = turnosDelPeriodo
+        .GroupBy(t => t.FechaHoraInicio.Hour)
+        .Select(g => new HorarioOcupadoDto(g.Key, g.Count()))
+        .OrderBy(x => x.Hora)
+        .ToList();
+
+    // Clientes frecuentes y "para reactivar" miran TODO el historial confirmado, no el
+    // rango desde/hasta elegido arriba: son sobre la relación con el cliente, no sobre
+    // la facturación de un período puntual. Se identifica al cliente por WhatsApp (más
+    // estable que el nombre, que puede repetirse o tipearse distinto entre visitas); si
+    // no cargó WhatsApp, se cae al nombre como alternativa.
+    string ClavePorCliente(string clienteWhatsApp, string clienteNombre) =>
+        string.IsNullOrWhiteSpace(clienteWhatsApp) ? clienteNombre : clienteWhatsApp;
+
+    var clientesFrecuentes = turnosConfirmadosTodos
+        .Where(t => !string.IsNullOrWhiteSpace(t.ClienteNombre))
+        .GroupBy(t => ClavePorCliente(t.ClienteWhatsApp, t.ClienteNombre))
+        .Select(g => new ClienteFrecuenteDto(g.OrderByDescending(t => t.FechaHoraInicio).First().ClienteNombre, g.Count(), g.Max(t => t.FechaHoraInicio)))
+        .OrderByDescending(x => x.CantidadTurnos)
+        .Take(5)
+        .ToList();
+
+    // "Para reactivar": clientes con al menos un turno confirmado cuya última visita fue
+    // hace 30 días o más. Ordenados por los que hace más tiempo que no vuelven primero.
+    var umbralReactivar = AhoraArgentina().AddDays(-30);
+    var paraReactivar = turnosConfirmadosTodos
+        .Where(t => !string.IsNullOrWhiteSpace(t.ClienteNombre))
+        .GroupBy(t => ClavePorCliente(t.ClienteWhatsApp, t.ClienteNombre))
+        .Select(g => new { Nombre = g.OrderByDescending(t => t.FechaHoraInicio).First().ClienteNombre, UltimaVisita = g.Max(t => t.FechaHoraInicio), CantidadTurnos = g.Count() })
+        .Where(x => x.UltimaVisita < umbralReactivar)
+        .OrderBy(x => x.UltimaVisita)
+        .Take(5)
+        .Select(x => new ClienteReactivarDto(x.Nombre, x.CantidadTurnos, DateOnly.FromDateTime(x.UltimaVisita)))
+        .ToList();
 
     var porProfesional = turnosDelPeriodo
         .GroupBy(t => t.ProfesionalId)
@@ -1465,7 +1648,10 @@ app.MapGet("/api/comercios/{comercioId:int}/ganancias", async (AppDbContext cont
         .OrderByDescending(x => x.Ingresos)
         .ToList();
 
-    return Results.Ok(new GananciasDto(porProfesional, porSucursal, turnosDelPeriodo.Count, turnosDelPeriodo.Sum(t => t.MontoCobrado ?? 0)));
+    return Results.Ok(new GananciasDto(
+        porProfesional, porSucursal, turnosDelPeriodo.Count, turnosDelPeriodo.Sum(t => t.MontoCobrado ?? 0),
+        facturadoHoy, facturadoUltimos7Dias, facturadoEsteMes, cortesTotales, facturacionPorDia,
+        servicioMasPedido, horariosOcupados, clientesFrecuentes, paraReactivar));
 }).RequireAuthorization("AdminCliente");
 
 // ==========================================
@@ -1655,5 +1841,14 @@ record HistorialItemDto(int Id, DateTime FechaHoraInicio, string ClienteNombre, 
 record HistorialDto(List<HistorialItemDto> Items, decimal TotalHoy, decimal TotalSemana, decimal TotalMes);
 record GananciaPorProfesionalDto(int? ProfesionalId, string NombreProfesional, int CantidadTurnos, decimal Ingresos);
 record GananciaPorSucursalDto(int? SucursalId, string NombreSucursal, int CantidadTurnos, decimal Ingresos);
-record GananciasDto(List<GananciaPorProfesionalDto> PorProfesional, List<GananciaPorSucursalDto> PorSucursal, int CantidadTotal, decimal IngresosTotal);
+record FacturacionDiaDto(DateOnly Fecha, decimal Total);
+record ServicioPedidoDto(int? ServicioId, string NombreServicio, int Cantidad);
+record HorarioOcupadoDto(int Hora, int Cantidad);
+record ClienteFrecuenteDto(string Nombre, int CantidadTurnos, DateTime UltimaVisita);
+record ClienteReactivarDto(string Nombre, int CantidadTurnos, DateOnly UltimaVisita);
+record GananciasDto(
+    List<GananciaPorProfesionalDto> PorProfesional, List<GananciaPorSucursalDto> PorSucursal, int CantidadTotal, decimal IngresosTotal,
+    decimal FacturadoHoy, decimal FacturadoUltimos7Dias, decimal FacturadoEsteMes, int CortesTotales, List<FacturacionDiaDto> FacturacionPorDia,
+    List<ServicioPedidoDto> ServicioMasPedido, List<HorarioOcupadoDto> HorariosOcupados,
+    List<ClienteFrecuenteDto> ClientesFrecuentes, List<ClienteReactivarDto> ParaReactivar);
 record WhatsAppConfigDto(bool Activado);

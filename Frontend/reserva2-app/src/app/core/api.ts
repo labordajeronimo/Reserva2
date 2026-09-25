@@ -70,6 +70,7 @@ export interface Turno {
   id: number;
   comercioId: number;
   servicioId: number | null;
+  profesionalId: number | null;
   fechaHoraInicio: string;
   fechaHoraFin: string;
   estadoReserva: number; // 1 Pre-Reservado, 2 Confirmado, 3 Cancelado
@@ -108,11 +109,48 @@ export interface GananciaPorSucursal {
   ingresos: number;
 }
 
+export interface FacturacionDia {
+  fecha: string;
+  total: number;
+}
+
+export interface ServicioPedido {
+  servicioId: number | null;
+  nombreServicio: string;
+  cantidad: number;
+}
+
+export interface HorarioOcupado {
+  hora: number;
+  cantidad: number;
+}
+
+export interface ClienteFrecuente {
+  nombre: string;
+  cantidadTurnos: number;
+  ultimaVisita: string;
+}
+
+export interface ClienteReactivar {
+  nombre: string;
+  cantidadTurnos: number;
+  ultimaVisita: string;
+}
+
 export interface Ganancias {
   porProfesional: GananciaPorProfesional[];
   porSucursal: GananciaPorSucursal[];
   cantidadTotal: number;
   ingresosTotal: number;
+  facturadoHoy: number;
+  facturadoUltimos7Dias: number;
+  facturadoEsteMes: number;
+  cortesTotales: number;
+  facturacionPorDia: FacturacionDia[];
+  servicioMasPedido: ServicioPedido[];
+  horariosOcupados: HorarioOcupado[];
+  clientesFrecuentes: ClienteFrecuente[];
+  paraReactivar: ClienteReactivar[];
 }
 
 export interface WhatsAppConfig {
@@ -315,6 +353,10 @@ export class Api {
 
   renovarComercio(id: number): Observable<ComercioAdmin> {
     return this.http.patch<ComercioAdmin>(`${API_BASE}/comercios/${id}/renovar`, {});
+  }
+
+  eliminarComercio(id: number): Observable<void> {
+    return this.http.delete<void>(`${API_BASE}/comercios/${id}`);
   }
 
   getMetricas(): Observable<Metricas> {

@@ -28,6 +28,8 @@ export class SuperAdmin {
   actualizandoEstadoId = signal<number | null>(null);
   actualizandoMontoId = signal<number | null>(null);
   renovandoId = signal<number | null>(null);
+  eliminandoId = signal<number | null>(null);
+  errorEliminar = signal<string | null>(null);
 
   // --- Búsqueda y filtros ---
   busqueda = signal('');
@@ -150,6 +152,24 @@ export class SuperAdmin {
         this.api.getDashboard().subscribe(d => this.dashboard.set(d));
       },
       error: () => this.renovandoId.set(null)
+    });
+  }
+
+  eliminar(c: ComercioAdmin): void {
+    this.errorEliminar.set(null);
+    if (!confirm(`¿Eliminar definitivamente "${c.nombre}"? Se borran también sus turnos, servicios, horarios, profesionales y sucursales. Esto no se puede deshacer.`)) return;
+
+    this.eliminandoId.set(c.id);
+    this.api.eliminarComercio(c.id).subscribe({
+      next: () => {
+        this.comercios.update(lista => lista.filter(x => x.id !== c.id));
+        this.eliminandoId.set(null);
+        this.api.getDashboard().subscribe(d => this.dashboard.set(d));
+      },
+      error: err => {
+        this.eliminandoId.set(null);
+        this.errorEliminar.set(err.error?.mensaje ?? 'No pudimos eliminar el comercio.');
+      }
     });
   }
 

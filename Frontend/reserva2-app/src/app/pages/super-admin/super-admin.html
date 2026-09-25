@@ -95,6 +95,10 @@
         </select>
       </div>
 
+      @if (errorEliminar()) {
+        <div class="error-msg">{{ errorEliminar() }}</div>
+      }
+
       @if (errorComercios()) {
         <div class="error-msg">{{ errorComercios() }}</div>
       } @else if (cargandoComercios()) {
@@ -161,6 +165,13 @@
                     [disabled]="renovandoId() === c.id"
                     (click)="renovar(c)">
                     {{ renovandoId() === c.id ? '...' : 'Marcar como renovado' }}
+                  </button>
+                  <button
+                    class="mini danger"
+                    [disabled]="c.activo || eliminandoId() === c.id"
+                    [title]="c.activo ? 'Pausalo antes de poder eliminarlo' : 'Eliminar definitivamente'"
+                    (click)="eliminar(c)">
+                    {{ eliminandoId() === c.id ? '...' : 'Eliminar' }}
                   </button>
                 </td>
               </tr>

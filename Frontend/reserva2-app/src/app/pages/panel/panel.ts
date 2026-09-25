@@ -69,6 +69,58 @@ export class Panel {
   turnos = signal<Turno[]>([]);
   linkCopiado = signal(false);
 
+  // --- Vista de agenda (grilla de un día, una columna por profesional, arma la grilla con
+  // los turnos ya cargados — no pega al backend de nuevo, ya está todo en el signal "turnos").
+  // Es por día (no por semana) porque con columnas por profesional, una semana entera no
+  // entra cómodo en pantalla. ---
+  vistaAgenda = signal(false);
+  agendaDia = signal<Date>(this.soloFecha(new Date()));
+
+  private soloFecha(d: Date): Date {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+
+  // Si el comercio no cargó profesionales (dueño único), se usa una sola columna "Vos" que
+  // agrupa todos los turnos del día sin filtrar por profesionalId.
+  columnasAgenda(): { id: number | null; nombre: string }[] {
+    const profesionales = this.profesionales();
+    if (profesionales.length === 0) return [{ id: null, nombre: 'Vos' }];
+    return profesionales.map(p => ({ id: p.id, nombre: p.nombre }));
+  }
+
+  turnosColumnaAgenda(columnaId: number | null): Turno[] {
+    const dia = this.agendaDia();
+    const sinProfesionales = this.profesionales().length === 0;
+    return this.turnos()
+      .filter(t => {
+        const f = new Date(t.fechaHoraInicio);
+        const mismoDia = f.getFullYear() === dia.getFullYear() && f.getMonth() === dia.getMonth() && f.getDate() === dia.getDate();
+        return mismoDia && (sinProfesionales || t.profesionalId === columnaId);
+      })
+      .sort((a, b) => a.fechaHoraInicio.localeCompare(b.fechaHoraInicio));
+  }
+
+  agendaDiaAnterior(): void {
+    const d = new Date(this.agendaDia());
+    d.setDate(d.getDate() - 1);
+    this.agendaDia.set(d);
+  }
+
+  agendaDiaSiguiente(): void {
+    const d = new Date(this.agendaDia());
+    d.setDate(d.getDate() + 1);
+    this.agendaDia.set(d);
+  }
+
+  agendaHoy(): void {
+    this.agendaDia.set(this.soloFecha(new Date()));
+  }
+
+  etiquetaDiaAgenda(): string {
+    const d = this.agendaDia();
+    return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+
   // --- Carga manual de turno presencial ---
   nuevoTurnoServicioId = 0;
   nuevoTurnoProfesionalId: number | null = null;
@@ -471,6 +523,16 @@ export class Panel {
         this.errorGanancias.set(err.error?.mensaje ?? 'No pudimos cargar el reporte de ganancias.');
       }
     });
+  }
+
+  alturaBarraFacturacion<T>(valor: number, serie: T[], campo: keyof T = 'total' as keyof T): number {
+    const max = Math.max(1, ...serie.map(d => Number(d[campo])));
+    return Math.max(4, Math.round((valor / max) * 100));
+  }
+
+  etiquetaDiaFacturacion(fecha: string): string {
+    const [y, m, d] = fecha.split('-').map(Number);
+    return this.dias[new Date(y, m - 1, d).getDay()].substring(0, 3);
   }
 
   // ================= WHATSAPP (placeholder, exclusivo Premium) =================
