@@ -60,18 +60,35 @@
   </div>
 </header>
 
-@if (reservaConfirmada()) {
+@if (reservaConfirmada() && reservaHecha(); as r) {
 
 <main>
-  <div class="wrap" style="max-width:520px;">
+  <div class="wrap confirmacion-wrap">
     <div class="card confirm-panel">
       <div class="check-circle">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
       </div>
-      <h2>¡Turno reservado!</h2>
-      <p>{{ mensajeConfirmacion() }}</p>
-      <p class="note">¿Necesitás cancelar? Usá el link que te llega por mail apenas confirmás la reserva.</p>
-      <button class="again" type="button" (click)="reservarOtroTurno()">Reservar otro turno</button>
+      <h2>¡Listo{{ r.primerNombre ? ', ' + r.primerNombre : '' }}!</h2>
+      <p class="confirm-sub">Tu turno quedó reservado. {{ comercio()!.nombre }} ya lo tiene en su agenda.</p>
+      @if (r.conSenia) {
+        <p class="confirm-sub">Recibimos el comprobante de tu seña: el local lo va a verificar.</p>
+      }
+
+      <dl class="confirm-detalle">
+        <div><dt>Día</dt><dd>{{ r.diaLargo }}</dd></div>
+        <div><dt>Horario</dt><dd>{{ r.horario }}</dd></div>
+        <div><dt>Servicio</dt><dd>{{ r.servicio }}</dd></div>
+        @if (r.profesional) { <div><dt>Profesional</dt><dd>{{ r.profesional }}</dd></div> }
+        @if (r.local) { <div><dt>Local</dt><dd>{{ r.local }}</dd></div> }
+        <div class="confirm-total"><dt>Total</dt><dd>{{ r.total | currency:'ARS':'$':'1.0-2' }}</dd></div>
+      </dl>
+
+      <p class="aviso-azul">Te enviamos la confirmación a <strong>{{ r.email }}</strong>. Revisá también spam o promociones.</p>
+
+      <div class="confirm-acciones">
+        <a class="confirm-btn confirm-btn-link" [href]="r.linkCalendario" target="_blank" rel="noopener">Agregar a mi calendario</a>
+        <button class="again" type="button" (click)="reservarOtroTurno()">Reservar otro turno</button>
+      </div>
     </div>
   </div>
 </main>

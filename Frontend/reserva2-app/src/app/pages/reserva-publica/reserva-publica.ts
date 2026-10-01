@@ -6,6 +6,21 @@ import { catchError, forkJoin, of } from 'rxjs';
 
 import { Api, ComercioPublico, Servicio, SlotDisponibilidad, Sucursal, Profesional, urlArchivo } from '../../core/api';
 
+// Foto de la reserva recién hecha para la pantalla de confirmación (el formulario se puede
+// resetear con "Reservar otro turno" sin perder lo que se muestra).
+interface ReservaHecha {
+  primerNombre: string;
+  email: string;
+  diaLargo: string;
+  horario: string;
+  servicio: string;
+  profesional: string | null;
+  local: string | null;
+  total: number;
+  conSenia: boolean;
+  linkCalendario: string;
+}
+
 interface DiaGrilla {
   fecha: string; // yyyy-MM-dd, lo que le mandamos a la API
   etiquetaDia: string; // "mar", "mié"...
@@ -68,6 +83,7 @@ export class ReservaPublica implements OnInit {
   reservando = signal(false);
   errorReserva = signal<string | null>(null);
   reservaConfirmada = signal(false);
+  reservaHecha = signal<ReservaHecha | null>(null);
   linkCopiado = signal(false);
   intentoEnviar = signal(false);
   // Los errores de cada campo se muestran recién cuando el cliente sale del campo (o intentó
@@ -223,12 +239,48 @@ export class ReservaPublica implements OnInit {
     });
   }
 
-  // Texto de la pantalla de confirmación (se rediseña en la Etapa 6). Ya no hay pre-reserva
-  // ni plazo de 2 horas: el turno queda reservado y la confirmación llega por mail.
-  mensajeConfirmacion(): string {
-    return this.pideSenia()
-      ? 'Te enviamos la confirmación por mail. El local va a verificar el comprobante de tu seña.'
-      : 'Te enviamos la confirmación de tu turno por mail.';
+  // ================= CONFIRMACIÓN =================
+  // Link de Google Calendar con el mismo formato que el del mail (LinkGoogleCalendar en el
+  // backend): los horarios vienen en hora de Argentina sin zona, y Argentina es UTC-3 fijo.
+  private linkGoogleCalendar(inicio: string, fin: string, titulo: string, ubicacion: string, detalle: string): string {
+    const aUtc = (iso: string) => {
+      const [fecha, hora] = iso.split('T');
+      const [y, m, d] = fecha.split('-').map(Number);
+      const [hh, mm] = hora.split(':').map(Number);
+      return new Date(Date.UTC(y, m - 1, d, hh + 3, mm)).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+    };
+    const params = [
+      'action=TEMPLATE',
+      `text=${encodeURIComponent(titulo)}`,
+      `dates=${aUtc(inicio)}/${aUtc(fin)}`,
+      `details=${encodeURIComponent(detalle)}`,
+      `location=${encodeURIComponent(ubicacion)}`
+    ];
+    return `https://calendar.google.com/calendar/render?${params.join('&')}`;
+  }
+
+  private armarReservaHecha(): ReservaHecha | null {
+    const comercio = this.comercio();
+    const servicio = this.servicioSeleccionado();
+    const slot = this.slotSeleccionado();
+    if (!comercio || !servicio || !slot) return null;
+
+    const sucursal = this.sucursalSeleccionada();
+    const profesional = this.profesionalSeleccionado();
+    const ubicacion = sucursal?.direccion ? `${comercio.nombre} · ${sucursal.direccion}` : comercio.nombre;
+    return {
+      primerNombre: this.clienteNombre.trim().split(/\s+/)[0] ?? '',
+      email: this.clienteEmail.trim(),
+      diaLargo: this.diaLargoSeleccionado(),
+      horario: this.textoHorarioSeleccionado(),
+      servicio: servicio.nombre,
+      profesional: this.profesionales().length > 0 ? (profesional?.nombre ?? 'Cualquiera disponible') : null,
+      local: sucursal?.nombre ?? null,
+      total: servicio.precio,
+      conSenia: this.pideSenia(),
+      linkCalendario: this.linkGoogleCalendar(slot.inicio, slot.fin, `${servicio.nombre} en ${comercio.nombre}`, ubicacion,
+        `Turno reservado con Reserva2.${profesional ? ' Te atiende ' + profesional.nombre + '.' : ''}`)
+    };
   }
 
   constructor(private route: ActivatedRoute, private api: Api) {}
@@ -451,6 +503,7 @@ export class ReservaPublica implements OnInit {
 
     this.reservando.set(true);
     this.errorReserva.set(null);
+    const reservaHecha = this.armarReservaHecha();
 
     this.api.crearTurno({
       comercioId: comercio.id,
@@ -464,7 +517,9 @@ export class ReservaPublica implements OnInit {
     }).subscribe({
       next: () => {
         this.reservando.set(false);
+        this.reservaHecha.set(reservaHecha);
         this.reservaConfirmada.set(true);
+        if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
         this.cargarResumenDias();
       },
       error: err => {
@@ -485,6 +540,7 @@ export class ReservaPublica implements OnInit {
 
   reservarOtroTurno(): void {
     this.reservaConfirmada.set(false);
+    this.reservaHecha.set(null);
     this.slotSeleccionado.set(null);
     this.clienteNombre = '';
     this.clienteWhatsApp = '';
