@@ -308,7 +308,11 @@ async Task EnviarEmail(IConfiguration config, ILogger logger, string destinatari
         return;
     }
 
-    var remitente = config["Smtp:From"] ?? config["Smtp:User"] ?? "no-reply@reservados2.com";
+    // appsettings.json trae Smtp:From y Smtp:User como "" (no null): con "??" un string vacío
+    // pasaba de largo y Brevo rechazaba el mail por remitente inválido si el override de
+    // systemd (Smtp__From) llegaba a faltar. Se saltean los vacíos.
+    var remitente = new[] { config["Smtp:From"], config["Smtp:User"] }
+        .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? "no-reply@reservados2.com";
 
     var body = new Dictionary<string, object>
     {
@@ -329,12 +333,17 @@ async Task EnviarEmail(IConfiguration config, ILogger logger, string destinatari
     request.Headers.Add("api-key", apiKey);
 
     var respuesta = await brevoHttpClient.SendAsync(request);
+    var detalle = await respuesta.Content.ReadAsStringAsync();
     if (!respuesta.IsSuccessStatusCode)
     {
-        var detalle = await respuesta.Content.ReadAsStringAsync();
         logger.LogError("Brevo devolvió {StatusCode} al enviar el email a {Destinatario} ({Asunto}): {Detalle}",
             respuesta.StatusCode, destinatario, asunto, detalle);
+        return;
     }
+    // Se loguea también el envío aceptado (con el messageId de Brevo) para poder rastrear en
+    // journalctl y en los logs de Brevo un mail que "no llegó".
+    logger.LogInformation("Email aceptado por Brevo para {Destinatario} desde {Remitente} ({Asunto}): {Detalle}",
+        destinatario, remitente, asunto, detalle);
 }
 
 // ==========================================
