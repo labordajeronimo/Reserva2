@@ -230,6 +230,10 @@ static bool EstaDentroDeAlgunHorario(IEnumerable<Horario> bloques, DateTime inic
     return bloques.Any(b => inicio >= fechaBase + b.HoraInicio && fin <= fechaBase + b.HoraFin);
 }
 
+// Especialidad del profesional: sin espacios de más; vacía = sin especialidad (null).
+static string? NormalizarEspecialidad(string? especialidad) =>
+    string.IsNullOrWhiteSpace(especialidad) ? null : especialidad.Trim();
+
 static bool EmailValido(string email) =>
     System.Text.RegularExpressions.Regex.IsMatch(email, @"^[^\s@]+@[^\s@]+\.[^\s@]+$") && email.Length <= 254;
 
@@ -1220,7 +1224,11 @@ app.MapPost("/api/comercios/{comercioId:int}/profesionales", async (AppDbContext
     if (cantidadActual >= tope)
         return Results.Conflict(new { mensaje = $"Tu plan {comercio.PlanActual} permite hasta {tope} profesional(es). Actualizá de plan para agregar más." });
 
-    var profesional = new Profesional { ComercioId = comercioId, Nombre = req.Nombre, SucursalId = req.SucursalId };
+    var especialidad = NormalizarEspecialidad(req.Especialidad);
+    if (especialidad is { Length: > 30 })
+        return Results.BadRequest(new { mensaje = "La especialidad puede tener hasta 30 caracteres." });
+
+    var profesional = new Profesional { ComercioId = comercioId, Nombre = req.Nombre, SucursalId = req.SucursalId, Especialidad = especialidad };
     context.Profesionales.Add(profesional);
     await context.SaveChangesAsync();
     return Results.Created($"/api/profesionales/{profesional.Id}", profesional);
@@ -1242,12 +1250,17 @@ app.MapPut("/api/profesionales/{id:int}", async (AppDbContext context, int id, P
     if (string.IsNullOrWhiteSpace(req.Nombre))
         return Results.BadRequest(new { mensaje = "El nombre no puede estar vacío." });
 
+    var especialidad = NormalizarEspecialidad(req.Especialidad);
+    if (especialidad is { Length: > 30 })
+        return Results.BadRequest(new { mensaje = "La especialidad puede tener hasta 30 caracteres." });
+
     var profesional = await context.Profesionales.FindAsync(id);
     if (profesional is null) return Results.NotFound();
     if (ComercioIdDelToken(user) != profesional.ComercioId) return Results.Forbid();
 
     profesional.Nombre = req.Nombre.Trim();
     profesional.SucursalId = req.SucursalId;
+    profesional.Especialidad = especialidad;
     await context.SaveChangesAsync();
 
     return Results.Ok(profesional);
@@ -2271,7 +2284,7 @@ record LoginResponse(int ComercioId, string Nombre, string AliasUrl, string Toke
     string TelefonoNotificaciones, string DatosBancarios, string? LogoUrl, DateTime? FechaProximoPago, bool Activo);
 record SuperAdminLoginRequest(string Email, string Password);
 record SuperAdminLoginResponse(string Token);
-record ProfesionalRequest(string Nombre, int? SucursalId = null);
+record ProfesionalRequest(string Nombre, int? SucursalId = null, string? Especialidad = null);
 record SucursalRequest(string Nombre, string Direccion, string? Telefono, bool Activa = true);
 record HorarioRequest(int DiaSemana, TimeSpan HoraInicio, TimeSpan HoraFin, int? ProfesionalId = null);
 record SlotDisponibilidad(DateTime Inicio, DateTime Fin, bool Disponible);

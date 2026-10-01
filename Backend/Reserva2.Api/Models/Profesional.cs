@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Reserva2.Api.Models
 {
     // Plan Básico: 1-2 profesionales por comercio. Premium: ilimitados.
@@ -12,5 +14,10 @@ namespace Reserva2.Api.Models
         // a la sucursal automáticamente sin tocar esa entidad). Nulo = comercios de antes de
         // la feature de sucursales, que siguen funcionando igual que hoy sin selector.
         public int? SucursalId { get; set; }
+
+        // Opcional, se muestra debajo del nombre en la página pública (ej.: "Barbero",
+        // "Estilista"). Nulo si el comercio no la cargó.
+        [MaxLength(30)]
+        public string? Especialidad { get; set; }
     }
 }
