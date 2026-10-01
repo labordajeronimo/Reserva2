@@ -105,7 +105,7 @@
                   </div>
                   <ul>
                     @for (c of grupo.lista.slice(0, 5); track c.id) {
-                      <li><a [routerLink]="['/super-admin/comercios', c.id]">{{ c.nombre }}</a></li>
+                      <li><button class="link-boton" (click)="abrirDetalle(c)">{{ c.nombre }}</button></li>
                     }
                     @if (grupo.lista.length > 5) { <li class="alerta-mas">y {{ grupo.lista.length - 5 }} más</li> }
                   </ul>
@@ -264,7 +264,7 @@
                     <div class="comercio-celda">
                       <span class="comercio-iniciales">{{ iniciales(c.nombre) }}</span>
                       <div class="comercio-texto">
-                        <a class="nombre-link" [routerLink]="['/super-admin/comercios', c.id]">{{ c.nombre }}</a>
+                        <button class="nombre-link link-boton" (click)="abrirDetalle(c)">{{ c.nombre }}</button>
                         <div class="comercio-sub">/{{ c.aliasUrl }} · {{ c.tipoPlantilla }}</div>
                       </div>
                     </div>
@@ -317,7 +317,7 @@
                         (click)="renovar(c)">
                         {{ renovandoId() === c.id ? '...' : 'Marcar como renovado' }}
                       </button>
-                      <a class="btn-sec btn-chico btn-ver" [routerLink]="['/super-admin/comercios', c.id]">Ver →</a>
+                      <button class="btn-sec btn-chico btn-ver" (click)="abrirDetalle(c)">Ver →</button>
                     </div>
                   </td>
                 </tr>
@@ -329,4 +329,14 @@
     </div>
 
   </main>
+
+  @if (comercioAbiertoId() !== null) {
+    <app-comercio-drawer
+      [comercioId]="comercioAbiertoId()!"
+      [salud]="comercioAbierto() ? salud(comercioAbierto()!) : null"
+      [claseSalud]="comercioAbierto() ? claseSalud(comercioAbierto()!) : 'sin'"
+      (cerrar)="comercioAbiertoId.set(null)"
+      (eliminado)="alEliminarDesdeDetalle($event)">
+    </app-comercio-drawer>
+  }
 </div>

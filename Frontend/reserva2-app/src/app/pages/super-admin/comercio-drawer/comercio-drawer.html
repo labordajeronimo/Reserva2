@@ -1,0 +1,122 @@
+<div class="drawer-overlay" (click)="cerrar.emit()"></div>
+
+<aside class="drawer" role="dialog" aria-modal="true" [attr.aria-label]="detalle()?.nombre ?? 'Detalle del comercio'">
+  @if (cargando()) {
+    <div class="drawer-top">
+      <span class="drawer-cargando">Cargando...</span>
+      <button class="drawer-cerrar" (click)="cerrar.emit()" aria-label="Cerrar">✕</button>
+    </div>
+  } @else if (error()) {
+    <div class="drawer-top">
+      <div class="error-msg">{{ error() }}</div>
+      <button class="drawer-cerrar" (click)="cerrar.emit()" aria-label="Cerrar">✕</button>
+    </div>
+  } @else if (detalle(); as d) {
+    <div class="drawer-top">
+      <div class="drawer-identidad">
+        <span class="drawer-iniciales">{{ iniciales(d.nombre) }}</span>
+        <div class="drawer-identidad-texto">
+          <h2>{{ d.nombre }}</h2>
+          <div class="drawer-sub">/{{ d.aliasUrl }} · {{ d.tipoPlantilla }}</div>
+        </div>
+      </div>
+      <button class="drawer-cerrar" (click)="cerrar.emit()" aria-label="Cerrar">✕</button>
+    </div>
+
+    <div class="drawer-etiquetas">
+      <span class="pastilla" [class]="'estado-' + estado(d)">{{ estado(d) }}</span>
+      @if (salud) { <span class="pastilla" [class]="'salud-' + claseSalud">{{ salud }}</span> }
+      <span class="pastilla pastilla-neutra">{{ nombrePlan(d.planActual) }} · {{ d.cicloFacturacion | lowercase }}</span>
+    </div>
+
+    <div class="mini-kpis">
+      <div class="mini-kpi">
+        <div class="mini-kpi-etiqueta">Turnos del mes</div>
+        <div class="mini-kpi-valor">{{ d.turnosDelMes }}</div>
+      </div>
+      <div class="mini-kpi">
+        <div class="mini-kpi-etiqueta">Facturó el local (mes)</div>
+        <div class="mini-kpi-valor">{{ d.facturacionDelMes | currency:'ARS':'$':'1.0-0' }}</div>
+      </div>
+      <div class="mini-kpi">
+        <div class="mini-kpi-etiqueta">Nos paga</div>
+        <div class="mini-kpi-valor">{{ d.montoMensualAcordado ? (d.montoMensualAcordado | currency:'ARS':'$':'1.0-0') : '—' }}</div>
+      </div>
+      <div class="mini-kpi">
+        <div class="mini-kpi-etiqueta">Profesionales</div>
+        <div class="mini-kpi-valor">{{ d.cantidadProfesionales }}</div>
+      </div>
+      <div class="mini-kpi">
+        <div class="mini-kpi-etiqueta">Sucursales</div>
+        <div class="mini-kpi-valor">{{ d.cantidadSucursales }}</div>
+      </div>
+      <div class="mini-kpi">
+        <div class="mini-kpi-etiqueta">Servicios</div>
+        <div class="mini-kpi-valor">{{ d.cantidadServicios }}</div>
+      </div>
+    </div>
+
+    <section class="drawer-bloque">
+      <h3>Turnos · últimos 30 días</h3>
+      <div class="barras-dias">
+        @for (dia of d.turnosPorDia; track dia.fecha) {
+          <div class="barra-dia" [class.vacia]="dia.cantidad === 0" [style.height.%]="alturaBarra(dia.cantidad, d)"
+               [title]="etiquetaFechaCorta(dia.fecha) + ': ' + dia.cantidad + ' turnos'"></div>
+        }
+      </div>
+      @if (d.turnosPorDia.length > 0) {
+        <div class="barras-dias-ejes">
+          <span>{{ etiquetaFechaCorta(d.turnosPorDia[0].fecha) }}</span>
+          <span>{{ etiquetaFechaCorta(d.turnosPorDia[d.turnosPorDia.length - 1].fecha) }}</span>
+        </div>
+      }
+    </section>
+
+    @if (d.planActual === 'Gratuito') {
+      <section class="drawer-bloque">
+        <h3>Uso del plan gratis</h3>
+        <div class="uso-cabecera">
+          <span><strong>{{ d.turnosDelMes }}</strong> de {{ d.topeTurnosGratuito }} turnos este mes</span>
+          <span>{{ usoGratis(d) }}%</span>
+        </div>
+        <div class="uso-pista">
+          <div class="uso-barra" [class.alerta]="d.turnosDelMes >= avisoTurnosGratuito" [style.width.%]="usoGratis(d)"></div>
+        </div>
+        @if (d.turnosDelMes >= avisoTurnosGratuito) {
+          <p class="uso-aviso">Está cerca del límite: buen momento para ofrecerle un plan pago.</p>
+        }
+      </section>
+    }
+
+    <section class="drawer-bloque">
+      <h3>Contacto y cuenta</h3>
+      <dl class="datos">
+        <dt>Dueño (cuenta)</dt><dd>{{ d.email }}</dd>
+        <dt>WhatsApp</dt><dd>{{ d.telefonoNotificaciones || '—' }}</dd>
+        <dt>Alta</dt><dd>{{ d.fechaAlta | date:'d/M/yyyy' }}</dd>
+        <dt>Activado</dt><dd>{{ d.fechaActivacion ? (d.fechaActivacion | date:'d/M/yyyy') : 'Nunca' }}</dd>
+        <dt>Último acceso</dt><dd>{{ textoUltimoAcceso(d) }}</dd>
+        <dt>Vencimiento</dt><dd>{{ textoVencimiento(d) }}</dd>
+      </dl>
+    </section>
+
+    <div class="drawer-acciones">
+      @if (linkWhatsAppComercio(d); as wa) {
+        <a class="btn-ok" [href]="wa" target="_blank" rel="noopener">Escribir por WhatsApp</a>
+      }
+      <a class="btn-sec" [routerLink]="['/', d.aliasUrl]" target="_blank">Ver su página pública ↗</a>
+      <a class="btn-sec" [routerLink]="['/super-admin/comercios', d.id]">Abrir ficha completa</a>
+    </div>
+
+    <section class="drawer-bloque zona-peligro">
+      <div>
+        <h3>Eliminar comercio</h3>
+        <p class="drawer-nota">{{ d.activo ? 'Para eliminarlo, primero pausalo.' : 'Se borra todo: turnos, servicios, horarios, profesionales y sucursales. No se puede deshacer.' }}</p>
+        @if (errorEliminar()) { <div class="error-msg">{{ errorEliminar() }}</div> }
+      </div>
+      <button class="btn-peligro" [disabled]="d.activo || eliminando()" (click)="eliminar()">
+        {{ eliminando() ? 'Eliminando...' : 'Eliminar' }}
+      </button>
+    </section>
+  }
+</aside>

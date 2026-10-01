@@ -1,16 +1,17 @@
 import { Component, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 
 import { Api, ComercioAdmin, ComercioEstadistica, Dashboard, SuperAdminResumen, SuperAdminSession } from '../../core/api';
 import { Session } from '../../core/session';
 import { linkWhatsApp } from '../../core/whatsapp';
+import { ComercioDrawer } from './comercio-drawer/comercio-drawer';
 
 @Component({
   selector: 'app-super-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, ComercioDrawer],
   templateUrl: './super-admin.html',
   styleUrls: ['./super-admin.css']
 })
@@ -28,6 +29,9 @@ export class SuperAdmin {
   actualizandoEstadoId = signal<number | null>(null);
   actualizandoMontoId = signal<number | null>(null);
   renovandoId = signal<number | null>(null);
+
+  // Comercio abierto en el panel lateral (null = cerrado).
+  comercioAbiertoId = signal<number | null>(null);
 
   // Fecha de alta, si está pendiente de activación y turnos del mes, por id de comercio.
   // Si esta llamada falla, la tabla funciona igual (sin esos datos para ordenar/filtrar).
@@ -144,6 +148,22 @@ export class SuperAdmin {
     this.api.actualizarCicloFacturacion(c.id, nuevoCiclo).subscribe(actualizado => {
       this.comercios.update(lista => lista.map(x => x.id === actualizado.id ? actualizado : x));
     });
+  }
+
+  // ================= PANEL LATERAL =================
+  abrirDetalle(c: ComercioAdmin): void {
+    this.comercioAbiertoId.set(c.id);
+  }
+
+  comercioAbierto(): ComercioAdmin | null {
+    return this.comercios().find(c => c.id === this.comercioAbiertoId()) ?? null;
+  }
+
+  alEliminarDesdeDetalle(id: number): void {
+    this.comercioAbiertoId.set(null);
+    this.comercios.update(lista => lista.filter(x => x.id !== id));
+    this.api.getDashboard().subscribe(d => this.dashboard.set(d));
+    this.cargarResumen();
   }
 
   private cargarResumen(): void {

@@ -268,3 +268,8 @@
 .salud-atencion { background: rgba(251, 191, 36, 0.16); color: #FBBF24; }
 .salud-riesgo { background: rgba(248, 113, 113, 0.14); color: #FCA5A5; }
 .salud-sin { background: none; color: #7C879E; padding-left: 0; }
+
+/* ===================== ETAPA C ===================== */
+.link-boton { background: none; border: none; padding: 0; font: inherit; text-align: left; cursor: pointer; }
+.alerta-grupo .link-boton { color: #E8ECF6; font-size: 0.84rem; }
+.alerta-grupo .link-boton:hover { color: #FB923C; }

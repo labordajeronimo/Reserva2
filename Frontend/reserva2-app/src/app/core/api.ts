@@ -270,6 +270,17 @@ export interface ComercioDetalle {
   sucursales: Sucursal[];
   profesionales: Profesional[];
   turnosPorSemana: TurnosPorSemana[];
+  // Para el panel lateral del Super Admin.
+  email: string;
+  telefonoNotificaciones: string;
+  whatsAppNumero: string | null; // ya formateado para wa.me (549...)
+  ultimoAcceso: string | null;   // UTC
+  fechaActivacion: string | null;
+  fechaBaja: string | null;
+  cantidadServicios: number;
+  facturacionDelMes: number;
+  turnosPorDia: { fecha: string; cantidad: number }[];
+  topeTurnosGratuito: number;
 }
 
 export interface Metricas {
