@@ -703,6 +703,30 @@
 .horario-tramo-hora { font-family: 'Sora', sans-serif; font-weight: 600; font-size: 0.88rem; color: #E8ECF6; margin-right: 4px; white-space: nowrap; }
 .horario-cerrado { color: #7C879E; font-size: 0.85rem; font-weight: 600; }
 
+/* ----- Tarjetas en grilla (Profesionales / Sucursales) ----- */
+.tarjetas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; align-items: start; }
+.tarjeta {
+  background: #10172B;
+  border: 1px solid rgba(232, 236, 246, 0.09);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.tarjeta-abierta { grid-column: 1 / -1; }
+.tarjeta-inactiva .fila-titulo { color: #A6AFC6; }
+.tarjeta-cabecera { display: flex; align-items: flex-start; gap: 12px; }
+.tarjeta-texto { flex: 1; min-width: 0; }
+.tarjeta-sub { color: #A6AFC6; font-size: 0.82rem; margin-top: 3px; overflow-wrap: anywhere; }
+.tarjeta-acciones { display: flex; gap: 6px; flex-wrap: wrap; }
+.tarjeta-form { grid-template-columns: minmax(0, 1fr); }
+.tarjeta-horarios { margin: 0 -16px -16px; border-radius: 0 0 16px 16px; }
+.tarjeta-horarios .filas { margin-bottom: 4px; }
+.fila-compacta { padding: 10px 14px; background: #131A2E; }
+.fila-compacta .fila-principal { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
 @media (max-width: 720px) {
   .horario-fila { grid-template-columns: 1fr; }
   .horario-escala { display: none; }
@@ -725,20 +749,6 @@
 .mini.danger { background: rgba(248, 113, 113, 0.16); border-color: rgba(248, 113, 113, 0.32); color: #FCA5A5; }
 .mini.danger:hover { background: rgba(248, 113, 113, 0.26); }
 
-/* Listas de servicios / horarios */
-.lista { list-style: none; margin: 0 0 20px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.lista li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border: 1px solid rgba(232, 236, 246, 0.13);
-  border-radius: 14px;
-  font-size: 0.9rem;
-  color: #E8ECF6;
-}
-.lista .detalle { display: block; color: #A6AFC6; font-size: 0.8rem; margin-top: 2px; }
-.lista li.lista-item-editando { display: block; }
 .form-inline-edicion { padding-top: 0; border-top: none; }
 
 .form-inline {
@@ -764,32 +774,6 @@
 
 /* Profesionales */
 .sub-info { color: #A6AFC6; font-size: 0.85rem; margin: -8px 0 18px; }
-.lista li.profesional-item {
-  display: block;
-  padding: 0;
-  border: 1px solid rgba(232, 236, 246, 0.13);
-  border-radius: 14px;
-  overflow: hidden;
-}
-.profesional-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-}
-.sucursal-tag { font-weight: 400; font-size: 0.8rem; color: #A6AFC6; }
-
-.link-toggle {
-  background: none;
-  border: none;
-  padding: 0;
-  font-family: 'Sora', sans-serif;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #E8ECF6;
-  cursor: pointer;
-  text-align: left;
-}
 .sub-horarios {
   padding: 14px;
   background: #10172B;

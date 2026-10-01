@@ -768,60 +768,65 @@
     }
 
     @if (tabActiva() === 'profesionales') {
-      <div class="panel-card">
-        <h2>Profesionales</h2>
-        <p class="sub-info">Cada profesional puede tener sus propios horarios de atención. Si no cargás ninguno, tu negocio funciona con un solo horario general (pestaña "Horarios").</p>
+      <div class="panel-card turnos-card">
+        <div class="turnos-toolbar">
+          <div>
+            <h2>Tu equipo</h2>
+            <div class="historial-cantidad">Cada profesional puede tener sus propios horarios de atención. Si no cargás ninguno, tu negocio funciona con un solo horario general (pestaña "Horarios").</div>
+          </div>
+        </div>
 
         @if (profesionales().length === 0) {
           <p class="empty">Todavía no cargaste profesionales.</p>
         } @else {
-          <ul class="lista">
+          <div class="tarjetas-grid">
             @for (p of profesionales(); track p.id) {
-              <li class="profesional-item">
+              <div class="tarjeta" [class.tarjeta-abierta]="profesionalSeleccionado()?.id === p.id" [class.fila-editando]="profesionalEditandoId() === p.id">
                 @if (profesionalEditandoId() === p.id) {
-                  <div class="profesional-row">
-                    <div class="form-inline form-inline-2 form-inline-edicion" style="flex:1;">
-                      <input type="text" [(ngModel)]="editProfesionalNombre" placeholder="Nombre del profesional">
-                      @if (sucursales().length > 1) {
-                        <select [(ngModel)]="editProfesionalSucursalId">
-                          <option [ngValue]="null">Sin sucursal asignada</option>
-                          @for (s of sucursales(); track s.id) {
-                            <option [ngValue]="s.id">{{ s.nombre }}</option>
-                          }
-                        </select>
-                      }
-                      <div class="acciones">
-                        <button class="mini ok" (click)="guardarEdicionProfesional(p)">Guardar</button>
-                        <button class="mini" (click)="cancelarEdicionProfesional()">Cancelar</button>
-                      </div>
+                  <div class="form-inline form-inline-edicion tarjeta-form">
+                    <input type="text" [(ngModel)]="editProfesionalNombre" placeholder="Nombre del profesional">
+                    @if (sucursales().length > 1) {
+                      <select [(ngModel)]="editProfesionalSucursalId">
+                        <option [ngValue]="null">Sin sucursal asignada</option>
+                        @for (s of sucursales(); track s.id) {
+                          <option [ngValue]="s.id">{{ s.nombre }}</option>
+                        }
+                      </select>
+                    }
+                    <div class="acciones">
+                      <button class="btn-ok" (click)="guardarEdicionProfesional(p)">Guardar</button>
+                      <button class="btn-sec" (click)="cancelarEdicionProfesional()">Cancelar</button>
                     </div>
                   </div>
-                  @if (errorEditProfesional()) { <div class="error-msg">{{ errorEditProfesional() }}</div> }
+                  @if (errorEditProfesional()) { <div class="error-msg error-en-fila">{{ errorEditProfesional() }}</div> }
                 } @else {
-                  <div class="profesional-row">
-                    <button class="link-toggle" (click)="seleccionarProfesional(p)">
-                      {{ p.nombre }}
+                  <div class="tarjeta-cabecera">
+                    <div class="sidebar-iniciales">{{ p.nombre.trim().charAt(0).toUpperCase() }}</div>
+                    <div class="tarjeta-texto">
+                      <div class="fila-titulo">{{ p.nombre }}</div>
                       @if (sucursales().length > 1 && p.sucursalId) {
-                        <span class="sucursal-tag">· {{ nombreSucursal(p.sucursalId) }}</span>
+                        <div class="tarjeta-sub">{{ nombreSucursal(p.sucursalId) }}</div>
                       }
-                      {{ profesionalSeleccionado()?.id === p.id ? '▲' : '▼' }}
-                    </button>
-                    <div class="acciones">
-                      <button class="mini" (click)="iniciarEdicionProfesional(p)">Editar</button>
-                      <button class="mini danger" (click)="quitarProfesional(p)">Quitar</button>
                     </div>
+                  </div>
+                  <div class="tarjeta-acciones">
+                    <button class="btn-sec btn-chico" (click)="seleccionarProfesional(p)">
+                      Horarios {{ profesionalSeleccionado()?.id === p.id ? '▲' : '▼' }}
+                    </button>
+                    <button class="btn-sec btn-chico" (click)="iniciarEdicionProfesional(p)">Editar</button>
+                    <button class="btn-peligro btn-chico" (click)="quitarProfesional(p)">Quitar</button>
                   </div>
                 }
 
                 @if (profesionalSeleccionado()?.id === p.id) {
-                  <div class="sub-horarios">
+                  <div class="sub-horarios tarjeta-horarios">
                     @if (horariosDelProfesional().length === 0) {
                       <p class="empty">{{ p.nombre }} todavía no tiene horarios cargados.</p>
                     } @else {
-                      <ul class="lista">
+                      <div class="filas">
                         @for (h of horariosDelProfesional(); track h.id) {
-                          <li [class.lista-item-editando]="horarioEditandoId() === h.id">
-                            @if (horarioEditandoId() === h.id) {
+                          @if (horarioEditandoId() === h.id) {
+                            <div class="fila fila-editando">
                               <div class="form-inline form-inline-edicion">
                                 <select [(ngModel)]="editHorarioDia">
                                   @for (d of dias; track d; let i = $index) {
@@ -831,21 +836,26 @@
                                 <input type="time" [(ngModel)]="editHorarioInicio">
                                 <input type="time" [(ngModel)]="editHorarioFin">
                                 <div class="acciones">
-                                  <button class="mini ok" (click)="guardarEdicionHorario(h)">Guardar</button>
-                                  <button class="mini" (click)="cancelarEdicionHorario()">Cancelar</button>
+                                  <button class="btn-ok" (click)="guardarEdicionHorario(h)">Guardar</button>
+                                  <button class="btn-sec" (click)="cancelarEdicionHorario()">Cancelar</button>
                                 </div>
                               </div>
-                              @if (errorEditHorario()) { <div class="error-msg">{{ errorEditHorario() }}</div> }
-                            } @else {
-                              <div>{{ dias[h.diaSemana] }} de {{ h.horaInicio.substring(0,5) }} a {{ h.horaFin.substring(0,5) }}</div>
-                              <div class="acciones">
-                                <button class="mini" (click)="iniciarEdicionHorario(h)">Editar</button>
-                                <button class="mini danger" (click)="quitarHorarioProfesional(h)">Quitar</button>
+                              @if (errorEditHorario()) { <div class="error-msg error-en-fila">{{ errorEditHorario() }}</div> }
+                            </div>
+                          } @else {
+                            <div class="fila fila-compacta">
+                              <div class="fila-principal">
+                                <span class="horario-dia">{{ dias[h.diaSemana] }}</span>
+                                <span class="horario-tramo-hora">{{ h.horaInicio.substring(0,5) }} – {{ h.horaFin.substring(0,5) }}</span>
                               </div>
-                            }
-                          </li>
+                              <div class="acciones">
+                                <button class="btn-sec btn-chico" (click)="iniciarEdicionHorario(h)">Editar</button>
+                                <button class="btn-peligro btn-chico" (click)="quitarHorarioProfesional(h)">Quitar</button>
+                              </div>
+                            </div>
+                          }
                         }
-                      </ul>
+                      </div>
                     }
 
                     <div class="form-inline">
@@ -860,14 +870,17 @@
                     </div>
                   </div>
                 }
-              </li>
+              </div>
             }
-          </ul>
+          </div>
         }
+      </div>
 
+      <div class="panel-card turnos-card turno-manual-card">
+        <h2>Agregar profesional</h2>
         @if (errorProfesional()) { <div class="error-msg">{{ errorProfesional() }}</div> }
 
-        <div class="form-inline form-inline-2">
+        <div class="form-inline form-inline-2 form-inline-edicion">
           <input type="text" [(ngModel)]="nuevoProfesionalNombre" placeholder="Nombre del profesional">
           @if (sucursales().length > 1) {
             <select [(ngModel)]="nuevoProfesionalSucursalId">
@@ -883,49 +896,57 @@
     }
 
     @if (tabActiva() === 'sucursales') {
-      <div class="panel-card">
-        <h2>Sucursales</h2>
-        <p class="sub-info">Si cargás más de una sucursal, tus clientes van a poder elegir en cuál reservar desde tu página pública.</p>
+      <div class="panel-card turnos-card">
+        <div class="turnos-toolbar">
+          <div>
+            <h2>Tus sucursales</h2>
+            <div class="historial-cantidad">Si cargás más de una sucursal, tus clientes van a poder elegir en cuál reservar desde tu página pública.</div>
+          </div>
+        </div>
 
         @if (sucursales().length === 0) {
           <p class="empty">Todavía no cargaste sucursales.</p>
         } @else {
-          <ul class="lista">
+          <div class="tarjetas-grid">
             @for (s of sucursales(); track s.id) {
-              <li class="profesional-item">
+              <div class="tarjeta" [class.fila-editando]="sucursalEditandoId() === s.id" [class.tarjeta-inactiva]="!s.activa">
                 @if (sucursalEditandoId() === s.id) {
-                  <div class="form-inline form-inline-2 form-inline-edicion">
+                  <div class="form-inline form-inline-edicion tarjeta-form">
                     <input type="text" [(ngModel)]="editSucursalNombre" placeholder="Nombre">
                     <input type="text" [(ngModel)]="editSucursalDireccion" placeholder="Dirección">
                     <input type="text" [(ngModel)]="editSucursalTelefono" placeholder="Teléfono (opcional)">
                     <div class="acciones">
-                      <button class="mini ok" (click)="guardarEdicionSucursal(s)">Guardar</button>
-                      <button class="mini" (click)="cancelarEdicionSucursal()">Cancelar</button>
+                      <button class="btn-ok" (click)="guardarEdicionSucursal(s)">Guardar</button>
+                      <button class="btn-sec" (click)="cancelarEdicionSucursal()">Cancelar</button>
                     </div>
                   </div>
-                  @if (errorEditSucursal()) { <div class="error-msg">{{ errorEditSucursal() }}</div> }
+                  @if (errorEditSucursal()) { <div class="error-msg error-en-fila">{{ errorEditSucursal() }}</div> }
                 } @else {
-                  <div class="profesional-row">
-                    <div>
-                      <strong>{{ s.nombre }}</strong>
-                      <span class="badge" [class.badge-ok]="s.activa" [class.badge-danger]="!s.activa">{{ s.activa ? 'Activa' : 'Inactiva' }}</span>
-                      <div class="sub-info" style="margin:2px 0 0;">{{ s.direccion || 'Sin dirección cargada' }} {{ s.telefono ? '· ' + s.telefono : '' }}</div>
+                  <div class="tarjeta-cabecera">
+                    <div class="tarjeta-texto">
+                      <div class="fila-titulo">{{ s.nombre }}</div>
+                      <div class="tarjeta-sub">{{ s.direccion || 'Sin dirección cargada' }}</div>
+                      @if (s.telefono) { <div class="tarjeta-sub">{{ s.telefono }}</div> }
                     </div>
-                    <div class="acciones">
-                      <button class="mini" (click)="iniciarEdicionSucursal(s)">Editar</button>
-                      <button class="mini" [class.ok]="!s.activa" [class.danger]="s.activa" (click)="toggleActivaSucursal(s)">{{ s.activa ? 'Desactivar' : 'Activar' }}</button>
-                      <button class="mini danger" (click)="quitarSucursal(s)">Quitar</button>
-                    </div>
+                    <span class="badge" [class.estado-2]="s.activa" [class.estado-3]="!s.activa">{{ s.activa ? 'Activa' : 'Inactiva' }}</span>
+                  </div>
+                  <div class="tarjeta-acciones">
+                    <button class="btn-sec btn-chico" (click)="iniciarEdicionSucursal(s)">Editar</button>
+                    <button class="btn-chico" [class.btn-ok]="!s.activa" [class.btn-sec]="s.activa" (click)="toggleActivaSucursal(s)">{{ s.activa ? 'Desactivar' : 'Activar' }}</button>
+                    <button class="btn-peligro btn-chico" (click)="quitarSucursal(s)">Quitar</button>
                   </div>
                 }
-              </li>
+              </div>
             }
-          </ul>
+          </div>
         }
+      </div>
 
+      <div class="panel-card turnos-card turno-manual-card">
+        <h2>Agregar sucursal</h2>
         @if (errorSucursal()) { <div class="error-msg">{{ errorSucursal() }}</div> }
 
-        <div class="form-inline form-inline-2">
+        <div class="form-inline form-inline-edicion">
           <input type="text" [(ngModel)]="nuevaSucursalNombre" placeholder="Nombre de la sucursal">
           <input type="text" [(ngModel)]="nuevaSucursalDireccion" placeholder="Dirección">
           <input type="text" [(ngModel)]="nuevaSucursalTelefono" placeholder="Teléfono (opcional)">
