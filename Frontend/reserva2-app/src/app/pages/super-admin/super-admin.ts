@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 
-import { Api, ComercioAdmin, Dashboard, SuperAdminSession } from '../../core/api';
+import { Api, ComercioAdmin, ComercioEstadistica, Dashboard, SuperAdminSession } from '../../core/api';
 import { Session } from '../../core/session';
 import { linkWhatsApp } from '../../core/whatsapp';
 
@@ -28,27 +28,34 @@ export class SuperAdmin {
   actualizandoEstadoId = signal<number | null>(null);
   actualizandoMontoId = signal<number | null>(null);
   renovandoId = signal<number | null>(null);
-  eliminandoId = signal<number | null>(null);
-  errorEliminar = signal<string | null>(null);
 
-  // --- Búsqueda y filtros ---
+  // Fecha de alta, si está pendiente de activación y turnos del mes, por id de comercio.
+  // Si esta llamada falla, la tabla funciona igual (sin esos datos para ordenar/filtrar).
+  estadisticas = signal<Map<number, ComercioEstadistica>>(new Map());
+
+  // --- Búsqueda, filtros y orden ---
   busqueda = signal('');
   filtroPlan = signal('Todos');
-  filtroEstado = signal('Todos');
+  filtroEstado = signal<'Todos' | 'Activo' | 'Pausado' | 'Pendiente'>('Todos');
+  orden = signal<'recientes' | 'turnos' | 'vencimiento' | 'monto'>('recientes');
 
   comerciosFiltrados = computed(() => {
     const termino = this.busqueda().trim().toLowerCase();
     const plan = this.filtroPlan();
     const estado = this.filtroEstado();
 
-    return this.comercios().filter(c => {
+    const filtrados = this.comercios().filter(c => {
+      // "Dueño": el comercio no guarda un nombre de dueño aparte, así que se busca por el
+      // email de la cuenta.
       const coincideTexto = !termino
         || c.nombre.toLowerCase().includes(termino)
-        || c.aliasUrl.toLowerCase().includes(termino);
+        || c.aliasUrl.toLowerCase().includes(termino)
+        || c.email.toLowerCase().includes(termino);
       const coincidePlan = plan === 'Todos' || c.planActual === plan;
-      const coincideEstado = estado === 'Todos' || (estado === 'Activo' ? c.activo : !c.activo);
-      return coincideTexto && coincidePlan && coincideEstado;
+      return coincideTexto && coincidePlan && (estado === 'Todos' || this.estadoComercio(c) === estado);
     });
+
+    return [...filtrados].sort((a, b) => this.compararPorOrden(a, b));
   });
 
   constructor(private api: Api, private session: Session, private router: Router) {
@@ -66,8 +73,17 @@ export class SuperAdmin {
     return linkWhatsApp('Hola! Tengo una duda administrando Reserva2.');
   }
 
+  fechaHoyTexto(): string {
+    const texto = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+  }
+
   private cargarTodo(): void {
     this.api.getDashboard().subscribe(d => this.dashboard.set(d));
+    this.api.getEstadisticasComercios().subscribe({
+      next: lista => this.estadisticas.set(new Map(lista.map(e => [e.id, e]))),
+      error: () => this.estadisticas.set(new Map())
+    });
 
     this.errorComercios.set(null);
     this.cargandoComercios.set(true);
@@ -120,6 +136,72 @@ export class SuperAdmin {
     });
   }
 
+  // ================= ESTADO, ORDEN Y PRESENTACIÓN =================
+  // "Pendiente" = nunca se activó (mismo criterio que el KPI del dashboard); "Pausado" = se
+  // activó alguna vez y ahora está inactivo.
+  estadoComercio(c: ComercioAdmin): 'Activo' | 'Pausado' | 'Pendiente' {
+    if (c.activo) return 'Activo';
+    return this.estadisticas().get(c.id)?.pendiente ? 'Pendiente' : 'Pausado';
+  }
+
+  // Los KPI de Pausados y Pendientes filtran la tabla; un segundo clic saca el filtro.
+  filtrarPorKpi(estado: 'Pausado' | 'Pendiente'): void {
+    this.filtroEstado.set(this.filtroEstado() === estado ? 'Todos' : estado);
+  }
+
+  turnosDelMes(c: ComercioAdmin): number {
+    return this.estadisticas().get(c.id)?.turnosDelMes ?? 0;
+  }
+
+  private compararPorOrden(a: ComercioAdmin, b: ComercioAdmin): number {
+    switch (this.orden()) {
+      case 'turnos':
+        return this.turnosDelMes(b) - this.turnosDelMes(a);
+      case 'monto':
+        return (b.montoMensualAcordado ?? 0) - (a.montoMensualAcordado ?? 0);
+      case 'vencimiento': {
+        // Sin fecha de vencimiento (ej. gratuitos) van al final.
+        const da = this.diasParaVencimiento(a) ?? Number.MAX_SAFE_INTEGER;
+        const db = this.diasParaVencimiento(b) ?? Number.MAX_SAFE_INTEGER;
+        return da - db;
+      }
+      default: {
+        const fa = this.estadisticas().get(a.id)?.fechaAlta ?? '';
+        const fb = this.estadisticas().get(b.id)?.fechaAlta ?? '';
+        return fb.localeCompare(fa) || b.id - a.id;
+      }
+    }
+  }
+
+  iniciales(nombre: string): string {
+    const palabras = nombre.trim().split(/\s+/).filter(Boolean);
+    return palabras.slice(0, 2).map(p => p[0].toUpperCase()).join('') || '?';
+  }
+
+  // Pastilla de vencimiento: verde > 7 días, ámbar <= 7, roja si ya venció, "—" si es gratuito.
+  claseVencimiento(c: ComercioAdmin): 'ok' | 'alerta' | 'vencido' | 'sin' {
+    if (c.planActual === 'Gratuito') return 'sin';
+    const dias = this.diasParaVencimiento(c);
+    if (dias === null) return 'sin';
+    if (dias < 0) return 'vencido';
+    return dias <= 7 ? 'alerta' : 'ok';
+  }
+
+  textoVencimiento(c: ComercioAdmin): string {
+    if (c.planActual === 'Gratuito') return '—';
+    return this.etiquetaVencimiento(c);
+  }
+
+  // MRR de cada plan con el mismo criterio que el ingreso mensual estimado del dashboard:
+  // suma de montos acordados de comercios activos.
+  mrrPorPlan(plan: string): number {
+    return this.comercios().filter(c => c.activo && c.planActual === plan).reduce((t, c) => t + (c.montoMensualAcordado ?? 0), 0);
+  }
+
+  nombrePlan(plan: string): string {
+    return plan === 'Basico' ? 'Básico' : plan;
+  }
+
   private diasParaVencimiento(c: ComercioAdmin): number | null {
     if (!c.fechaProximoPago) return null;
     const hoy = new Date();
@@ -152,24 +234,6 @@ export class SuperAdmin {
         this.api.getDashboard().subscribe(d => this.dashboard.set(d));
       },
       error: () => this.renovandoId.set(null)
-    });
-  }
-
-  eliminar(c: ComercioAdmin): void {
-    this.errorEliminar.set(null);
-    if (!confirm(`¿Eliminar definitivamente "${c.nombre}"? Se borran también sus turnos, servicios, horarios, profesionales y sucursales. Esto no se puede deshacer.`)) return;
-
-    this.eliminandoId.set(c.id);
-    this.api.eliminarComercio(c.id).subscribe({
-      next: () => {
-        this.comercios.update(lista => lista.filter(x => x.id !== c.id));
-        this.eliminandoId.set(null);
-        this.api.getDashboard().subscribe(d => this.dashboard.set(d));
-      },
-      error: err => {
-        this.eliminandoId.set(null);
-        this.errorEliminar.set(err.error?.mensaje ?? 'No pudimos eliminar el comercio.');
-      }
     });
   }
 

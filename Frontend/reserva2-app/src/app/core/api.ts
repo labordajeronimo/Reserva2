@@ -290,6 +290,15 @@ export interface AltaMes {
   cantidad: number;
 }
 
+// Datos extra por comercio para la tabla del Super Admin (GET /admin/comercios/estadisticas).
+export interface ComercioEstadistica {
+  id: number;
+  fechaAlta: string;
+  pendiente: boolean;
+  turnosDelMes: number;
+  turnosMesAnterior: number;
+}
+
 export interface Dashboard {
   totalComercios: number;
   comerciosActivos: number;
@@ -353,6 +362,10 @@ export class Api {
   // --- Super Admin ---
   getComerciosAdmin(): Observable<ComercioAdmin[]> {
     return this.http.get<ComercioAdmin[]>(`${API_BASE}/comercios`);
+  }
+
+  getEstadisticasComercios(): Observable<ComercioEstadistica[]> {
+    return this.http.get<ComercioEstadistica[]>(`${API_BASE}/admin/comercios/estadisticas`);
   }
 
   actualizarEstadoComercio(id: number, activo: boolean): Observable<ComercioAdmin> {

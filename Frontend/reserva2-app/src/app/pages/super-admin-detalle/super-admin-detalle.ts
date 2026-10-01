@@ -23,6 +23,8 @@ export class SuperAdminDetalle {
   actualizandoEstado = signal(false);
   actualizandoPlan = signal(false);
   renovando = signal(false);
+  eliminando = signal(false);
+  errorEliminar = signal<string | null>(null);
 
   constructor(private api: Api, private route: ActivatedRoute, private router: Router) {
     this.comercioId = Number(this.route.snapshot.paramMap.get('id'));
@@ -84,6 +86,35 @@ export class SuperAdminDetalle {
         this.cargarDetalle();
       },
       error: () => this.renovando.set(false)
+    });
+  }
+
+  // Eliminar vive acá (ya no en la fila de la tabla) y pide doble confirmación: primero un
+  // aviso y después escribir el nombre del comercio. Igual que antes, solo se puede si está
+  // pausado.
+  eliminar(): void {
+    const d = this.detalle();
+    if (!d || d.activo) return;
+    this.errorEliminar.set(null);
+
+    if (!confirm(`¿Eliminar definitivamente "${d.nombre}"? Se borran también sus turnos, servicios, horarios, profesionales y sucursales. Esto no se puede deshacer.`)) return;
+    const escrito = prompt(`Para confirmar, escribí el nombre del comercio: ${d.nombre}`);
+    if (escrito === null) return;
+    if (escrito.trim() !== d.nombre.trim()) {
+      this.errorEliminar.set('El nombre no coincide. No se eliminó nada.');
+      return;
+    }
+
+    this.eliminando.set(true);
+    this.api.eliminarComercio(d.id).subscribe({
+      next: () => {
+        this.eliminando.set(false);
+        this.router.navigateByUrl('/super-admin');
+      },
+      error: err => {
+        this.eliminando.set(false);
+        this.errorEliminar.set(err.error?.mensaje ?? 'No pudimos eliminar el comercio.');
+      }
     });
   }
 

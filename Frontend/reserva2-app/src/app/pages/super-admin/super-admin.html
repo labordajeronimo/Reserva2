@@ -1,44 +1,57 @@
 <div class="panel-shell">
   <header class="panel-header">
     <div class="brand-row">
-      <img src="/reserva2_icono_navy.png" alt="Reserva2" class="brand-icon">
-      <div class="brand">Super Admin</div>
+      <div class="logo-pastilla">
+        <img src="/reserva2_icono_navy.png" alt="" class="logo-icono">
+        <img src="/reserva2_logo_coral.png" alt="Reserva2" class="logo-texto">
+      </div>
+      <div>
+        <div class="brand">Super Admin</div>
+        <div class="brand-fecha">{{ fechaHoyTexto() }}</div>
+      </div>
     </div>
-    <button class="btn-outline" (click)="cerrarSesion()">Cerrar sesión</button>
+    <div class="header-acciones">
+      <a [href]="linkAyudaWhatsApp()" target="_blank" rel="noopener">¿Necesitás ayuda?</a>
+      <button class="btn-sec" (click)="cerrarSesion()">Cerrar sesión</button>
+    </div>
   </header>
 
   <main class="panel-main">
 
     @if (dashboard(); as d) {
-      <div class="metricas">
-        <div class="metrica-card">
-          <div class="valor">{{ d.totalComercios }}</div>
-          <div class="etiqueta">Comercios totales</div>
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="kpi-etiqueta">Comercios totales</div>
+          <div class="kpi-valor">{{ d.totalComercios }}</div>
         </div>
-        <div class="metrica-card">
-          <div class="valor ok">{{ d.comerciosActivos }}</div>
-          <div class="etiqueta">Activos</div>
+        <div class="kpi">
+          <div class="kpi-etiqueta">Activos</div>
+          <div class="kpi-valor ok">{{ d.comerciosActivos }}</div>
         </div>
-        <div class="metrica-card">
-          <div class="valor danger">{{ d.comerciosInactivos }}</div>
-          <div class="etiqueta">Pausados</div>
+        <button class="kpi kpi-filtro" [class.active]="filtroEstado() === 'Pausado'" (click)="filtrarPorKpi('Pausado')"
+                [attr.aria-pressed]="filtroEstado() === 'Pausado'">
+          <div class="kpi-etiqueta">Pausados</div>
+          <div class="kpi-valor peligro">{{ d.comerciosInactivos }}</div>
+          <div class="kpi-pie">{{ filtroEstado() === 'Pausado' ? 'Filtrando · clic para quitar' : 'Ver en la tabla' }}</div>
+        </button>
+        <button class="kpi kpi-filtro" [class.active]="filtroEstado() === 'Pendiente'" (click)="filtrarPorKpi('Pendiente')"
+                [attr.aria-pressed]="filtroEstado() === 'Pendiente'">
+          <div class="kpi-etiqueta">Pendientes de activación</div>
+          <div class="kpi-valor alerta">{{ d.comerciosPendientes }}</div>
+          <div class="kpi-pie">{{ filtroEstado() === 'Pendiente' ? 'Filtrando · clic para quitar' : 'Ver en la tabla' }}</div>
+        </button>
+        <div class="kpi">
+          <div class="kpi-etiqueta">Ingreso mensual estimado</div>
+          <div class="kpi-valor">{{ d.ingresoMensualEstimado | currency:'ARS':'$':'1.0-0' }}</div>
         </div>
-        <div class="metrica-card">
-          <div class="valor">{{ d.comerciosPendientes }}</div>
-          <div class="etiqueta">Pendientes de activación</div>
-        </div>
-        <div class="metrica-card">
-          <div class="valor ok">{{ d.ingresoMensualEstimado | currency:'ARS':'$' }}</div>
-          <div class="etiqueta">Ingreso mensual estimado</div>
-        </div>
-        <div class="metrica-card">
-          <div class="valor">{{ d.turnosDelMes }}</div>
-          <div class="etiqueta">Turnos este mes</div>
+        <div class="kpi">
+          <div class="kpi-etiqueta">Turnos este mes</div>
+          <div class="kpi-valor">{{ d.turnosDelMes }}</div>
         </div>
       </div>
 
       <div class="graficos-row">
-        <div class="panel-card grafico-card">
+        <div class="panel-card">
           <h2>Altas de comercios por mes</h2>
           <div class="grafico-barras">
             @for (m of d.altasPorMes; track m.anio + '-' + m.mes) {
@@ -51,19 +64,23 @@
           </div>
         </div>
 
-        <div class="panel-card grafico-card">
+        <div class="panel-card">
           <h2>Comercios por plan</h2>
           @if (d.porPlan.length === 0) {
             <p class="empty">Todavía no hay comercios registrados.</p>
           } @else {
-            <div class="grafico-barras-h">
+            <div class="barra-segmentada" role="img" [attr.aria-label]="'Comercios por plan'">
               @for (p of d.porPlan; track p.plan) {
-                <div class="barra-h-fila">
-                  <div class="barra-h-etiqueta">{{ p.plan }}</div>
-                  <div class="barra-h-pista">
-                    <div class="barra-h" [style.width.%]="anchoBarraPlan(p.cantidad)"></div>
-                  </div>
-                  <div class="barra-h-valor">{{ p.cantidad }}</div>
+                <div class="segmento" [class]="'plan-' + p.plan" [style.width.%]="anchoBarraPlan(p.cantidad)" [title]="nombrePlan(p.plan) + ': ' + p.cantidad"></div>
+              }
+            </div>
+            <div class="leyenda">
+              @for (p of d.porPlan; track p.plan) {
+                <div class="leyenda-fila">
+                  <span class="leyenda-punto" [class]="'plan-' + p.plan"></span>
+                  <span class="leyenda-nombre">{{ nombrePlan(p.plan) }}</span>
+                  <span class="leyenda-cantidad">{{ p.cantidad }} · {{ anchoBarraPlan(p.cantidad) }}%</span>
+                  <span class="leyenda-mrr">{{ mrrPorPlan(p.plan) | currency:'ARS':'$':'1.0-0' }}/mes</span>
                 </div>
               }
             </div>
@@ -73,31 +90,37 @@
     }
 
     <div class="panel-card">
-      <h2>Comercios</h2>
+      <div class="tabla-cabecera">
+        <h2>Comercios</h2>
+        <span class="tabla-cantidad">{{ comerciosFiltrados().length }} de {{ comercios().length }}</span>
+      </div>
 
       <div class="filtros-row">
         <input
           type="text"
           class="filtro-busqueda"
-          placeholder="Buscar por nombre o link..."
+          placeholder="Buscar por nombre, link o email del dueño..."
           [ngModel]="busqueda()"
           (ngModelChange)="busqueda.set($event)">
         <select class="plan-select" [ngModel]="filtroPlan()" (ngModelChange)="filtroPlan.set($event)">
           <option value="Todos">Todos los planes</option>
           @for (p of planes; track p) {
-            <option [value]="p">{{ p }}</option>
+            <option [value]="p">{{ nombrePlan(p) }}</option>
           }
         </select>
         <select class="plan-select" [ngModel]="filtroEstado()" (ngModelChange)="filtroEstado.set($event)">
           <option value="Todos">Todos los estados</option>
-          <option value="Activo">Activo</option>
-          <option value="Inactivo">Inactivo</option>
+          <option value="Activo">Activos</option>
+          <option value="Pausado">Pausados</option>
+          <option value="Pendiente">Pendientes de activación</option>
+        </select>
+        <select class="plan-select" [ngModel]="orden()" (ngModelChange)="orden.set($event)">
+          <option value="recientes">Más recientes</option>
+          <option value="turnos">Más turnos este mes</option>
+          <option value="vencimiento">Vencimiento más cercano</option>
+          <option value="monto">Mayor monto</option>
         </select>
       </div>
-
-      @if (errorEliminar()) {
-        <div class="error-msg">{{ errorEliminar() }}</div>
-      }
 
       @if (errorComercios()) {
         <div class="error-msg">{{ errorComercios() }}</div>
@@ -108,82 +131,78 @@
       } @else if (comerciosFiltrados().length === 0) {
         <p class="empty">Ningún comercio coincide con la búsqueda o los filtros.</p>
       } @else {
-        <table class="tabla">
-          <thead>
-            <tr><th>Nombre</th><th>Link</th><th>Plan</th><th>Ciclo</th><th>Monto mensual acordado</th><th>Vencimiento</th><th>Estado</th><th></th></tr>
-          </thead>
-          <tbody>
-            @for (c of comerciosFiltrados(); track c.id) {
-              <tr>
-                <td><a class="nombre-link" [routerLink]="['/super-admin/comercios', c.id]">{{ c.nombre }}</a></td>
-                <td>{{ c.aliasUrl }}</td>
-                <td>
-                  <select class="plan-select" [ngModel]="c.planActual" (ngModelChange)="cambiarPlan(c, $event)">
-                    @for (p of planes; track p) {
-                      <option [value]="p">{{ p }}</option>
-                    }
-                  </select>
-                </td>
-                <td>
-                  <select class="plan-select" [ngModel]="c.cicloFacturacion" (ngModelChange)="cambiarCicloFacturacion(c, $event)">
-                    @for (ci of ciclos; track ci) {
-                      <option [value]="ci">{{ ci }}</option>
-                    }
-                  </select>
-                </td>
-                <td class="monto-acordado">
-                  <span class="monto-prefijo">$</span>
-                  <input type="number" class="monto-input" min="0" [(ngModel)]="c.montoMensualAcordado" placeholder="Sin definir">
-                  <button
-                    class="mini"
-                    [disabled]="actualizandoMontoId() === c.id"
-                    (click)="guardarMontoAcordado(c)">
-                    {{ actualizandoMontoId() === c.id ? '...' : 'Guardar' }}
-                  </button>
-                </td>
-                <td>
-                  @if (c.fechaProximoPago) {
-                    <span class="badge" [class.badge-danger]="vencimientoUrgente(c)" [class.badge-ok]="!vencimientoUrgente(c)">
-                      {{ etiquetaVencimiento(c) }}
-                    </span>
-                  } @else {
-                    <span class="sin-vencimiento">Sin definir</span>
-                  }
-                </td>
-                <td><span class="badge" [class.badge-ok]="c.activo" [class.badge-danger]="!c.activo">{{ c.activo ? 'Activo' : 'Pausado' }}</span></td>
-                <td class="acciones">
-                  <button
-                    class="mini"
-                    [class.ok]="!c.activo"
-                    [class.danger]="c.activo"
-                    [disabled]="actualizandoEstadoId() === c.id"
-                    (click)="toggleEstado(c)">
-                    {{ c.activo ? 'Pausar' : 'Activar' }}
-                  </button>
-                  <button
-                    class="mini ok"
-                    [disabled]="renovandoId() === c.id"
-                    (click)="renovar(c)">
-                    {{ renovandoId() === c.id ? '...' : 'Marcar como renovado' }}
-                  </button>
-                  <button
-                    class="mini danger"
-                    [disabled]="c.activo || eliminandoId() === c.id"
-                    [title]="c.activo ? 'Pausalo antes de poder eliminarlo' : 'Eliminar definitivamente'"
-                    (click)="eliminar(c)">
-                    {{ eliminandoId() === c.id ? '...' : 'Eliminar' }}
-                  </button>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        <div class="tabla-scroll">
+          <table class="tabla">
+            <thead>
+              <tr><th>Comercio</th><th>Plan</th><th>Ciclo</th><th>Monto mensual</th><th>Vencimiento</th><th>Turnos mes</th><th>Estado</th><th></th></tr>
+            </thead>
+            <tbody>
+              @for (c of comerciosFiltrados(); track c.id) {
+                <tr>
+                  <td>
+                    <div class="comercio-celda">
+                      <span class="comercio-iniciales">{{ iniciales(c.nombre) }}</span>
+                      <div class="comercio-texto">
+                        <a class="nombre-link" [routerLink]="['/super-admin/comercios', c.id]">{{ c.nombre }}</a>
+                        <div class="comercio-sub">/{{ c.aliasUrl }} · {{ c.tipoPlantilla }}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <select class="plan-select" [ngModel]="c.planActual" (ngModelChange)="cambiarPlan(c, $event)">
+                      @for (p of planes; track p) {
+                        <option [value]="p">{{ nombrePlan(p) }}</option>
+                      }
+                    </select>
+                  </td>
+                  <td>
+                    <select class="plan-select" [ngModel]="c.cicloFacturacion" (ngModelChange)="cambiarCicloFacturacion(c, $event)">
+                      @for (ci of ciclos; track ci) {
+                        <option [value]="ci">{{ ci }}</option>
+                      }
+                    </select>
+                  </td>
+                  <td>
+                    <div class="monto-acordado">
+                      <span class="monto-prefijo">$</span>
+                      <input type="number" class="monto-input" min="0" [(ngModel)]="c.montoMensualAcordado" placeholder="Sin definir">
+                      <button
+                        class="btn-sec btn-chico"
+                        [disabled]="actualizandoMontoId() === c.id"
+                        (click)="guardarMontoAcordado(c)">
+                        {{ actualizandoMontoId() === c.id ? '...' : 'Guardar' }}
+                      </button>
+                    </div>
+                  </td>
+                  <td><span class="pastilla" [class]="'venc-' + claseVencimiento(c)">{{ textoVencimiento(c) }}</span></td>
+                  <td class="celda-numero">{{ turnosDelMes(c) }}</td>
+                  <td><span class="pastilla" [class]="'estado-' + estadoComercio(c)">{{ estadoComercio(c) }}</span></td>
+                  <td>
+                    <div class="acciones">
+                      <button
+                        class="btn-chico"
+                        [class.btn-ok]="!c.activo"
+                        [class.btn-peligro]="c.activo"
+                        [disabled]="actualizandoEstadoId() === c.id"
+                        (click)="toggleEstado(c)">
+                        {{ c.activo ? 'Pausar' : 'Activar' }}
+                      </button>
+                      <button
+                        class="btn-ok btn-chico"
+                        [disabled]="renovandoId() === c.id"
+                        (click)="renovar(c)">
+                        {{ renovandoId() === c.id ? '...' : 'Marcar como renovado' }}
+                      </button>
+                      <a class="btn-sec btn-chico btn-ver" [routerLink]="['/super-admin/comercios', c.id]">Ver →</a>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
       }
     </div>
 
   </main>
-
-  <footer class="panel-footer">
-    <a [href]="linkAyudaWhatsApp()" target="_blank" rel="noopener">¿Necesitás ayuda?</a>
-  </footer>
 </div>

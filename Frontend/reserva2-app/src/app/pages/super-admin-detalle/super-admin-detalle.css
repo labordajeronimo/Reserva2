@@ -167,3 +167,17 @@
   .metricas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .detalle-listas { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Eliminar: sale de la fila de la tabla y vive acá, separado del resto de las acciones. */
+.zona-peligro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  border-color: rgba(248, 113, 113, 0.3);
+}
+.zona-peligro h2 { margin-bottom: 6px; }
+.zona-peligro .sub-info { margin: 0; }
+.zona-peligro .error-msg { margin-top: 10px; }

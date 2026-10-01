@@ -108,6 +108,24 @@
         </div>
       </div>
 
+      <div class="panel-card zona-peligro">
+        <div>
+          <h2>Eliminar comercio</h2>
+          <p class="sub-info">
+            @if (d.activo) {
+              Para eliminarlo, primero pausalo.
+            } @else {
+              Se borran también sus turnos, servicios, horarios, profesionales y sucursales. No se puede deshacer.
+            }
+          </p>
+          @if (errorEliminar()) { <div class="error-msg">{{ errorEliminar() }}</div> }
+        </div>
+        <button class="mini danger" [disabled]="d.activo || eliminando()" (click)="eliminar()"
+                [title]="d.activo ? 'Pausalo antes de poder eliminarlo' : 'Eliminar definitivamente'">
+          {{ eliminando() ? 'Eliminando...' : 'Eliminar' }}
+        </button>
+      </div>
+
       <div class="detalle-listas">
         <div class="panel-card">
           <h2>Sucursales</h2>
