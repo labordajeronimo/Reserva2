@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -86,56 +86,207 @@ export class Panel {
   turnos = signal<Turno[]>([]);
   linkCopiado = signal(false);
 
-  // --- Vista de agenda (grilla de un día, una columna por profesional, arma la grilla con
-  // los turnos ya cargados — no pega al backend de nuevo, ya está todo en el signal "turnos").
-  // Es por día (no por semana) porque con columnas por profesional, una semana entera no
-  // entra cómodo en pantalla. ---
-  vistaAgenda = signal(false);
+  // --- Calendario del día (una columna por profesional). Arma la grilla con los turnos ya
+  // cargados — no pega al backend de nuevo, ya está todo en el signal "turnos". Es por día
+  // (no por semana) porque con columnas por profesional, una semana entera no entra cómoda
+  // en pantalla. ---
+  readonly pxPorHora = 64;
+  vistaTurnos = signal<'calendario' | 'lista'>('calendario');
   agendaDia = signal<Date>(this.soloFecha(new Date()));
+  ahora = signal(new Date());
+
+  // Se guarda el id (no el objeto) para que, al recargar los turnos después de confirmar o
+  // cancelar, el detalle muestre el estado nuevo sin tener que volver a seleccionarlo.
+  turnoSeleccionadoId = signal<number | null>(null);
+  turnoSeleccionado = computed(() => this.turnos().find(t => t.id === this.turnoSeleccionadoId()) ?? null);
 
   private soloFecha(d: Date): Date {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
   }
 
+  mismoDia(a: Date, b: Date): boolean {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  }
+
+  esHoyAgenda(): boolean {
+    return this.mismoDia(this.agendaDia(), this.ahora());
+  }
+
+  turnosDelDia(dia: Date): Turno[] {
+    return this.turnos()
+      .filter(t => this.mismoDia(new Date(t.fechaHoraInicio), dia))
+      .sort((a, b) => a.fechaHoraInicio.localeCompare(b.fechaHoraInicio));
+  }
+
   // Si el comercio no cargó profesionales (dueño único), se usa una sola columna "Vos" que
-  // agrupa todos los turnos del día sin filtrar por profesionalId.
+  // agrupa todos los turnos del día. Si hay profesionales pero algún turno del día no tiene
+  // uno asignado (o es de un profesional ya borrado), se suma una columna "Sin asignar" para
+  // que ese turno no quede invisible en el calendario.
   columnasAgenda(): { id: number | null; nombre: string }[] {
     const profesionales = this.profesionales();
     if (profesionales.length === 0) return [{ id: null, nombre: 'Vos' }];
-    return profesionales.map(p => ({ id: p.id, nombre: p.nombre }));
+    const columnas: { id: number | null; nombre: string }[] = profesionales.map(p => ({ id: p.id, nombre: p.nombre }));
+    if (this.turnosDelDia(this.agendaDia()).some(t => this.esTurnoSinAsignar(t))) columnas.push({ id: null, nombre: 'Sin asignar' });
+    return columnas;
+  }
+
+  private esTurnoSinAsignar(t: Turno): boolean {
+    return t.profesionalId === null || !this.profesionales().some(p => p.id === t.profesionalId);
   }
 
   turnosColumnaAgenda(columnaId: number | null): Turno[] {
+    const delDia = this.turnosDelDia(this.agendaDia());
+    if (this.profesionales().length === 0) return delDia;
+    return delDia.filter(t => columnaId === null ? this.esTurnoSinAsignar(t) : t.profesionalId === columnaId);
+  }
+
+  private minutosDelDia(fechaIso: string): number {
+    const f = new Date(fechaIso);
+    return f.getHours() * 60 + f.getMinutes();
+  }
+
+  // Minuto de fin dentro del día del turno (si termina pasada la medianoche, se corta en 24h).
+  private minutoFin(t: Turno): number {
+    const fin = this.mismoDia(new Date(t.fechaHoraFin), new Date(t.fechaHoraInicio)) ? this.minutosDelDia(t.fechaHoraFin) : 24 * 60;
+    return Math.max(this.minutosDelDia(t.fechaHoraInicio) + 15, fin);
+  }
+
+  private horaAMinutos(hora: string): number {
+    const [h, m] = hora.split(':').map(Number);
+    return h * 60 + m;
+  }
+
+  // Rango visible: el horario general de ese día de la semana (o 9 a 20 si no hay), estirado
+  // para que entren todos los turnos del día aunque caigan fuera del horario.
+  rangoHorasAgenda(): { desde: number; hasta: number } {
     const dia = this.agendaDia();
-    const sinProfesionales = this.profesionales().length === 0;
-    return this.turnos()
-      .filter(t => {
-        const f = new Date(t.fechaHoraInicio);
-        const mismoDia = f.getFullYear() === dia.getFullYear() && f.getMonth() === dia.getMonth() && f.getDate() === dia.getDate();
-        return mismoDia && (sinProfesionales || t.profesionalId === columnaId);
-      })
-      .sort((a, b) => a.fechaHoraInicio.localeCompare(b.fechaHoraInicio));
+    const horariosDelDia = this.horarios().filter(h => h.diaSemana === dia.getDay());
+    let desde = horariosDelDia.length ? Math.min(...horariosDelDia.map(h => this.horaAMinutos(h.horaInicio))) : 9 * 60;
+    let hasta = horariosDelDia.length ? Math.max(...horariosDelDia.map(h => this.horaAMinutos(h.horaFin))) : 20 * 60;
+    for (const t of this.turnosDelDia(dia)) {
+      desde = Math.min(desde, this.minutosDelDia(t.fechaHoraInicio));
+      hasta = Math.max(hasta, this.minutoFin(t));
+    }
+    const horaDesde = Math.floor(desde / 60);
+    return { desde: horaDesde, hasta: Math.min(24, Math.max(horaDesde + 1, Math.ceil(hasta / 60))) };
+  }
+
+  horasAgenda(): number[] {
+    const { desde, hasta } = this.rangoHorasAgenda();
+    return Array.from({ length: hasta - desde }, (_, i) => desde + i);
+  }
+
+  alturaAgendaPx(): number {
+    const { desde, hasta } = this.rangoHorasAgenda();
+    return (hasta - desde) * this.pxPorHora;
+  }
+
+  etiquetaHora(h: number): string {
+    return `${String(h).padStart(2, '0')}:00`;
+  }
+
+  // Posición de cada bloque: arriba según la hora de inicio y alto según la duración. Si dos
+  // turnos de la misma columna se pisan, se reparten el ancho en carriles lado a lado.
+  bloquesColumnaAgenda(columnaId: number | null): { turno: Turno; top: number; alto: number; izquierda: number; ancho: number }[] {
+    const inicioRango = this.rangoHorasAgenda().desde * 60;
+    const bloques: { turno: Turno; ini: number; fin: number; carril: number; carriles: number }[] = [];
+    let grupo: typeof bloques = [];
+    let finesCarriles: number[] = [];
+    let finGrupo = -1;
+
+    const cerrarGrupo = () => {
+      for (const b of grupo) b.carriles = finesCarriles.length;
+      grupo = [];
+      finesCarriles = [];
+    };
+
+    for (const t of this.turnosColumnaAgenda(columnaId)) {
+      const ini = this.minutosDelDia(t.fechaHoraInicio);
+      const fin = this.minutoFin(t);
+      if (ini >= finGrupo) cerrarGrupo();
+      let carril = finesCarriles.findIndex(f => f <= ini);
+      if (carril === -1) {
+        carril = finesCarriles.length;
+        finesCarriles.push(fin);
+      } else {
+        finesCarriles[carril] = fin;
+      }
+      const b = { turno: t, ini, fin, carril, carriles: 1 };
+      bloques.push(b);
+      grupo.push(b);
+      finGrupo = Math.max(finGrupo, fin);
+    }
+    cerrarGrupo();
+
+    return bloques.map(b => ({
+      turno: b.turno,
+      top: (b.ini - inicioRango) / 60 * this.pxPorHora,
+      alto: Math.max(24, (b.fin - b.ini) / 60 * this.pxPorHora - 2),
+      izquierda: (b.carril / b.carriles) * 100,
+      ancho: 100 / b.carriles
+    }));
+  }
+
+  // Línea naranja "ahora": solo si el día elegido es hoy y la hora cae dentro del rango.
+  ahoraTopPx(): number | null {
+    if (!this.esHoyAgenda()) return null;
+    const { desde, hasta } = this.rangoHorasAgenda();
+    const minutos = this.ahora().getHours() * 60 + this.ahora().getMinutes();
+    if (minutos < desde * 60 || minutos > hasta * 60) return null;
+    return (minutos - desde * 60) / 60 * this.pxPorHora;
+  }
+
+  // Tira de 7 días (lunes a domingo) de la semana del día elegido, con la cantidad de turnos
+  // no cancelados de cada día.
+  semanaAgenda(): { fecha: Date; nombre: string; cantidad: number }[] {
+    const base = this.agendaDia();
+    const lunes = new Date(base.getFullYear(), base.getMonth(), base.getDate() - ((base.getDay() + 6) % 7));
+    return Array.from({ length: 7 }, (_, i) => {
+      const fecha = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i);
+      return {
+        fecha,
+        nombre: this.dias[fecha.getDay()].substring(0, 3),
+        cantidad: this.turnosDelDia(fecha).filter(t => t.estadoReserva !== 3).length
+      };
+    });
+  }
+
+  irADia(d: Date): void {
+    this.agendaDia.set(this.soloFecha(d));
+    this.turnoSeleccionadoId.set(null);
   }
 
   agendaDiaAnterior(): void {
     const d = new Date(this.agendaDia());
     d.setDate(d.getDate() - 1);
-    this.agendaDia.set(d);
+    this.irADia(d);
   }
 
   agendaDiaSiguiente(): void {
     const d = new Date(this.agendaDia());
     d.setDate(d.getDate() + 1);
-    this.agendaDia.set(d);
+    this.irADia(d);
   }
 
   agendaHoy(): void {
-    this.agendaDia.set(this.soloFecha(new Date()));
+    this.irADia(new Date());
   }
 
   etiquetaDiaAgenda(): string {
-    const d = this.agendaDia();
-    return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const texto = this.agendaDia().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+  }
+
+  seleccionarTurno(t: Turno): void {
+    this.turnoSeleccionadoId.set(this.turnoSeleccionadoId() === t.id ? null : t.id);
+  }
+
+  nombreServicio(servicioId: number | null): string {
+    return this.servicios().find(s => s.id === servicioId)?.nombre ?? '';
+  }
+
+  nombreProfesional(profesionalId: number | null): string {
+    return this.profesionales().find(p => p.id === profesionalId)?.nombre ?? 'Sin asignar';
   }
 
   // --- Carga manual de turno presencial ---
@@ -238,6 +389,10 @@ export class Panel {
     this.perfilDatosBancarios = this.sesion.datosBancarios;
 
     this.cargarTodo();
+
+    // Mueve la línea "ahora" del calendario una vez por minuto.
+    const reloj = setInterval(() => this.ahora.set(new Date()), 60_000);
+    inject(DestroyRef).onDestroy(() => clearInterval(reloj));
 
     // Permite entrar directo a /panel?tab=ganancias, ?tab=whatsapp o ?tab=plan (ej. un link
     // guardado); si el comercio no es Premium, la pestaña igual se abre pero muestra el aviso.

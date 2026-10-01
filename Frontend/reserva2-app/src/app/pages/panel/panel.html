@@ -66,34 +66,106 @@
   <main class="panel-main">
 
     @if (tabActiva() === 'turnos') {
-      <div class="panel-card">
-        <div class="historial-header">
-          <h2>Turnos</h2>
-          <button class="btn-outline" (click)="vistaAgenda.set(!vistaAgenda())">
-            {{ vistaAgenda() ? 'Ver como lista' : 'Ver agenda' }}
-          </button>
+      <div class="panel-card turnos-card">
+        <div class="turnos-toolbar">
+          @if (vistaTurnos() === 'calendario') {
+            <div class="turnos-nav">
+              <button class="nav-flecha" (click)="agendaDiaAnterior()" aria-label="Día anterior">←</button>
+              <span class="turnos-dia">{{ etiquetaDiaAgenda() }}</span>
+              <button class="nav-flecha" (click)="agendaDiaSiguiente()" aria-label="Día siguiente">→</button>
+              <button class="btn-sec" [disabled]="esHoyAgenda()" (click)="agendaHoy()">Hoy</button>
+            </div>
+          } @else {
+            <h2>Todos los turnos</h2>
+          }
+          <div class="segmentado">
+            <button [class.active]="vistaTurnos() === 'calendario'" (click)="vistaTurnos.set('calendario')">Calendario</button>
+            <button [class.active]="vistaTurnos() === 'lista'" (click)="vistaTurnos.set('lista')">Lista</button>
+          </div>
         </div>
 
-        @if (vistaAgenda()) {
-          <div class="agenda-nav">
-            <button class="mini" (click)="agendaDiaAnterior()">← Día anterior</button>
-            <span class="agenda-rango">{{ etiquetaDiaAgenda() }}</span>
-            <button class="mini" (click)="agendaHoy()">Hoy</button>
-            <button class="mini" (click)="agendaDiaSiguiente()">Día siguiente →</button>
+        @if (vistaTurnos() === 'calendario') {
+          <div class="tira-semana">
+            @for (d of semanaAgenda(); track d.fecha.getTime()) {
+              <button class="tira-dia" [class.active]="mismoDia(d.fecha, agendaDia())" [class.hoy]="mismoDia(d.fecha, ahora())" (click)="irADia(d.fecha)">
+                <span class="tira-dia-nombre">{{ d.nombre }}</span>
+                <span class="tira-dia-num">{{ d.fecha.getDate() }}</span>
+                <span class="tira-dia-cant">{{ d.cantidad }} turno{{ d.cantidad === 1 ? '' : 's' }}</span>
+              </button>
+            }
           </div>
-          <div class="agenda-grilla-profesionales" [style.grid-template-columns]="'repeat(' + columnasAgenda().length + ', minmax(180px, 1fr))'">
-            @for (col of columnasAgenda(); track col.id) {
-              <div class="agenda-dia">
-                <div class="agenda-dia-header">{{ col.nombre }}</div>
-                @if (turnosColumnaAgenda(col.id).length === 0) {
-                  <p class="agenda-vacio">Sin turnos</p>
-                } @else {
-                  @for (t of turnosColumnaAgenda(col.id); track t.id) {
-                    <div class="agenda-turno" [class]="'estado-' + t.estadoReserva">
-                      <div class="agenda-turno-hora">{{ t.fechaHoraInicio | date:'HH:mm' }}</div>
-                      <div class="agenda-turno-cliente">{{ t.clienteNombre }}</div>
-                    </div>
+
+          @if (turnosDelDia(agendaDia()).length === 0) {
+            <p class="empty calendario-vacio">No hay turnos para este día.</p>
+          }
+
+          <div class="calendario-layout" [class.con-detalle]="turnoSeleccionado()">
+            <div class="calendario-scroll">
+              <div class="calendario" [style.grid-template-columns]="'56px repeat(' + columnasAgenda().length + ', minmax(160px, 1fr))'">
+                <div class="cal-esquina"></div>
+                @for (col of columnasAgenda(); track col.id) {
+                  <div class="cal-col-header">
+                    <span>{{ col.nombre }}</span>
+                    <span class="cal-col-cant">{{ turnosColumnaAgenda(col.id).length }}</span>
+                  </div>
+                }
+
+                <div class="cal-horas" [style.height.px]="alturaAgendaPx()">
+                  @for (h of horasAgenda(); track h; let i = $index) {
+                    <div class="cal-hora" [style.top.px]="i * pxPorHora">{{ etiquetaHora(h) }}</div>
                   }
+                </div>
+                @for (col of columnasAgenda(); track col.id) {
+                  <div class="cal-col" [style.height.px]="alturaAgendaPx()">
+                    @for (b of bloquesColumnaAgenda(col.id); track b.turno.id) {
+                      <button class="cal-turno" [class]="'estado-' + b.turno.estadoReserva"
+                              [class.seleccionado]="turnoSeleccionadoId() === b.turno.id"
+                              [style.top.px]="b.top" [style.height.px]="b.alto"
+                              [style.left]="'calc(' + b.izquierda + '% + 3px)'" [style.width]="'calc(' + b.ancho + '% - 6px)'"
+                              (click)="seleccionarTurno(b.turno)">
+                        <span class="cal-turno-hora">{{ b.turno.fechaHoraInicio | date:'HH:mm' }}</span>
+                        <span class="cal-turno-cliente">{{ b.turno.clienteNombre }}</span>
+                        @if (nombreServicio(b.turno.servicioId)) {
+                          <span class="cal-turno-servicio">{{ nombreServicio(b.turno.servicioId) }}</span>
+                        }
+                      </button>
+                    }
+                    @if (ahoraTopPx() !== null) {
+                      <div class="cal-ahora" [style.top.px]="ahoraTopPx()"></div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+
+            @if (turnoSeleccionado(); as t) {
+              <div class="turno-detalle">
+                <div class="turno-detalle-top">
+                  <span class="badge" [class]="'estado-' + t.estadoReserva">{{ etiquetaEstado(t.estadoReserva) }}</span>
+                  <button class="turno-detalle-cerrar" (click)="turnoSeleccionadoId.set(null)" aria-label="Cerrar">✕</button>
+                </div>
+                <h3>{{ t.clienteNombre }}</h3>
+                <dl>
+                  <dt>Horario</dt>
+                  <dd>{{ t.fechaHoraInicio | date:'HH:mm' }} – {{ t.fechaHoraFin | date:'HH:mm' }}</dd>
+                  @if (nombreServicio(t.servicioId)) {
+                    <dt>Servicio</dt>
+                    <dd>{{ nombreServicio(t.servicioId) }}</dd>
+                  }
+                  @if (profesionales().length > 0) {
+                    <dt>Profesional</dt>
+                    <dd>{{ nombreProfesional(t.profesionalId) }}</dd>
+                  }
+                  @if (t.clienteWhatsApp) {
+                    <dt>WhatsApp</dt>
+                    <dd>{{ t.clienteWhatsApp }}</dd>
+                  }
+                </dl>
+                @if (t.estadoReserva === 1) {
+                  <div class="turno-detalle-acciones">
+                    <button class="btn-ok" (click)="confirmar(t)">Confirmar</button>
+                    <button class="btn-peligro" (click)="cancelar(t)">Cancelar</button>
+                  </div>
                 }
               </div>
             }
@@ -101,7 +173,7 @@
         } @else if (turnos().length === 0) {
           <p class="empty">Todavía no tenés turnos reservados.</p>
         } @else {
-          <table class="tabla">
+          <table class="tabla tabla-turnos">
             <thead>
               <tr><th>Cliente</th><th>WhatsApp</th><th>Fecha</th><th>Estado</th><th></th></tr>
             </thead>
@@ -125,7 +197,7 @@
         }
       </div>
 
-      <div class="panel-card" style="margin-top:20px;">
+      <div class="panel-card turnos-card turno-manual-card">
         <h2>Cargar turno presencial</h2>
         <p class="sub-info">Para un cliente que te pidió el turno en persona o por teléfono. Queda confirmado directamente.</p>
 
