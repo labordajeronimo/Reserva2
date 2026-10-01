@@ -338,7 +338,7 @@
   width: 100%;
   padding: 11px 13px;
   border-radius: 10px;
-  border: 1px solid rgba(232, 236, 246, 0.16);
+  border: 1px solid rgba(232, 236, 246, 0.14);
   font-size: 0.9rem;
   background: #10172B;
   color: #E8ECF6;
@@ -754,6 +754,19 @@
 .anillo-numero { font-family: 'Sora', sans-serif; font-weight: 800; font-size: 2rem; color: #FFFFFF; line-height: 1; }
 .anillo.alerta .anillo-numero { color: #FCA5A5; }
 .anillo-etiqueta { color: #A6AFC6; font-size: 0.75rem; margin-top: 4px; }
+
+/* ----- Perfil ----- */
+.link-publico { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.link-publico-texto { min-width: 0; }
+.link-publico-url { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 1.15rem; color: #FB923C; margin: 4px 0 6px; overflow-wrap: anywhere; }
+.link-publico-ver { text-decoration: none; display: inline-flex; align-items: center; }
+.campos-2col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+.campo-ancho { grid-column: 1 / -1; }
+.perfil-logo-ayuda { margin: 6px 0 0; }
+.ok-msg-form { margin: 0 0 14px; }
+@media (max-width: 720px) {
+  .campos-2col { grid-template-columns: minmax(0, 1fr); }
+}
 
 @media (max-width: 720px) {
   .horario-fila { grid-template-columns: 1fr; }

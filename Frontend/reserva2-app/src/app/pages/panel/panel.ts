@@ -464,8 +464,12 @@ export class Panel {
     return linkWhatsApp(`Hola! Ya registré mi comercio en Reserva2 (${this.sesion.nombre} · ${this.sesion.aliasUrl}). ¿Podés activarme la cuenta?`);
   }
 
+  linkPublicoTexto(): string {
+    return `${window.location.host}/${this.sesion.aliasUrl}`;
+  }
+
   copiarLink(): void {
-    const url = `${window.location.host}/${this.sesion.aliasUrl}`;
+    const url = this.linkPublicoTexto();
     navigator.clipboard?.writeText(url).then(() => {
       this.linkCopiado.set(true);
       setTimeout(() => this.linkCopiado.set(false), 2000);

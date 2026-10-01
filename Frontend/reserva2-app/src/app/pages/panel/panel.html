@@ -598,7 +598,19 @@
     }
 
     @if (tabActiva() === 'perfil') {
-      <div class="panel-card">
+      <div class="panel-card turnos-card link-publico">
+        <div class="link-publico-texto">
+          <div class="kpi-etiqueta">Tu link público</div>
+          <div class="link-publico-url">{{ linkPublicoTexto() }}</div>
+          <div class="historial-cantidad">Compartilo en tu Instagram o por WhatsApp para que tus clientes reserven solos.</div>
+        </div>
+        <div class="acciones">
+          <a class="btn-sec link-publico-ver" [routerLink]="['/', sesion.aliasUrl]" target="_blank">Ver ↗</a>
+          <button class="btn-naranja btn-copiar" (click)="copiarLink()">{{ linkCopiado() ? '¡Copiado!' : 'Copiar link' }}</button>
+        </div>
+      </div>
+
+      <div class="panel-card turnos-card turno-manual-card">
         <h2>Perfil del negocio</h2>
 
         <div class="perfil-logo-row">
@@ -608,54 +620,58 @@
             <div class="perfil-logo-preview perfil-logo-vacio">Sin logo</div>
           }
           <div>
-            <label class="btn-outline perfil-logo-btn">
+            <label class="btn-sec perfil-logo-btn">
               {{ subiendoLogo() ? 'Subiendo...' : 'Cambiar logo' }}
               <input type="file" accept="image/png,image/jpeg,image/webp" hidden [disabled]="subiendoLogo()" (change)="subirLogo($event)">
             </label>
-            <p class="sub-info" style="margin:6px 0 0;">PNG, JPG o WEBP, hasta 2MB.</p>
+            <p class="sub-info perfil-logo-ayuda">PNG, JPG o WEBP, hasta 2MB.</p>
           </div>
         </div>
         @if (errorLogo()) { <div class="error-msg">{{ errorLogo() }}</div> }
 
-        <div class="field">
-          <label>Nombre del negocio</label>
-          <input type="text" [(ngModel)]="perfilNombre">
-        </div>
-        <div class="field">
-          <label>WhatsApp de notificaciones</label>
-          <input type="tel" [(ngModel)]="perfilTelefono">
-        </div>
-        <div class="field">
-          <label>Alias o CBU para la seña</label>
-          <input type="text" [(ngModel)]="perfilDatosBancarios">
+        <div class="campos-2col">
+          <div class="field">
+            <label>Nombre del negocio</label>
+            <input type="text" [(ngModel)]="perfilNombre">
+          </div>
+          <div class="field">
+            <label>WhatsApp de notificaciones</label>
+            <input type="tel" [(ngModel)]="perfilTelefono">
+          </div>
+          <div class="field">
+            <label>Alias o CBU para la seña</label>
+            <input type="text" [(ngModel)]="perfilDatosBancarios">
+          </div>
         </div>
 
         @if (errorPerfil()) { <div class="error-msg">{{ errorPerfil() }}</div> }
-        @if (perfilGuardadoOk()) { <div class="ok-msg">¡Listo! Tu perfil se actualizó.</div> }
+        @if (perfilGuardadoOk()) { <div class="ok-msg ok-msg-form">¡Listo! Tu perfil se actualizó.</div> }
 
         <button class="btn-naranja" [disabled]="guardandoPerfil()" (click)="guardarPerfil()">
           {{ guardandoPerfil() ? 'Guardando...' : 'Guardar cambios' }}
         </button>
       </div>
 
-      <div class="panel-card" style="margin-top:20px;">
+      <div class="panel-card turnos-card turno-manual-card">
         <h2>Cambiar contraseña</h2>
 
-        <div class="field">
-          <label>Contraseña actual</label>
-          <input type="password" [(ngModel)]="passwordActual">
-        </div>
-        <div class="field">
-          <label>Contraseña nueva</label>
-          <input type="password" [(ngModel)]="passwordNueva">
-        </div>
-        <div class="field">
-          <label>Repetí la contraseña nueva</label>
-          <input type="password" [(ngModel)]="passwordNuevaRepetida">
+        <div class="campos-2col">
+          <div class="field campo-ancho">
+            <label>Contraseña actual</label>
+            <input type="password" [(ngModel)]="passwordActual">
+          </div>
+          <div class="field">
+            <label>Contraseña nueva</label>
+            <input type="password" [(ngModel)]="passwordNueva">
+          </div>
+          <div class="field">
+            <label>Repetí la contraseña nueva</label>
+            <input type="password" [(ngModel)]="passwordNuevaRepetida">
+          </div>
         </div>
 
         @if (errorPassword()) { <div class="error-msg">{{ errorPassword() }}</div> }
-        @if (passwordCambiadaOk()) { <div class="ok-msg">¡Listo! Tu contraseña se actualizó.</div> }
+        @if (passwordCambiadaOk()) { <div class="ok-msg ok-msg-form">¡Listo! Tu contraseña se actualizó.</div> }
 
         <button class="btn-naranja" [disabled]="cambiandoPassword()" (click)="cambiarPassword()">
           {{ cambiandoPassword() ? 'Guardando...' : 'Cambiar contraseña' }}
