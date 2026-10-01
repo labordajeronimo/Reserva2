@@ -748,6 +748,43 @@ app.MapGet("/api/admin/dashboard", async (AppDbContext context) =>
         porPlan, ingresoMensualEstimado, turnosDelMes, altasPorMes));
 }).RequireAuthorization("SuperAdmin");
 
+// Datos extra por comercio para la tabla del Super Admin (orden, filtros y alertas): fecha de
+// alta, si nunca se activó (pendiente) y turnos del mes actual y del anterior. Va aparte de
+// GET /api/comercios para no tocar ComercioDto, que también devuelven las acciones (PATCH).
+// "Turno" = cualquier estado excepto Cancelado, igual que turnosDelMes del dashboard.
+app.MapGet("/api/admin/comercios/estadisticas", async (AppDbContext context) =>
+{
+    var ahora = AhoraArgentina();
+    var inicioMes = new DateTime(ahora.Year, ahora.Month, 1);
+    var inicioMesAnterior = inicioMes.AddMonths(-1);
+    var inicioMesSiguiente = inicioMes.AddMonths(1);
+
+    var turnosPorComercio = await context.Turnos
+        .Where(t => t.EstadoReserva != 3 && t.FechaHoraInicio >= inicioMesAnterior && t.FechaHoraInicio < inicioMesSiguiente)
+        .GroupBy(t => t.ComercioId)
+        .Select(g => new
+        {
+            ComercioId = g.Key,
+            DelMes = g.Count(t => t.FechaHoraInicio >= inicioMes),
+            DelMesAnterior = g.Count(t => t.FechaHoraInicio < inicioMes)
+        })
+        .ToDictionaryAsync(x => x.ComercioId);
+
+    var comercios = await context.Comercios
+        .Select(c => new { c.Id, c.FechaAlta, c.FechaActivacion, c.Activo })
+        .ToListAsync();
+
+    var resultado = comercios.Select(c =>
+    {
+        turnosPorComercio.TryGetValue(c.Id, out var t);
+        return new ComercioEstadisticaDto(
+            c.Id, c.FechaAlta, !c.Activo && c.FechaActivacion is null,
+            t?.DelMes ?? 0, t?.DelMesAnterior ?? 0);
+    }).ToList();
+
+    return Results.Ok(resultado);
+}).RequireAuthorization("SuperAdmin");
+
 // Ficha de detalle de un comercio puntual para el Super Admin (distinto de /historial y
 // /ganancias, que son AdminCliente-only y solo dejan ver el propio comercio logueado).
 app.MapGet("/api/admin/comercios/{id:int}/detalle", async (AppDbContext context, int id) =>
@@ -1935,6 +1972,7 @@ record DashboardDto(
     int TotalComercios, int ComerciosActivos, int ComerciosInactivos, int ComerciosPendientes,
     List<PlanCantidadDto> PorPlan, decimal IngresoMensualEstimado, int TurnosDelMes, List<AltaMesDto> AltasPorMes);
 record TurnosPorSemanaDto(DateOnly Desde, DateOnly Hasta, int Cantidad);
+record ComercioEstadisticaDto(int Id, DateTime FechaAlta, bool Pendiente, int TurnosDelMes, int TurnosMesAnterior);
 record ComercioDetalleDto(
     int Id, string Nombre, string AliasUrl, string TipoPlantilla, string PlanActual, string CicloFacturacion,
     decimal? MontoMensualAcordado, DateTime FechaAlta, DateTime? FechaProximoPago, bool Activo,
