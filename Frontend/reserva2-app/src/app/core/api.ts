@@ -137,6 +137,26 @@ export interface ClienteReactivar {
   ultimaVisita: string;
 }
 
+// Resumen de la pestaña Inicio (GET /comercios/{id}/resumen). "Turnos" son los que ocupan
+// horario: confirmados o pre-reservas vigentes, igual que en la grilla pública.
+export interface Resumen {
+  desde: string;
+  hasta: string;
+  turnos: number;
+  turnosPeriodoAnterior: number;
+  ingresosEstimados: number;
+  ingresosPeriodoAnterior: number;
+  minutosReservados: number;
+  minutosDisponibles: number;
+  turnosPorDia: { fecha: string; cantidad: number }[];
+  horariosMasPedidos: { diaSemana: number; hora: number; cantidad: number }[];
+  serviciosMasReservados: { servicioId: number | null; nombreServicio: string; cantidad: number; ingresos: number }[];
+  reservasPorHoraDeCreacion: { hora: number; cantidad: number }[];
+  reservasOnline: number;
+  reservasFueraDeHorario: number;
+  ocupacionPorProfesional: { profesionalId: number; nombre: string; minutosReservados: number; minutosDisponibles: number }[];
+}
+
 export interface Ganancias {
   porProfesional: GananciaPorProfesional[];
   porSucursal: GananciaPorSucursal[];
@@ -512,6 +532,10 @@ export class Api {
   // --- Ganancias (exclusivo Premium) ---
   getGanancias(comercioId: number, desde: string, hasta: string): Observable<Ganancias> {
     return this.http.get<Ganancias>(`${API_BASE}/comercios/${comercioId}/ganancias`, { params: { desde, hasta } });
+  }
+
+  getResumen(comercioId: number, desde: string, hasta: string): Observable<Resumen> {
+    return this.http.get<Resumen>(`${API_BASE}/comercios/${comercioId}/resumen`, { params: { desde, hasta } });
   }
 
   // --- WhatsApp (placeholder, exclusivo Premium) ---

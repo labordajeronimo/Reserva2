@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
-import { Api, Turno, Servicio, Horario, Profesional, Sucursal, LoginResponse, Historial, Ganancias, WhatsAppConfig, urlArchivo } from '../../core/api';
+import { Api, Turno, Servicio, Horario, Profesional, Sucursal, LoginResponse, Historial, Ganancias, WhatsAppConfig, Resumen, urlArchivo } from '../../core/api';
 import { Session } from '../../core/session';
 import { linkWhatsApp } from '../../core/whatsapp';
 import { PlanSelector } from '../../shared/plan-selector/plan-selector';
@@ -295,9 +295,78 @@ export class Panel {
     return this.profesionales().find(p => p.id === profesionalId)?.nombre ?? 'Sin asignar';
   }
 
-  // --- Inicio: solo bloques que salen de los turnos ya cargados (activos). Las estadísticas
-  // por rango (ocupación, turnos por día, horarios más pedidos, etc.) necesitan un endpoint
-  // que todavía no existe, así que por ahora no se muestran. ---
+  // --- Inicio: la agenda de hoy y los pendientes salen de los turnos ya cargados; las
+  // estadísticas por rango vienen de GET /comercios/{id}/resumen. Si esa llamada falla, los
+  // bloques de estadísticas simplemente no se muestran. ---
+  resumen = signal<Resumen | null>(null);
+  cargandoResumen = signal(false);
+  rangoResumen = signal<7 | 30 | 90>(30);
+  readonly opcionesRangoResumen: (7 | 30 | 90)[] = [7, 30, 90];
+
+  cargarResumen(): void {
+    const hoy = new Date();
+    const desde = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - (this.rangoResumen() - 1));
+    this.cargandoResumen.set(true);
+    this.api.getResumen(this.sesion.comercioId, this.formatearFecha(desde), this.formatearFecha(hoy)).subscribe({
+      next: r => {
+        this.resumen.set(r);
+        this.cargandoResumen.set(false);
+      },
+      error: () => {
+        this.resumen.set(null);
+        this.cargandoResumen.set(false);
+      }
+    });
+  }
+
+  cambiarRangoResumen(dias: 7 | 30 | 90): void {
+    if (this.rangoResumen() === dias) return;
+    this.rangoResumen.set(dias);
+    this.cargarResumen();
+  }
+
+  // Variación porcentual contra el período anterior del mismo largo; null si antes no hubo
+  // nada (no tiene sentido un "+∞%").
+  variacion(actual: number, anterior: number): number | null {
+    if (anterior <= 0) return null;
+    return Math.round(((actual - anterior) / anterior) * 100);
+  }
+
+  textoVariacion(actual: number, anterior: number): string {
+    const v = this.variacion(actual, anterior) ?? 0;
+    return `${v > 0 ? '+' : ''}${v}% vs. los ${this.rangoResumen()} días anteriores`;
+  }
+
+  porcentaje(parte: number, total: number): number {
+    return total > 0 ? Math.min(100, Math.round((parte / total) * 100)) : 0;
+  }
+
+  horasTexto(minutos: number): string {
+    const horas = minutos / 60;
+    return `${Number.isInteger(horas) ? horas : horas.toFixed(1)} h`;
+  }
+
+  etiquetaFechaCorta(fecha: string): string {
+    const [, m, dia] = fecha.split('-');
+    return `${dia}/${m}`;
+  }
+
+  // Heatmap: lunes a domingo × las horas donde hubo turnos (como mínimo de 9 a 20).
+  horasHeatmap(r: Resumen): number[] {
+    const horas = r.horariosMasPedidos.map(c => c.hora);
+    const desde = Math.min(9, ...horas);
+    const hasta = Math.max(20, ...horas);
+    return Array.from({ length: hasta - desde + 1 }, (_, i) => desde + i);
+  }
+
+  cantidadHeatmap(r: Resumen, diaSemana: number, hora: number): number {
+    return r.horariosMasPedidos.find(c => c.diaSemana === diaSemana && c.hora === hora)?.cantidad ?? 0;
+  }
+
+  maxHeatmap(r: Resumen): number {
+    return Math.max(1, ...r.horariosMasPedidos.map(c => c.cantidad));
+  }
+
   turnosDeHoy(): Turno[] {
     return this.turnosDelDia(this.ahora()).filter(t => t.estadoReserva !== 3);
   }
@@ -670,6 +739,7 @@ export class Panel {
     this.cargarProfesionales();
     this.cargarSucursales();
     this.cargarHistorial();
+    this.cargarResumen();
   }
 
   private mesActual(): { anio: number; mes: number } {

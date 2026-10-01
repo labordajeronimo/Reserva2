@@ -134,8 +134,147 @@
           }
         </div>
       </div>
-    }
 
+      @if (resumen(); as r) {
+        <div class="inicio-stats-header">
+          <h2>Cómo viene tu negocio</h2>
+          <div class="segmentado">
+            @for (dias of opcionesRangoResumen; track dias) {
+              <button [class.active]="rangoResumen() === dias" [disabled]="cargandoResumen()" (click)="cambiarRangoResumen(dias)">{{ dias }} días</button>
+            }
+          </div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="kpi-etiqueta">Turnos</div>
+            <div class="kpi-valor">{{ r.turnos }}</div>
+            @if (variacion(r.turnos, r.turnosPeriodoAnterior) !== null) {
+              <div class="kpi-variacion" [class.sube]="variacion(r.turnos, r.turnosPeriodoAnterior)! > 0" [class.baja]="variacion(r.turnos, r.turnosPeriodoAnterior)! < 0">{{ textoVariacion(r.turnos, r.turnosPeriodoAnterior) }}</div>
+            }
+          </div>
+          <div class="kpi">
+            <div class="kpi-etiqueta">Ingresos estimados</div>
+            <div class="kpi-valor">{{ r.ingresosEstimados | currency:'ARS':'$':'1.0-0' }}</div>
+            @if (variacion(r.ingresosEstimados, r.ingresosPeriodoAnterior) !== null) {
+              <div class="kpi-variacion" [class.sube]="variacion(r.ingresosEstimados, r.ingresosPeriodoAnterior)! > 0" [class.baja]="variacion(r.ingresosEstimados, r.ingresosPeriodoAnterior)! < 0">{{ textoVariacion(r.ingresosEstimados, r.ingresosPeriodoAnterior) }}</div>
+            }
+          </div>
+          @if (r.minutosDisponibles > 0) {
+            <div class="kpi">
+              <div class="kpi-etiqueta">Ocupación</div>
+              <div class="kpi-valor">{{ porcentaje(r.minutosReservados, r.minutosDisponibles) }}%</div>
+              <div class="kpi-variacion">{{ horasTexto(r.minutosReservados) }} reservadas de {{ horasTexto(r.minutosDisponibles) }} de atención</div>
+            </div>
+          }
+        </div>
+
+        <div class="panel-card turnos-card bloque-inicio">
+          <h2>Turnos por día</h2>
+          <div class="barras-dias">
+            @for (d of r.turnosPorDia; track d.fecha) {
+              <div class="barra-dia" [class.vacia]="d.cantidad === 0"
+                   [style.height.%]="d.cantidad === 0 ? 2 : alturaBarraFacturacion(d.cantidad, r.turnosPorDia, 'cantidad')"
+                   [title]="etiquetaFechaCorta(d.fecha) + ': ' + d.cantidad + ' turno' + (d.cantidad === 1 ? '' : 's')"></div>
+            }
+          </div>
+          <div class="barras-dias-ejes">
+            <span>{{ etiquetaFechaCorta(r.desde) }}</span>
+            <span>{{ etiquetaFechaCorta(r.hasta) }}</span>
+          </div>
+        </div>
+
+        <div class="inicio-grid">
+          <div class="panel-card turnos-card">
+            <h2>Horarios más pedidos</h2>
+            @if (r.horariosMasPedidos.length === 0) {
+              <p class="empty">Todavía no hay turnos en este período.</p>
+            } @else {
+              <div class="heatmap-scroll">
+                <div class="heatmap" [style.grid-template-columns]="'36px repeat(' + horasHeatmap(r).length + ', minmax(14px, 1fr))'">
+                  <span></span>
+                  @for (h of horasHeatmap(r); track h) {
+                    <span class="heatmap-etiqueta heatmap-hora">{{ h % 3 === 0 ? h : '' }}</span>
+                  }
+                  @for (dia of diasSemanaOrden; track dia) {
+                    <span class="heatmap-etiqueta">{{ dias[dia].substring(0, 3) }}</span>
+                    @for (h of horasHeatmap(r); track h) {
+                      <span class="heatmap-celda"
+                            [style.background]="cantidadHeatmap(r, dia, h) > 0 ? 'rgba(249, 115, 22, ' + (0.15 + 0.85 * cantidadHeatmap(r, dia, h) / maxHeatmap(r)) + ')' : null"
+                            [title]="dias[dia] + ' ' + h + 'h: ' + cantidadHeatmap(r, dia, h) + ' turnos'"></span>
+                    }
+                  }
+                </div>
+              </div>
+            }
+          </div>
+
+          <div class="panel-card turnos-card">
+            <h2>Servicios más reservados</h2>
+            @if (r.serviciosMasReservados.length === 0) {
+              <p class="empty">Todavía no hay turnos en este período.</p>
+            } @else {
+              <div class="ranking-lista">
+                @for (s of r.serviciosMasReservados; track s.servicioId) {
+                  <div class="ranking-item">
+                    <div class="ranking-header">
+                      <span>{{ s.nombreServicio }}<span class="ranking-sub">{{ s.ingresos | currency:'ARS':'$':'1.0-0' }}</span></span>
+                      <span>{{ s.cantidad }}</span>
+                    </div>
+                    <div class="ranking-barra-fondo">
+                      <div class="ranking-barra" [style.width.%]="alturaBarraFacturacion(s.cantidad, r.serviciosMasReservados, 'cantidad')"></div>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </div>
+
+        @if (r.reservasOnline > 0 || r.ocupacionPorProfesional.length > 0) {
+        <div class="inicio-grid">
+          @if (r.reservasOnline > 0) {
+            <div class="panel-card turnos-card">
+              <h2>¿A qué hora reservan tus clientes?</h2>
+              <div class="barras-dias">
+                @for (h of r.reservasPorHoraDeCreacion; track h.hora) {
+                  <div class="barra-dia" [class.vacia]="h.cantidad === 0"
+                       [style.height.%]="h.cantidad === 0 ? 2 : alturaBarraFacturacion(h.cantidad, r.reservasPorHoraDeCreacion, 'cantidad')"
+                       [title]="h.hora + 'h: ' + h.cantidad + ' reserva' + (h.cantidad === 1 ? '' : 's')"></div>
+                }
+              </div>
+              <div class="barras-dias-ejes"><span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span></div>
+              @if (horarios().length > 0) {
+              <p class="inicio-nota">
+                <strong>{{ porcentaje(r.reservasFueraDeHorario, r.reservasOnline) }}%</strong> de las reservas online
+                ({{ r.reservasFueraDeHorario }} de {{ r.reservasOnline }}) llegaron cuando no estabas atendiendo.
+              </p>
+              }
+            </div>
+          }
+
+          @if (r.ocupacionPorProfesional.length > 0) {
+            <div class="panel-card turnos-card">
+              <h2>Ocupación por profesional</h2>
+              <div class="ranking-lista">
+                @for (p of r.ocupacionPorProfesional; track p.profesionalId) {
+                  <div class="ranking-item">
+                    <div class="ranking-header">
+                      <span>{{ p.nombre }}<span class="ranking-sub">{{ horasTexto(p.minutosReservados) }} de {{ horasTexto(p.minutosDisponibles) }}</span></span>
+                      <span>{{ p.minutosDisponibles > 0 ? porcentaje(p.minutosReservados, p.minutosDisponibles) + '%' : 'Sin horario' }}</span>
+                    </div>
+                    <div class="ranking-barra-fondo">
+                      <div class="ranking-barra" [style.width.%]="porcentaje(p.minutosReservados, p.minutosDisponibles)"></div>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+        }
+      }
+    }
 
     @if (tabActiva() === 'turnos') {
       <div class="panel-card turnos-card">
