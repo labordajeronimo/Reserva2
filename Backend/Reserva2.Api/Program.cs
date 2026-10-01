@@ -501,6 +501,9 @@ app.MapPost("/api/auth/login", async (AppDbContext context, LoginRequest req) =>
     if (comercio is null || !VerifyPassword(req.Password, comercio.PasswordHash))
         return Results.Unauthorized();
 
+    comercio.UltimoAcceso = DateTime.UtcNow;
+    await context.SaveChangesAsync();
+
     return Results.Ok(new LoginResponse(comercio.Id, comercio.Nombre, comercio.AliasUrl, GenerarToken("AdminCliente", comercio.Id), comercio.PlanActual, comercio.CicloFacturacion,
             comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.LogoUrl, comercio.FechaProximoPago, comercio.Activo));
 }).RequireRateLimiting("login");
@@ -594,6 +597,8 @@ app.MapPatch("/api/comercios/{id:int}/estado", async (AppDbContext context, int 
     var comercio = await context.Comercios.FindAsync(id);
     if (comercio is null) return Results.NotFound();
 
+    if (comercio.Activo && !req.Activo) comercio.FechaBaja = AhoraArgentina();
+    if (req.Activo) comercio.FechaBaja = null;
     comercio.Activo = req.Activo;
     if (req.Activo) comercio.FechaActivacion ??= AhoraArgentina();
     await context.SaveChangesAsync();
@@ -771,7 +776,7 @@ app.MapGet("/api/admin/comercios/estadisticas", async (AppDbContext context) =>
         .ToDictionaryAsync(x => x.ComercioId);
 
     var comercios = await context.Comercios
-        .Select(c => new { c.Id, c.FechaAlta, c.FechaActivacion, c.Activo })
+        .Select(c => new { c.Id, c.FechaAlta, c.FechaActivacion, c.Activo, c.UltimoAcceso })
         .ToListAsync();
 
     var resultado = comercios.Select(c =>
@@ -779,10 +784,109 @@ app.MapGet("/api/admin/comercios/estadisticas", async (AppDbContext context) =>
         turnosPorComercio.TryGetValue(c.Id, out var t);
         return new ComercioEstadisticaDto(
             c.Id, c.FechaAlta, !c.Activo && c.FechaActivacion is null,
-            t?.DelMes ?? 0, t?.DelMesAnterior ?? 0);
+            t?.DelMes ?? 0, t?.DelMesAnterior ?? 0,
+            c.UltimoAcceso is null ? null : DateTime.SpecifyKind(c.UltimoAcceso.Value, DateTimeKind.Utc));
     }).ToList();
 
     return Results.Ok(resultado);
+}).RequireAuthorization("SuperAdmin");
+
+// Resumen del Super Admin (Etapa B): MRR con historial, turnos y facturación de los
+// locales del mes vs. el anterior, turnos por día de los últimos 30 días, altas y bajas por
+// mes y comercios por rubro. Los conteos que dependen de comercios (activos, pagando,
+// alertas, salud) se calculan en el frontend con /api/comercios y /estadisticas.
+app.MapGet("/api/admin/resumen", async (AppDbContext context) =>
+{
+    var ahora = AhoraArgentina();
+    var hoy = DateOnly.FromDateTime(ahora);
+    var inicioMes = new DateTime(ahora.Year, ahora.Month, 1);
+    var inicioMesAnterior = inicioMes.AddMonths(-1);
+
+    var comercios = await context.Comercios
+        .Select(c => new { c.Activo, c.MontoMensualAcordado, c.FechaAlta, c.FechaBaja, c.TipoPlantilla })
+        .ToListAsync();
+
+    // MRR: mismo criterio que el ingreso mensual estimado del dashboard. Se guarda la foto
+    // del mes en curso para poder comparar el mes que viene.
+    var mrrActual = comercios.Where(c => c.Activo).Sum(c => c.MontoMensualAcordado ?? 0);
+    var snapshot = await context.MrrSnapshots.FirstOrDefaultAsync(m => m.Anio == ahora.Year && m.Mes == ahora.Month);
+    if (snapshot is null)
+    {
+        context.MrrSnapshots.Add(new MrrSnapshot { Anio = ahora.Year, Mes = ahora.Month, Monto = mrrActual });
+    }
+    else
+    {
+        snapshot.Monto = mrrActual;
+        snapshot.FechaActualizacion = DateTime.UtcNow;
+    }
+    try
+    {
+        await context.SaveChangesAsync();
+    }
+    catch (DbUpdateException)
+    {
+        // Dos consultas simultáneas pueden intentar crear la foto del mes a la vez; el índice
+        // único deja pasar una sola. La foto es de mejor esfuerzo: el resumen sigue igual.
+        context.ChangeTracker.Clear();
+    }
+
+    var snapshots = await context.MrrSnapshots
+        .OrderByDescending(m => m.Anio).ThenByDescending(m => m.Mes)
+        .Take(6)
+        .ToListAsync();
+    var mrrMesAnterior = snapshots.FirstOrDefault(m => m.Anio == inicioMesAnterior.Year && m.Mes == inicioMesAnterior.Month)?.Monto;
+    var mrrHistorico = snapshots.OrderBy(m => m.Anio).ThenBy(m => m.Mes).Select(m => new MrrMesDto(m.Anio, m.Mes, m.Monto)).ToList();
+
+    // Turnos (sin cancelados) del mes y del anterior, toda la plataforma.
+    var turnosDelMes = await context.Turnos.CountAsync(t => t.EstadoReserva != 3 && t.FechaHoraInicio >= inicioMes && t.FechaHoraInicio < inicioMes.AddMonths(1));
+    var turnosMesAnterior = await context.Turnos.CountAsync(t => t.EstadoReserva != 3 && t.FechaHoraInicio >= inicioMesAnterior && t.FechaHoraInicio < inicioMes);
+
+    // Facturación de los locales: misma lógica que Ganancias (turnos confirmados, monto
+    // cobrado), solo los ya realizados (inicio anterior a ahora).
+    var facturacionMes = await context.Turnos
+        .Where(t => t.EstadoReserva == 2 && t.FechaHoraInicio >= inicioMes && t.FechaHoraInicio <= ahora)
+        .SumAsync(t => t.MontoCobrado ?? 0);
+    var facturacionMesAnterior = await context.Turnos
+        .Where(t => t.EstadoReserva == 2 && t.FechaHoraInicio >= inicioMesAnterior && t.FechaHoraInicio < inicioMes)
+        .SumAsync(t => t.MontoCobrado ?? 0);
+
+    // Turnos por día de los últimos 30 días (incluye hoy), toda la plataforma.
+    var desde30 = hoy.AddDays(-29);
+    var inicio30 = desde30.ToDateTime(TimeOnly.MinValue);
+    var fin30 = hoy.ToDateTime(TimeOnly.MaxValue);
+    var fechasTurnos = await context.Turnos
+        .Where(t => t.EstadoReserva != 3 && t.FechaHoraInicio >= inicio30 && t.FechaHoraInicio <= fin30)
+        .Select(t => t.FechaHoraInicio)
+        .ToListAsync();
+    var porFecha = fechasTurnos.GroupBy(f => DateOnly.FromDateTime(f)).ToDictionary(g => g.Key, g => g.Count());
+    var turnosPorDia = new List<TurnosDiaDto>();
+    for (var d = desde30; d <= hoy; d = d.AddDays(1))
+        turnosPorDia.Add(new TurnosDiaDto(d, porFecha.GetValueOrDefault(d)));
+
+    // Altas y bajas de los últimos 6 meses. Baja = comercio hoy pausado cuya última pausa
+    // cayó en ese mes (los eliminados ya no están en la base).
+    var altasYBajas = new List<AltasBajasMesDto>();
+    for (var i = 5; i >= 0; i--)
+    {
+        var mesInicio = inicioMes.AddMonths(-i);
+        var mesFin = mesInicio.AddMonths(1);
+        altasYBajas.Add(new AltasBajasMesDto(
+            mesInicio.Year, mesInicio.Month,
+            comercios.Count(c => c.FechaAlta >= mesInicio && c.FechaAlta < mesFin),
+            comercios.Count(c => !c.Activo && c.FechaBaja >= mesInicio && c.FechaBaja < mesFin)));
+    }
+
+    var porRubro = comercios
+        .GroupBy(c => string.IsNullOrWhiteSpace(c.TipoPlantilla) ? "Sin rubro" : c.TipoPlantilla)
+        .Select(g => new RubroCantidadDto(g.Key, g.Count()))
+        .OrderByDescending(x => x.Cantidad)
+        .ToList();
+
+    return Results.Ok(new SuperAdminResumenDto(
+        mrrActual, mrrMesAnterior, mrrHistorico,
+        turnosDelMes, turnosMesAnterior,
+        facturacionMes, facturacionMesAnterior,
+        turnosPorDia, altasYBajas, porRubro));
 }).RequireAuthorization("SuperAdmin");
 
 // Ficha de detalle de un comercio puntual para el Super Admin (distinto de /historial y
@@ -1972,7 +2076,15 @@ record DashboardDto(
     int TotalComercios, int ComerciosActivos, int ComerciosInactivos, int ComerciosPendientes,
     List<PlanCantidadDto> PorPlan, decimal IngresoMensualEstimado, int TurnosDelMes, List<AltaMesDto> AltasPorMes);
 record TurnosPorSemanaDto(DateOnly Desde, DateOnly Hasta, int Cantidad);
-record ComercioEstadisticaDto(int Id, DateTime FechaAlta, bool Pendiente, int TurnosDelMes, int TurnosMesAnterior);
+record ComercioEstadisticaDto(int Id, DateTime FechaAlta, bool Pendiente, int TurnosDelMes, int TurnosMesAnterior, DateTime? UltimoAcceso);
+record MrrMesDto(int Anio, int Mes, decimal Monto);
+record AltasBajasMesDto(int Anio, int Mes, int Altas, int Bajas);
+record RubroCantidadDto(string Rubro, int Cantidad);
+record SuperAdminResumenDto(
+    decimal MrrActual, decimal? MrrMesAnterior, List<MrrMesDto> MrrHistorico,
+    int TurnosDelMes, int TurnosMesAnterior,
+    decimal FacturacionLocalesMes, decimal FacturacionLocalesMesAnterior,
+    List<TurnosDiaDto> TurnosPorDia, List<AltasBajasMesDto> AltasYBajasPorMes, List<RubroCantidadDto> PorRubro);
 record ComercioDetalleDto(
     int Id, string Nombre, string AliasUrl, string TipoPlantilla, string PlanActual, string CicloFacturacion,
     decimal? MontoMensualAcordado, DateTime FechaAlta, DateTime? FechaProximoPago, bool Activo,

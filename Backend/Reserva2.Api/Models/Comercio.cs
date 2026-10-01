@@ -48,6 +48,15 @@ namespace Reserva2.Api.Models
         // haber estado activo" (Activo == false && FechaActivacion != null).
         public DateTime? FechaActivacion { get; set; }
 
+        // Último login del dueño al panel (UTC). Nulo si no entró desde que existe el campo.
+        // Lo usa el Super Admin para las alertas de "sin actividad" y la salud del comercio.
+        public DateTime? UltimoAcceso { get; set; }
+
+        // Cuándo se pausó por última vez (hora de Argentina, igual que FechaActivacion). Se
+        // borra si se vuelve a activar. Sirve para las "bajas por mes" del Super Admin; un
+        // comercio eliminado desaparece de la base y no cuenta como baja.
+        public DateTime? FechaBaja { get; set; }
+
         // Cantidad de profesionales y sucursales que el comercio declaró tener al
         // registrarse (no es lo mismo que la cantidad real cargada en Profesionales/
         // Sucursales, que puede cambiar después). Sirve para saber cuánto cobrarle sin
