@@ -233,40 +233,45 @@
     }
 
     @if (tabActiva() === 'historial') {
-      <div class="metricas metricas-historial">
-        <div class="metrica-card">
-          <div class="valor ok">{{ historial()?.totalHoy ?? 0 | currency:'ARS':'$' }}</div>
-          <div class="etiqueta">Hoy</div>
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="kpi-etiqueta">Cobrado hoy</div>
+          <div class="kpi-valor">{{ historial()?.totalHoy ?? 0 | currency:'ARS':'$':'1.0-0' }}</div>
         </div>
-        <div class="metrica-card">
-          <div class="valor ok">{{ historial()?.totalSemana ?? 0 | currency:'ARS':'$' }}</div>
-          <div class="etiqueta">Esta semana</div>
+        <div class="kpi">
+          <div class="kpi-etiqueta">Esta semana</div>
+          <div class="kpi-valor">{{ historial()?.totalSemana ?? 0 | currency:'ARS':'$':'1.0-0' }}</div>
         </div>
-        <div class="metrica-card">
-          <div class="valor ok">{{ historial()?.totalMes ?? 0 | currency:'ARS':'$' }}</div>
-          <div class="etiqueta">Este mes</div>
+        <div class="kpi">
+          <div class="kpi-etiqueta">Este mes</div>
+          <div class="kpi-valor">{{ historial()?.totalMes ?? 0 | currency:'ARS':'$':'1.0-0' }}</div>
         </div>
       </div>
 
-      <div class="panel-card">
-        <div class="historial-header">
-          <h2>Cortes realizados</h2>
-          <div class="mes-selector">
-            <button class="mini" (click)="mesHistorialAnterior()">←</button>
-            <span>{{ meses[mesHistorial().mes - 1] }} {{ mesHistorial().anio }}</span>
-            <button class="mini" (click)="mesHistorialSiguiente()">→</button>
+      <div class="panel-card turnos-card">
+        <div class="turnos-toolbar">
+          <div>
+            <h2>Cortes realizados</h2>
+            @if (!cargandoHistorial() && historial()) {
+              <div class="historial-cantidad">{{ historial()!.items.length }} corte{{ historial()!.items.length === 1 ? '' : 's' }} en el mes</div>
+            }
+          </div>
+          <div class="turnos-nav">
+            <button class="nav-flecha" (click)="mesHistorialAnterior()" aria-label="Mes anterior">←</button>
+            <span class="historial-mes">{{ meses[mesHistorial().mes - 1] }} {{ mesHistorial().anio }}</span>
+            <button class="nav-flecha" (click)="mesHistorialSiguiente()" aria-label="Mes siguiente">→</button>
           </div>
         </div>
-        <p class="sub-info">El detalle turno por turno. Si querés el resumen por profesional y por rango de fechas, es la pestaña Ganancias.</p>
+        <p class="sub-info historial-ayuda">El detalle turno por turno. Si querés el resumen por profesional y por rango de fechas, es la pestaña Ganancias.</p>
 
         @if (cargandoHistorial()) {
           <p class="empty">Cargando...</p>
         } @else if (!historial() || historial()!.items.length === 0) {
           <p class="empty">No hay cortes realizados en este mes.</p>
         } @else {
-          <table class="tabla">
+          <table class="tabla tabla-limpia">
             <thead>
-              <tr><th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Monto</th></tr>
+              <tr><th>Fecha</th><th>Cliente</th><th>Servicio</th><th class="celda-monto">Monto</th></tr>
             </thead>
             <tbody>
               @for (i of historial()!.items; track i.id) {
@@ -274,7 +279,7 @@
                   <td>{{ i.fechaHoraInicio | date:'dd/MM HH:mm' }}</td>
                   <td>{{ i.clienteNombre }}</td>
                   <td>{{ i.servicioNombre }}</td>
-                  <td>{{ i.monto | currency:'ARS':'$' }}</td>
+                  <td class="celda-monto">{{ i.monto | currency:'ARS':'$' }}</td>
                 </tr>
               }
             </tbody>

@@ -274,9 +274,6 @@
 
 .historial-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
 .historial-header h2 { margin: 0; }
-.mes-selector { display: flex; align-items: center; gap: 10px; font-family: 'Sora', sans-serif; font-weight: 600; color: #E8ECF6; font-size: 0.9rem; }
-.mes-selector .mini { background: rgba(232, 236, 246, 0.06); border-color: rgba(232, 236, 246, 0.18); color: #E8ECF6; }
-.mes-selector .mini:hover { background: rgba(232, 236, 246, 0.13); }
 
 .form-inline-turno-manual { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 
@@ -621,6 +618,28 @@
   .turnos-card { padding: 18px 16px; }
   .turnos-dia { min-width: 0; }
 }
+
+/* ----- KPIs y tabla del rediseño ----- */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.kpi {
+  background: #131A2E;
+  border: 1px solid rgba(232, 236, 246, 0.09);
+  border-radius: 20px;
+  padding: 20px 22px;
+  min-width: 0;
+}
+.kpi-etiqueta { color: #A6AFC6; font-size: 0.82rem; font-weight: 600; }
+.kpi-valor { font-family: 'Sora', sans-serif; font-weight: 800; font-size: 1.7rem; color: #FFFFFF; margin-top: 6px; overflow-wrap: break-word; }
+
+.tabla-limpia th { padding: 10px 12px; }
+.tabla-limpia td { padding: 13px 12px; color: #E8ECF6; }
+.tabla-limpia td:first-child { color: #A6AFC6; white-space: nowrap; }
+.tabla-limpia .celda-monto { text-align: right; font-family: 'Sora', sans-serif; font-weight: 600; white-space: nowrap; }
+
+/* ----- Historial ----- */
+.historial-cantidad { color: #7C879E; font-size: 0.82rem; margin-top: 4px; }
+.historial-mes { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 0.95rem; color: #E8ECF6; min-width: 140px; text-align: center; }
+.historial-ayuda { margin: 0 0 16px; }
 
 .mini {
   border: 1px solid transparent;
