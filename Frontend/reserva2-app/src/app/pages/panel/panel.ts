@@ -464,12 +464,14 @@ export class Panel {
   profesionales = signal<Profesional[]>([]);
   nuevoProfesionalNombre = '';
   nuevoProfesionalSucursalId: number | null = null;
+  nuevoProfesionalEspecialidad = '';
   errorProfesional = signal<string | null>(null);
   profesionalSeleccionado = signal<Profesional | null>(null);
   horariosDelProfesional = signal<Horario[]>([]);
   profesionalEditandoId = signal<number | null>(null);
   editProfesionalNombre = '';
   editProfesionalSucursalId: number | null = null;
+  editProfesionalEspecialidad = '';
   errorEditProfesional = signal<string | null>(null);
 
   // --- Sucursales ---
@@ -1184,10 +1186,12 @@ export class Panel {
     if (!this.nuevoProfesionalNombre.trim()) return;
 
     this.errorProfesional.set(null);
-    this.api.crearProfesional(this.sesion.comercioId, this.nuevoProfesionalNombre.trim(), this.nuevoProfesionalSucursalId).subscribe({
+    this.api.crearProfesional(this.sesion.comercioId, this.nuevoProfesionalNombre.trim(), this.nuevoProfesionalSucursalId,
+      this.nuevoProfesionalEspecialidad.trim() || null).subscribe({
       next: () => {
         this.nuevoProfesionalNombre = '';
         this.nuevoProfesionalSucursalId = null;
+        this.nuevoProfesionalEspecialidad = '';
         this.cargarProfesionales();
       },
       error: err => {
@@ -1200,6 +1204,7 @@ export class Panel {
     this.profesionalEditandoId.set(p.id);
     this.editProfesionalNombre = p.nombre;
     this.editProfesionalSucursalId = p.sucursalId;
+    this.editProfesionalEspecialidad = p.especialidad ?? '';
     this.errorEditProfesional.set(null);
   }
 
@@ -1215,7 +1220,8 @@ export class Panel {
       return;
     }
 
-    this.api.editarProfesional(p.id, this.editProfesionalNombre.trim(), this.editProfesionalSucursalId).subscribe({
+    this.api.editarProfesional(p.id, this.editProfesionalNombre.trim(), this.editProfesionalSucursalId,
+      this.editProfesionalEspecialidad.trim() || null).subscribe({
       next: () => {
         this.profesionalEditandoId.set(null);
         this.cargarProfesionales();

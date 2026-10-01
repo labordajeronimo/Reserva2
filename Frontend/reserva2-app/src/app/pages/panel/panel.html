@@ -1117,6 +1117,10 @@
                 @if (profesionalEditandoId() === p.id) {
                   <div class="form-inline form-inline-edicion tarjeta-form">
                     <input type="text" [(ngModel)]="editProfesionalNombre" placeholder="Nombre del profesional">
+                    <label class="campo-etiquetado">
+                      <span>Especialidad (opcional)</span>
+                      <input type="text" [(ngModel)]="editProfesionalEspecialidad" placeholder="Ej: Barbero, Estilista" maxlength="30">
+                    </label>
                     @if (sucursales().length > 1) {
                       <select [(ngModel)]="editProfesionalSucursalId">
                         <option [ngValue]="null">Sin sucursal asignada</option>
@@ -1136,6 +1140,9 @@
                     <div class="sidebar-iniciales">{{ p.nombre.trim().charAt(0).toUpperCase() }}</div>
                     <div class="tarjeta-texto">
                       <div class="fila-titulo">{{ p.nombre }}</div>
+                      @if (p.especialidad) {
+                        <div class="tarjeta-sub">{{ p.especialidad }}</div>
+                      }
                       @if (sucursales().length > 1 && p.sucursalId) {
                         <div class="tarjeta-sub">{{ nombreSucursal(p.sucursalId) }}</div>
                       }
@@ -1212,8 +1219,15 @@
         <h2>Agregar profesional</h2>
         @if (errorProfesional()) { <div class="error-msg">{{ errorProfesional() }}</div> }
 
-        <div class="form-inline form-inline-2 form-inline-edicion">
-          <input type="text" [(ngModel)]="nuevoProfesionalNombre" placeholder="Nombre del profesional">
+        <div class="form-inline form-inline-edicion form-profesional">
+          <label class="campo-etiquetado">
+            <span>Nombre</span>
+            <input type="text" [(ngModel)]="nuevoProfesionalNombre" placeholder="Nombre del profesional">
+          </label>
+          <label class="campo-etiquetado">
+            <span>Especialidad (opcional)</span>
+            <input type="text" [(ngModel)]="nuevoProfesionalEspecialidad" placeholder="Ej: Barbero, Estilista" maxlength="30">
+          </label>
           @if (sucursales().length > 1) {
             <select [(ngModel)]="nuevoProfesionalSucursalId">
               <option [ngValue]="null">Sin sucursal asignada</option>

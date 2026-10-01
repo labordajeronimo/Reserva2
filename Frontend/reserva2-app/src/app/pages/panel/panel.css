@@ -937,3 +937,8 @@ button.inicio-fila:hover { border-color: rgba(232, 236, 246, 0.2); border-left-c
 .visor-imagen img { max-width: 100%; max-height: 60vh; object-fit: contain; display: block; }
 .visor-nota { color: #A6AFC6; font-size: 0.8rem; margin: 12px 0 0; }
 .visor .turno-detalle-acciones { margin-top: 14px; }
+
+/* ----- Especialidad del profesional ----- */
+.campo-etiquetado { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.campo-etiquetado span { font-size: 0.75rem; font-weight: 600; color: #A6AFC6; }
+.form-profesional { align-items: end; }

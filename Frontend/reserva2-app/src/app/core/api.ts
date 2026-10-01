@@ -50,6 +50,7 @@ export interface Profesional {
   comercioId: number;
   nombre: string;
   sucursalId: number | null;
+  especialidad: string | null; // opcional, máx. 30 caracteres (ej.: "Barbero")
 }
 
 export interface Sucursal {
@@ -487,12 +488,12 @@ export class Api {
     });
   }
 
-  crearProfesional(comercioId: number, nombre: string, sucursalId?: number | null): Observable<Profesional> {
-    return this.http.post<Profesional>(`${API_BASE}/comercios/${comercioId}/profesionales`, { nombre, sucursalId });
+  crearProfesional(comercioId: number, nombre: string, sucursalId?: number | null, especialidad?: string | null): Observable<Profesional> {
+    return this.http.post<Profesional>(`${API_BASE}/comercios/${comercioId}/profesionales`, { nombre, sucursalId, especialidad });
   }
 
-  editarProfesional(id: number, nombre: string, sucursalId?: number | null): Observable<Profesional> {
-    return this.http.put<Profesional>(`${API_BASE}/profesionales/${id}`, { nombre, sucursalId });
+  editarProfesional(id: number, nombre: string, sucursalId?: number | null, especialidad?: string | null): Observable<Profesional> {
+    return this.http.put<Profesional>(`${API_BASE}/profesionales/${id}`, { nombre, sucursalId, especialidad });
   }
 
   eliminarProfesional(id: number): Observable<void> {

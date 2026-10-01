@@ -153,6 +153,7 @@
               <button type="button" class="profesional-card" [class.active]="profesionalSeleccionado()?.id === p.id" (click)="elegirProfesional(p)">
                 <span class="profesional-avatar">{{ inicialesDe(p.nombre) }}</span>
                 <span class="profesional-nombre">{{ p.nombre }}</span>
+                @if (p.especialidad) { <span class="profesional-detalle">{{ p.especialidad }}</span> }
               </button>
             }
           </div>
