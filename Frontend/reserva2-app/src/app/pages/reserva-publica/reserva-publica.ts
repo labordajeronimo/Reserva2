@@ -34,6 +34,9 @@ const DIAS_LARGOS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Vier
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const WHATSAPP_REGEX = /^[0-9+()\-\s]{8,20}$/;
 
+// Clave interna del chip "Otros" (servicios sin categoría); no choca con un nombre real.
+const CATEGORIA_OTROS = '\u0000otros';
+
 @Component({
   selector: 'app-reserva-publica',
   standalone: true,
@@ -60,6 +63,28 @@ export class ReservaPublica implements OnInit {
 
   servicios = signal<Servicio[]>([]);
   servicioSeleccionado = signal<Servicio | null>(null);
+
+  // Categorías de servicios: si el comercio cargó al menos una, se muestran como chips con la
+  // cantidad para filtrar la lista. Los servicios sin categoría van en "Otros". Sin ninguna
+  // categoría cargada, la lista se ve igual que siempre.
+  categoriaFiltro = signal<string | null>(null); // null = todos
+  categoriasServicios = computed(() => {
+    const conteo = new Map<string, number>();
+    let sinCategoria = 0;
+    for (const s of this.servicios()) {
+      if (s.categoria) conteo.set(s.categoria, (conteo.get(s.categoria) ?? 0) + 1);
+      else sinCategoria++;
+    }
+    if (conteo.size === 0) return [];
+    const categorias = [...conteo].map(([nombre, cantidad]) => ({ clave: nombre, nombre, cantidad }));
+    if (sinCategoria > 0) categorias.push({ clave: CATEGORIA_OTROS, nombre: 'Otros', cantidad: sinCategoria });
+    return categorias;
+  });
+  serviciosFiltrados = computed(() => {
+    const filtro = this.categoriaFiltro();
+    if (filtro === null || this.categoriasServicios().length === 0) return this.servicios();
+    return this.servicios().filter(s => (s.categoria ?? CATEGORIA_OTROS) === filtro);
+  });
 
   diasDisponibles: DiaGrilla[] = this.generarProximosDias(7);
   diaSeleccionado = signal<DiaGrilla | null>(null);

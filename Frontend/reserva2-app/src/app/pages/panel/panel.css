@@ -893,6 +893,8 @@ button.inicio-fila:hover { border-color: rgba(232, 236, 246, 0.2); border-left-c
 .form-inline input:focus, .form-inline select:focus { outline: 2px solid #FB923C; outline-offset: 1px; border-color: rgba(249, 115, 22, 0.6); }
 .form-inline-2 { grid-template-columns: minmax(0, 2fr) auto; }
 .form-inline-servicios { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.chip-categoria { background: rgba(129, 140, 248, 0.14); border-color: rgba(129, 140, 248, 0.35); color: #A5B4FC; }
+.sub-info-categorias { margin: 12px 0 0; }
 
 /* Profesionales */
 .sub-info { color: #A6AFC6; font-size: 0.85rem; margin: -8px 0 18px; }

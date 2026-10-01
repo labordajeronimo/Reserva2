@@ -242,6 +242,10 @@ static bool EstaDentroDeAlgunHorario(IEnumerable<Horario> bloques, DateTime inic
 static string? NormalizarEspecialidad(string? especialidad) =>
     string.IsNullOrWhiteSpace(especialidad) ? null : especialidad.Trim();
 
+// Categoría del servicio: sin espacios de más; vacía = sin categoría (null).
+static string? NormalizarCategoria(string? categoria) =>
+    string.IsNullOrWhiteSpace(categoria) ? null : categoria.Trim();
+
 // Borra del disco la foto de un profesional (si tenía). Se llama después de guardar en la
 // base, para no perder el archivo si falla el SaveChanges.
 void BorrarFotoProfesional(string? fotoUrl)
@@ -1194,6 +1198,10 @@ app.MapPost("/api/servicios", async (AppDbContext context, Servicio servicio, Cl
 {
     if (ComercioIdDelToken(user) != servicio.ComercioId) return Results.Forbid();
 
+    servicio.Categoria = NormalizarCategoria(servicio.Categoria);
+    if (servicio.Categoria is { Length: > 40 })
+        return Results.BadRequest(new { mensaje = "La categoría puede tener hasta 40 caracteres." });
+
     context.Servicios.Add(servicio);
     await context.SaveChangesAsync();
     return Results.Created($"/api/servicios/{servicio.Id}", servicio);
@@ -1219,10 +1227,15 @@ app.MapPut("/api/servicios/{id:int}", async (AppDbContext context, int id, Edita
     if (req.DuracionMinutos <= 0)
         return Results.BadRequest(new { mensaje = "La duración tiene que ser mayor a 0." });
 
+    var categoria = NormalizarCategoria(req.Categoria);
+    if (categoria is { Length: > 40 })
+        return Results.BadRequest(new { mensaje = "La categoría puede tener hasta 40 caracteres." });
+
     servicio.Nombre = req.Nombre.Trim();
     servicio.DuracionMinutos = req.DuracionMinutos;
     servicio.Precio = req.Precio;
     servicio.MontoSeña = req.MontoSeña;
+    servicio.Categoria = categoria;
     await context.SaveChangesAsync();
 
     return Results.Ok(servicio);
@@ -2356,7 +2369,7 @@ record MiPlanRequest(string PlanActual, string CicloFacturacion);
 record MiPlanDto(string PlanActual, string CicloFacturacion, DateTime? FechaProximoPago);
 record PerfilRequest(string Nombre, string TelefonoNotificaciones, string DatosBancarios);
 record PerfilDto(string Nombre, string TelefonoNotificaciones, string DatosBancarios, string? LogoUrl);
-record EditarServicioRequest(string Nombre, int DuracionMinutos, decimal Precio, decimal? MontoSeña);
+record EditarServicioRequest(string Nombre, int DuracionMinutos, decimal Precio, decimal? MontoSeña, string? Categoria = null);
 record CambiarPasswordRequest(string PasswordActual, string PasswordNueva);
 record TurnoPorTokenDto(int Id, string NombreComercio, string NombreServicio, DateTime FechaHoraInicio, int EstadoReserva);
 record LoginRequest(string Email, string Password);

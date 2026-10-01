@@ -34,6 +34,7 @@ export interface Servicio {
   precio: number;
   montoSeña: number | null;
   activo: boolean;
+  categoria: string | null; // agrupa los servicios en la página pública; null = sin categoría
 }
 
 export interface Horario {
@@ -455,7 +456,7 @@ export class Api {
     return this.http.post<Servicio>(`${API_BASE}/servicios`, servicio);
   }
 
-  editarServicio(id: number, datos: { nombre: string; duracionMinutos: number; precio: number; montoSeña: number | null }): Observable<Servicio> {
+  editarServicio(id: number, datos: { nombre: string; duracionMinutos: number; precio: number; montoSeña: number | null; categoria: string | null }): Observable<Servicio> {
     return this.http.put<Servicio>(`${API_BASE}/servicios/${id}`, datos);
   }
 

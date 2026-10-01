@@ -439,6 +439,7 @@ export class Panel {
   nuevoServicioDuracion: number | null = null;
   nuevoServicioPrecio: number | null = null;
   nuevoServicioSenia: number | null = null;
+  nuevoServicioCategoria = '';
   errorServicio = signal<string | null>(null);
 
   servicioEditandoId = signal<number | null>(null);
@@ -446,7 +447,13 @@ export class Panel {
   editServicioDuracion: number | null = null;
   editServicioPrecio: number | null = null;
   editServicioSenia: number | null = null;
+  editServicioCategoria = '';
   errorEditServicio = signal<string | null>(null);
+
+  // Categorías que el comercio ya usó, para sugerirlas al cargar o editar un servicio.
+  categoriasServicios = computed(() =>
+    [...new Set(this.servicios().map(s => s.categoria).filter((c): c is string => !!c))]
+      .sort((a, b) => a.localeCompare(b, 'es')));
 
   // --- Horarios ---
   horarios = signal<Horario[]>([]);
@@ -981,12 +988,14 @@ export class Panel {
       duracionMinutos: this.nuevoServicioDuracion,
       precio: this.nuevoServicioPrecio ?? 0,
       montoSeña: this.nuevoServicioSenia,
+      categoria: this.nuevoServicioCategoria.trim() || null,
       activo: true
     }).subscribe(() => {
       this.nuevoServicioNombre = '';
       this.nuevoServicioDuracion = null;
       this.nuevoServicioPrecio = null;
       this.nuevoServicioSenia = null;
+      this.nuevoServicioCategoria = '';
       this.cargarServicios();
     });
   }
@@ -997,6 +1006,7 @@ export class Panel {
     this.editServicioDuracion = s.duracionMinutos;
     this.editServicioPrecio = s.precio;
     this.editServicioSenia = s.montoSeña;
+    this.editServicioCategoria = s.categoria ?? '';
     this.errorEditServicio.set(null);
   }
 
@@ -1020,7 +1030,8 @@ export class Panel {
       nombre: this.editServicioNombre.trim(),
       duracionMinutos: this.editServicioDuracion,
       precio: this.editServicioPrecio ?? 0,
-      montoSeña: this.editServicioSenia
+      montoSeña: this.editServicioSenia,
+      categoria: this.editServicioCategoria.trim() || null
     }).subscribe({
       next: () => {
         this.servicioEditandoId.set(null);

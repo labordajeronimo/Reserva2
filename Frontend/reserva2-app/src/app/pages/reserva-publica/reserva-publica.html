@@ -189,8 +189,23 @@
           <p class="sub">Este negocio todavía no cargó servicios.</p>
         }
 
+        @if (categoriasServicios().length > 0) {
+          <div class="categorias-chips" role="tablist" aria-label="Categorías de servicios">
+            <button type="button" class="categoria-chip" role="tab" [attr.aria-selected]="categoriaFiltro() === null"
+                    [class.active]="categoriaFiltro() === null" (click)="categoriaFiltro.set(null)">
+              Todos <span class="categoria-cantidad">{{ servicios().length }}</span>
+            </button>
+            @for (c of categoriasServicios(); track c.clave) {
+              <button type="button" class="categoria-chip" role="tab" [attr.aria-selected]="categoriaFiltro() === c.clave"
+                      [class.active]="categoriaFiltro() === c.clave" (click)="categoriaFiltro.set(c.clave)">
+                {{ c.nombre }} <span class="categoria-cantidad">{{ c.cantidad }}</span>
+              </button>
+            }
+          </div>
+        }
+
         <div class="servicios-lista" role="radiogroup" aria-label="Servicios">
-          @for (s of servicios(); track s.id) {
+          @for (s of serviciosFiltrados(); track s.id) {
             <button type="button" class="servicio-fila" role="radio" [attr.aria-checked]="servicioSeleccionado()?.id === s.id"
                     [class.active]="servicioSeleccionado()?.id === s.id" (click)="elegirServicio(s)">
               <span class="radio" aria-hidden="true"></span>

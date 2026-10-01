@@ -971,6 +971,7 @@
                     <input type="number" [(ngModel)]="editServicioDuracion" placeholder="Duración en minutos" min="5" step="5">
                     <input type="number" [(ngModel)]="editServicioPrecio" placeholder="Precio $" min="0">
                     <input type="number" [(ngModel)]="editServicioSenia" placeholder="Monto de la seña (opcional)" min="0">
+                    <input type="text" [(ngModel)]="editServicioCategoria" placeholder="Categoría (opcional)" maxlength="40" list="categorias-servicios">
                     <div class="acciones">
                       <button class="btn-ok" (click)="guardarEdicionServicio(s)">Guardar</button>
                       <button class="btn-sec" (click)="cancelarEdicionServicio()">Cancelar</button>
@@ -983,6 +984,7 @@
                   <div class="fila-principal">
                     <div class="fila-titulo">{{ s.nombre }}</div>
                     <div class="fila-chips">
+                      @if (s.categoria) { <span class="chip chip-categoria">{{ s.categoria }}</span> }
                       <span class="chip">{{ s.duracionMinutos }} min</span>
                       @if (s['montoSeña']) { <span class="chip">Seña {{ s['montoSeña'] | currency:'ARS':'$':'1.0-2' }}</span> }
                     </div>
@@ -1008,8 +1010,13 @@
           <input type="number" [(ngModel)]="nuevoServicioDuracion" placeholder="Duración en minutos" min="5" step="5">
           <input type="number" [(ngModel)]="nuevoServicioPrecio" placeholder="Precio $" min="0">
           <input type="number" [(ngModel)]="nuevoServicioSenia" placeholder="Monto de la seña (opcional)" min="0">
+          <input type="text" [(ngModel)]="nuevoServicioCategoria" placeholder="Categoría (opcional)" maxlength="40" list="categorias-servicios">
           <button class="btn-naranja" (click)="agregarServicio()">Agregar</button>
         </div>
+        <p class="sub-info sub-info-categorias">La categoría agrupa tus servicios en la página de reservas (ej.: "Limpiezas faciales", "Consultas"). Escribí una nueva o elegí una que ya usaste.</p>
+        <datalist id="categorias-servicios">
+          @for (c of categoriasServicios(); track c) { <option [value]="c"></option> }
+        </datalist>
       </div>
     }
 
