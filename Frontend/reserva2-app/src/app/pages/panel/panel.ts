@@ -473,6 +473,7 @@ export class Panel {
   editProfesionalSucursalId: number | null = null;
   editProfesionalEspecialidad = '';
   errorEditProfesional = signal<string | null>(null);
+  subiendoFotoProfesionalId = signal<number | null>(null);
 
   // --- Sucursales ---
   sucursales = signal<Sucursal[]>([]);
@@ -1227,6 +1228,39 @@ export class Panel {
         this.cargarProfesionales();
       },
       error: err => this.errorEditProfesional.set(err.error?.mensaje ?? 'No pudimos guardar los cambios.')
+    });
+  }
+
+  fotoProfesional(p: Profesional): string | null {
+    return urlArchivo(p.fotoUrl);
+  }
+
+  // La foto se guarda apenas se elige (igual que el logo), sin esperar al botón Guardar.
+  subirFotoProfesional(p: Profesional, evento: Event): void {
+    const input = evento.target as HTMLInputElement;
+    const archivo = input.files?.[0];
+    input.value = '';
+    if (!archivo) return;
+
+    this.errorEditProfesional.set(null);
+    this.subiendoFotoProfesionalId.set(p.id);
+    this.api.subirFotoProfesional(p.id, archivo).subscribe({
+      next: r => {
+        this.subiendoFotoProfesionalId.set(null);
+        this.profesionales.update(lista => lista.map(x => x.id === p.id ? { ...x, fotoUrl: r.fotoUrl } : x));
+      },
+      error: err => {
+        this.subiendoFotoProfesionalId.set(null);
+        this.errorEditProfesional.set(err.error?.mensaje ?? 'No pudimos subir la foto.');
+      }
+    });
+  }
+
+  quitarFotoProfesional(p: Profesional): void {
+    this.errorEditProfesional.set(null);
+    this.api.quitarFotoProfesional(p.id).subscribe({
+      next: () => this.profesionales.update(lista => lista.map(x => x.id === p.id ? { ...x, fotoUrl: null } : x)),
+      error: err => this.errorEditProfesional.set(err.error?.mensaje ?? 'No pudimos quitar la foto.')
     });
   }
 

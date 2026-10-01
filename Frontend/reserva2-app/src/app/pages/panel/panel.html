@@ -1116,6 +1116,21 @@
               <div class="tarjeta" [class.tarjeta-abierta]="profesionalSeleccionado()?.id === p.id" [class.fila-editando]="profesionalEditandoId() === p.id">
                 @if (profesionalEditandoId() === p.id) {
                   <div class="form-inline form-inline-edicion tarjeta-form">
+                    <div class="profesional-foto-row">
+                      @if (fotoProfesional(p); as foto) {
+                        <img [src]="foto" alt="Foto de {{ p.nombre }}" class="sidebar-iniciales profesional-foto">
+                      } @else {
+                        <div class="sidebar-iniciales">{{ p.nombre.trim().charAt(0).toUpperCase() }}</div>
+                      }
+                      <label class="btn-sec btn-chico perfil-logo-btn">
+                        {{ subiendoFotoProfesionalId() === p.id ? 'Subiendo...' : (p.fotoUrl ? 'Cambiar foto' : 'Subir foto') }}
+                        <input type="file" accept="image/png,image/jpeg,image/webp" hidden [disabled]="subiendoFotoProfesionalId() === p.id" (change)="subirFotoProfesional(p, $event)">
+                      </label>
+                      @if (p.fotoUrl) {
+                        <button type="button" class="btn-sec btn-chico" (click)="quitarFotoProfesional(p)">Quitar foto</button>
+                      }
+                    </div>
+                    <p class="sub-info perfil-logo-ayuda">Foto opcional: PNG, JPG o WEBP, hasta 2MB. Se guarda al elegirla.</p>
                     <input type="text" [(ngModel)]="editProfesionalNombre" placeholder="Nombre del profesional">
                     <label class="campo-etiquetado">
                       <span>Especialidad (opcional)</span>
@@ -1137,7 +1152,11 @@
                   @if (errorEditProfesional()) { <div class="error-msg error-en-fila">{{ errorEditProfesional() }}</div> }
                 } @else {
                   <div class="tarjeta-cabecera">
-                    <div class="sidebar-iniciales">{{ p.nombre.trim().charAt(0).toUpperCase() }}</div>
+                    @if (fotoProfesional(p); as foto) {
+                      <img [src]="foto" alt="Foto de {{ p.nombre }}" class="sidebar-iniciales profesional-foto">
+                    } @else {
+                      <div class="sidebar-iniciales">{{ p.nombre.trim().charAt(0).toUpperCase() }}</div>
+                    }
                     <div class="tarjeta-texto">
                       <div class="fila-titulo">{{ p.nombre }}</div>
                       @if (p.especialidad) {

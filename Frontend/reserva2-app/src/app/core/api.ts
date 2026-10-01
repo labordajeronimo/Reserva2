@@ -51,6 +51,7 @@ export interface Profesional {
   nombre: string;
   sucursalId: number | null;
   especialidad: string | null; // opcional, máx. 30 caracteres (ej.: "Barbero")
+  fotoUrl: string | null; // relativa al backend (usar urlArchivo); null = mostrar iniciales
 }
 
 export interface Sucursal {
@@ -498,6 +499,16 @@ export class Api {
 
   eliminarProfesional(id: number): Observable<void> {
     return this.http.delete<void>(`${API_BASE}/profesionales/${id}`);
+  }
+
+  subirFotoProfesional(id: number, archivo: File): Observable<{ fotoUrl: string }> {
+    const formData = new FormData();
+    formData.append('archivo', archivo);
+    return this.http.post<{ fotoUrl: string }>(`${API_BASE}/profesionales/${id}/foto`, formData);
+  }
+
+  quitarFotoProfesional(id: number): Observable<void> {
+    return this.http.delete<void>(`${API_BASE}/profesionales/${id}/foto`);
   }
 
   // --- Sucursales ---
