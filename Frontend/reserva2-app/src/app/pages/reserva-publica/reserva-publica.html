@@ -79,20 +79,22 @@
 } @else if (necesitaElegirSucursal() && !sucursalSeleccionada()) {
 
 <main>
-  <div class="wrap" style="max-width:640px;">
-    <div class="card">
-      <h2>Elegí la sucursal</h2>
+  <div class="wrap">
+    <div class="elegir-local">
+      <h2>¿En qué local te atendés?</h2>
       <p class="sub">{{ comercio()!.nombre }} tiene más de un local. Elegí en cuál querés reservar.</p>
 
-      <div class="services">
+      <div class="locales-grid">
         @for (s of sucursalesActivas(); track s.id) {
-          <div class="service" (click)="elegirSucursal(s)">
-            <div>
-              <div class="name">{{ s.nombre }}</div>
-              @if (s.direccion) { <div class="dur">{{ s.direccion }}</div> }
-              @if (s.telefono) { <div class="dur">{{ s.telefono }}</div> }
-            </div>
-          </div>
+          <button type="button" class="local-card" (click)="elegirSucursal(s)">
+            <span class="local-icono" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 4l9 5.5"/><path d="M5 10v9h14v-9"/><path d="M10 19v-5h4v5"/></svg>
+            </span>
+            <span class="local-nombre">{{ s.nombre }}</span>
+            @if (s.direccion) { <span class="local-direccion">{{ s.direccion }}</span> }
+            @if (s.telefono) { <span class="local-direccion">{{ s.telefono }}</span> }
+            <span class="local-cta">Reservar acá →</span>
+          </button>
         }
       </div>
     </div>
@@ -105,16 +107,19 @@
   <div class="wrap layout">
     <div>
       @if (sucursalSeleccionada(); as sucursal) {
-        <div class="card" style="margin-bottom:22px;">
-          <h2>Sucursal elegida</h2>
-          <p class="sub" style="margin-bottom:0;">
-            <strong>{{ sucursal.nombre }}</strong>
-            @if (sucursal.direccion) { · {{ sucursal.direccion }} }
-            @if (sucursal.telefono) { · {{ sucursal.telefono }} }
-            @if (necesitaElegirSucursal()) {
-              · <button type="button" class="cambiar-sucursal-btn" (click)="elegirSucursal(null)">Cambiar</button>
+        <div class="local-elegido">
+          <span class="local-icono local-icono-chico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 4l9 5.5"/><path d="M5 10v9h14v-9"/><path d="M10 19v-5h4v5"/></svg>
+          </span>
+          <div class="local-elegido-texto">
+            <div class="local-elegido-nombre">{{ sucursal.nombre }}</div>
+            @if (sucursal.direccion || sucursal.telefono) {
+              <div class="local-elegido-sub">{{ sucursal.direccion }}{{ sucursal.direccion && sucursal.telefono ? ' · ' : '' }}{{ sucursal.telefono }}</div>
             }
-          </p>
+          </div>
+          @if (necesitaElegirSucursal()) {
+            <button type="button" class="local-cambiar" (click)="elegirSucursal(null)">Cambiar</button>
+          }
         </div>
       }
 

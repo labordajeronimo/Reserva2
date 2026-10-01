@@ -73,7 +73,6 @@
   .service:hover{border-color:rgba(232,236,246,0.24);}
   .service:active{transform:scale(0.98);}
   .service.active{border-color:rgba(249,115,22,0.55); background:rgba(234,88,12,0.14);}
-  .cambiar-sucursal-btn{background:none; border:none; color:#FB923C; font-size:13.5px; cursor:pointer; text-decoration:underline; padding:0; font-family:inherit;}
   .service .name{font-family:'Sora',sans-serif; font-size:14.5px; font-weight:600; overflow-wrap:break-word;}
   .service .dur{font-size:12.5px; color:#7C879E; margin-top:2px;}
   .service .price{font-family:'Sora',sans-serif; font-size:14.5px; font-weight:600; color:#E8ECF6; text-align:right; white-space:nowrap;}
@@ -190,3 +189,39 @@
 }
 
 .confirm-btn:disabled{opacity:0.45; cursor:not-allowed; box-shadow:none;}
+
+/* ----- Etapa 2: elegir local ----- */
+.elegir-local{padding:12px 0 8px;}
+.elegir-local h2{font-size:clamp(22px, 3vw, 28px); font-weight:800; color:#FFFFFF; margin:0 0 6px;}
+.elegir-local .sub{font-size:14px; color:#9AA4BA; margin:0 0 24px;}
+.locales-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px;}
+.local-card{
+  display:flex; flex-direction:column; align-items:flex-start; gap:6px; text-align:left;
+  background:#131A2E; border:1px solid rgba(232,236,246,0.09); border-radius:20px; padding:22px;
+  color:#E8ECF6; font-family:inherit; cursor:pointer;
+  transition:border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+}
+.local-card:hover{border-color:rgba(249,115,22,0.55); transform:translateY(-2px); box-shadow:0 14px 34px rgba(0,0,0,0.35);}
+.local-icono{
+  width:44px; height:44px; border-radius:14px; display:flex; align-items:center; justify-content:center;
+  background:rgba(249,115,22,0.14); color:#FB923C; margin-bottom:8px; flex-shrink:0;
+}
+.local-icono svg{width:22px; height:22px;}
+.local-nombre{font-family:'Sora',sans-serif; font-size:17px; font-weight:700; color:#FFFFFF;}
+.local-direccion{font-size:13.5px; color:#9AA4BA;}
+.local-cta{margin-top:12px; color:#FB923C; font-family:'Sora',sans-serif; font-weight:600; font-size:14px;}
+
+.local-elegido{
+  display:flex; align-items:center; gap:12px; margin-bottom:22px;
+  background:#131A2E; border:1px solid rgba(232,236,246,0.09); border-radius:16px; padding:12px 14px;
+}
+.local-icono-chico{width:36px; height:36px; border-radius:11px; margin:0;}
+.local-icono-chico svg{width:18px; height:18px;}
+.local-elegido-texto{flex:1; min-width:0;}
+.local-elegido-nombre{font-family:'Sora',sans-serif; font-weight:700; font-size:14.5px; color:#FFFFFF;}
+.local-elegido-sub{font-size:12.5px; color:#9AA4BA; margin-top:2px; overflow-wrap:anywhere;}
+.local-cambiar{
+  background:rgba(232,236,246,0.06); border:1px solid rgba(232,236,246,0.16); color:#E8ECF6;
+  font-family:inherit; font-size:13px; font-weight:600; padding:7px 14px; border-radius:10px; cursor:pointer; white-space:nowrap;
+}
+.local-cambiar:hover{background:rgba(232,236,246,0.12);}
