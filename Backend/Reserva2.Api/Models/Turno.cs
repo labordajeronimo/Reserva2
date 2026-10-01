@@ -1,3 +1,6 @@
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
+
 namespace Reserva2.Api.Models
 {
     public class Turno
@@ -31,5 +34,18 @@ namespace Reserva2.Api.Models
         // Token de un solo uso que va en el link de cancelación del mail de confirmación,
         // para que el cliente final pueda cancelar su turno sin necesitar una cuenta.
         public string TokenCancelacion { get; set; } = Guid.NewGuid().ToString("N");
+
+        // Seña: el comprobante (captura de la transferencia) que sube el cliente al reservar un
+        // servicio con seña. Es el nombre del archivo dentro de la carpeta privada de
+        // comprobantes; nunca se manda en las respuestas JSON (lo ve el comercio por su endpoint).
+        [JsonIgnore]
+        public string? ComprobanteArchivo { get; set; }
+
+        // null = el servicio no pedía seña; false = seña a verificar; true = el comercio ya la
+        // verificó contra su cuenta.
+        public bool? SeñaVerificada { get; set; }
+
+        [NotMapped]
+        public bool TieneComprobante => ComprobanteArchivo is not null;
     }
 }

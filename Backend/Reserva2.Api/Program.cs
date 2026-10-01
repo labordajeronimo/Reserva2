@@ -230,6 +230,33 @@ static bool EstaDentroDeAlgunHorario(IEnumerable<Horario> bloques, DateTime inic
     return bloques.Any(b => inicio >= fechaBase + b.HoraInicio && fin <= fechaBase + b.HoraFin);
 }
 
+static bool EmailValido(string email) =>
+    System.Text.RegularExpressions.Regex.IsMatch(email, @"^[^\s@]+@[^\s@]+\.[^\s@]+$") && email.Length <= 254;
+
+// Decodifica la captura del comprobante de seña y verifica que de verdad sea una imagen
+// PNG, JPG o WEBP (por su contenido, no por un nombre o tipo que manda el navegador) y que
+// no pase de 5MB. Devuelve null si falta o no es válida.
+static (byte[] Contenido, string Extension)? LeerComprobante(string? base64)
+{
+    if (string.IsNullOrWhiteSpace(base64)) return null;
+    var datos = base64.Trim();
+    var coma = datos.IndexOf(',');
+    if (datos.StartsWith("data:", StringComparison.OrdinalIgnoreCase) && coma >= 0) datos = datos[(coma + 1)..];
+
+    byte[] bytes;
+    try { bytes = Convert.FromBase64String(datos); }
+    catch (FormatException) { return null; }
+
+    const int tamañoMaximo = 5 * 1024 * 1024;
+    if (bytes.Length == 0 || bytes.Length > tamañoMaximo) return null;
+
+    if (bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) return (bytes, ".png");
+    if (bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) return (bytes, ".jpg");
+    if (bytes.Length >= 12 && bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F'
+        && bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P') return (bytes, ".webp");
+    return null;
+}
+
 // Un comercio pausado (no pagó) no puede recibir turnos nuevos por el link público,
 // pero el panel del Admin Cliente sigue mostrando sus datos sin restricciones.
 static IResult ResultadoComercioInactivo() =>
@@ -701,6 +728,11 @@ app.MapDelete("/api/comercios/{id:int}", async (AppDbContext context, int id) =>
     if (comercio.Activo)
         return Results.Conflict(new { mensaje = "Solo se puede eliminar un comercio que ya esté pausado." });
 
+    var comprobantesDelComercio = await context.Turnos
+        .Where(t => t.ComercioId == id && t.ComprobanteArchivo != null)
+        .Select(t => t.ComprobanteArchivo!)
+        .ToListAsync();
+
     context.Turnos.RemoveRange(context.Turnos.Where(t => t.ComercioId == id));
     context.Servicios.RemoveRange(context.Servicios.Where(s => s.ComercioId == id));
     context.Horarios.RemoveRange(context.Horarios.Where(h => h.ComercioId == id));
@@ -711,6 +743,15 @@ app.MapDelete("/api/comercios/{id:int}", async (AppDbContext context, int id) =>
     context.Comercios.Remove(comercio);
 
     await context.SaveChangesAsync();
+
+    // Recién con la base ya actualizada se borran los archivos (si fallara el borrado de la
+    // base, los comprobantes seguirían haciendo falta).
+    foreach (var nombreArchivo in comprobantesDelComercio)
+    {
+        var ruta = Path.Combine(rutaComprobantes, Path.GetFileName(nombreArchivo));
+        if (File.Exists(ruta)) File.Delete(ruta);
+    }
+
     return Results.NoContent();
 }).RequireAuthorization("SuperAdmin");
 
@@ -1001,7 +1042,8 @@ app.MapGet("/api/comercios/alias/{alias}", async (AppDbContext context, string a
     }
 
     return Results.Ok(new ComercioPublicoDto(
-        comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla, comercio.TelefonoNotificaciones, comercio.LogoUrl, whatsAppActivo));
+        comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla, comercio.TelefonoNotificaciones, comercio.LogoUrl, whatsAppActivo,
+        comercio.DatosBancarios));
 });
 
 // Autogestión de plan: el propio dueño del comercio cambia su plan y ciclo de facturación
@@ -1432,9 +1474,24 @@ app.MapGet("/api/comercios/{comercioId:int}/disponibilidad", async (AppDbContext
 // ==========================================
 app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, ILogger<Program> logger, CrearTurnoRequest req) =>
 {
+    // El email es obligatorio (ahí le llega la confirmación al cliente), igual que en el
+    // formulario de la página pública.
+    if (string.IsNullOrWhiteSpace(req.ClienteEmail) || !EmailValido(req.ClienteEmail.Trim()))
+        return Results.BadRequest(new { mensaje = "Ingresá un email válido: ahí te llega la confirmación del turno." });
+
     var servicio = await context.Servicios.FindAsync(req.ServicioId);
     if (servicio is null || servicio.ComercioId != req.ComercioId)
         return Results.NotFound(new { mensaje = "El servicio no pertenece a este comercio." });
+
+    // Si el servicio pide seña, el comprobante de la transferencia es obligatorio.
+    var pideSenia = servicio.MontoSeña is > 0;
+    (byte[] Contenido, string Extension)? comprobante = null;
+    if (pideSenia)
+    {
+        comprobante = LeerComprobante(req.ComprobanteBase64);
+        if (comprobante is null)
+            return Results.BadRequest(new { mensaje = "Subí la captura del comprobante de la seña (PNG, JPG o WEBP, hasta 5MB)." });
+    }
 
     var comercio = await context.Comercios.FindAsync(req.ComercioId);
     if (comercio is null) return Results.NotFound();
@@ -1482,14 +1539,35 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
         FechaHoraFin = finTurno,
         ClienteNombre = req.ClienteNombre,
         ClienteWhatsApp = req.ClienteWhatsApp,
-        ClienteEmail = req.ClienteEmail,
-        EstadoReserva = 1,
+        ClienteEmail = req.ClienteEmail.Trim(),
+        // Las reservas de la página pública entran confirmadas: ya no hay pre-reserva que el
+        // comercio tenga que confirmar en 2 horas. Si el servicio pide seña, el turno queda
+        // reservado igual, con la seña "a verificar" hasta que el comercio la revise.
+        EstadoReserva = 2,
+        SeñaVerificada = pideSenia ? false : null,
         FechaCreacion = DateTime.UtcNow,
         MontoCobrado = servicio.Precio
     };
 
+    string? rutaComprobanteGuardado = null;
+    if (comprobante is { } archivo)
+    {
+        turno.ComprobanteArchivo = $"{Guid.NewGuid():N}{archivo.Extension}";
+        rutaComprobanteGuardado = Path.Combine(rutaComprobantes, turno.ComprobanteArchivo);
+        await File.WriteAllBytesAsync(rutaComprobanteGuardado, archivo.Contenido);
+    }
+
     context.Turnos.Add(turno);
-    await context.SaveChangesAsync();
+    try
+    {
+        await context.SaveChangesAsync();
+    }
+    catch
+    {
+        // Si el turno no se pudo guardar, no dejamos el comprobante huérfano en disco.
+        if (rutaComprobanteGuardado is not null && File.Exists(rutaComprobanteGuardado)) File.Delete(rutaComprobanteGuardado);
+        throw;
+    }
 
     if (!string.IsNullOrWhiteSpace(req.ClienteEmail))
     {
@@ -1507,6 +1585,7 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
         var nombreComercio = comercio.Nombre;
         var nombreServicio = servicio.Nombre;
         var tokenCancelacion = turno.TokenCancelacion;
+        var montoSeniaMail = pideSenia ? servicio.MontoSeña : null;
 
         _ = Task.Run(async () =>
         {
@@ -1522,12 +1601,15 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
                 var icsBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(
                     GenerarIcs(tituloEvento, fechaHoraInicio, fechaHoraFin, descripcionEvento, nombreComercio)));
 
-                await EnviarEmail(config, logger, clienteEmail, $"Turno pre-reservado en {nombreComercio}",
+                var textoSenia = montoSeniaMail is null
+                    ? ""
+                    : $"Recibimos el comprobante de tu seña de ${montoSeniaMail.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}. {nombreComercio} lo va a verificar.\n\n";
+
+                await EnviarEmail(config, logger, clienteEmail, $"Turno reservado en {nombreComercio}",
                     $"Hola {clienteNombre},\n\n" +
-                    $"Tu turno para \"{nombreServicio}\" en {nombreComercio} quedó pre-reservado para el {fechaTexto}.\n\n" +
-                    "En breve te van a escribir por WhatsApp para coordinar la seña. Tenés 2 horas para confirmar antes de que el horario se libere.\n\n" +
-                    $"¿No podés ir? Cancelalo acá: {linkCancelacion}\n" +
-                    "(¿Necesitás cancelar? Usá el link que te llega por mail apenas confirmás la reserva.)\n\n" +
+                    $"Tu turno para \"{nombreServicio}\" en {nombreComercio} quedó reservado para el {fechaTexto}.\n\n" +
+                    textoSenia +
+                    $"¿No podés ir? Cancelalo acá: {linkCancelacion}\n\n" +
                     $"¿Querés agregarlo a tu calendario? {linkGoogleCalendar}\n" +
                     "(También te dejamos un archivo adjunto que sirve para cualquier calendario, no solo Google.)\n\n" +
                     "Gracias por reservar con Reserva2.",
@@ -2071,6 +2153,38 @@ app.MapPatch("/api/turnos/{id:int}/cancelar", async (AppDbContext context, int i
     return Results.Ok(turno);
 }).RequireAuthorization("AdminCliente");
 
+// Comprobante de la seña: solo el comercio dueño del turno. No es un archivo estático público.
+app.MapGet("/api/turnos/{id:int}/comprobante", async (AppDbContext context, int id, ClaimsPrincipal user) =>
+{
+    var turno = await context.Turnos.FindAsync(id);
+    if (turno is null) return Results.NotFound();
+    if (ComercioIdDelToken(user) != turno.ComercioId) return Results.Forbid();
+    if (turno.ComprobanteArchivo is null) return Results.NotFound(new { mensaje = "Este turno no tiene comprobante." });
+
+    var ruta = Path.Combine(rutaComprobantes, Path.GetFileName(turno.ComprobanteArchivo));
+    if (!File.Exists(ruta)) return Results.NotFound(new { mensaje = "No encontramos el archivo del comprobante." });
+
+    var tipo = Path.GetExtension(ruta).ToLowerInvariant() switch
+    {
+        ".png" => "image/png",
+        ".webp" => "image/webp",
+        _ => "image/jpeg"
+    };
+    return Results.File(ruta, tipo);
+}).RequireAuthorization("AdminCliente");
+
+app.MapPatch("/api/turnos/{id:int}/sena-verificada", async (AppDbContext context, int id, ClaimsPrincipal user) =>
+{
+    var turno = await context.Turnos.FindAsync(id);
+    if (turno is null) return Results.NotFound();
+    if (ComercioIdDelToken(user) != turno.ComercioId) return Results.Forbid();
+    if (turno.SeñaVerificada is null) return Results.BadRequest(new { mensaje = "Este turno no tiene seña." });
+
+    turno.SeñaVerificada = true;
+    await context.SaveChangesAsync();
+    return Results.Ok(turno);
+}).RequireAuthorization("AdminCliente");
+
 // ==========================================
 // CANCELACIÓN PÚBLICA (el cliente final cancela su turno sin necesitar cuenta,
 // usando el link único que le llega por mail)
@@ -2110,7 +2224,7 @@ app.Run();
 // DTOs (Data Transfer Objects)
 // (Acá es donde tienen que ir los 'record' y 'class' para que C# 9+ no tire error CS8803)
 // ==========================================
-record ComercioPublicoDto(int Id, string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string? LogoUrl, bool WhatsAppActivo);
+record ComercioPublicoDto(int Id, string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string? LogoUrl, bool WhatsAppActivo, string DatosBancarios);
 record ComercioDto(int Id, string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones,
     string DatosBancarios, string Email, bool Activo, string PlanActual, DateTime? FechaProximoPago, decimal? MontoMensualAcordado, string CicloFacturacion);
 record ActualizarEstadoRequest(bool Activo);
@@ -2161,7 +2275,10 @@ record ProfesionalRequest(string Nombre, int? SucursalId = null);
 record SucursalRequest(string Nombre, string Direccion, string? Telefono, bool Activa = true);
 record HorarioRequest(int DiaSemana, TimeSpan HoraInicio, TimeSpan HoraFin, int? ProfesionalId = null);
 record SlotDisponibilidad(DateTime Inicio, DateTime Fin, bool Disponible);
-record CrearTurnoRequest(int ComercioId, int ServicioId, DateTime FechaHoraInicio, string ClienteNombre, string ClienteWhatsApp, string ClienteEmail, int? ProfesionalId = null);
+// ComprobanteBase64: captura del comprobante de la seña (PNG, JPG o WEBP, hasta 5MB), en
+// base64 con o sin el prefijo "data:image/...;base64,". Obligatorio solo si el servicio
+// tiene seña; se ignora si no la tiene.
+record CrearTurnoRequest(int ComercioId, int ServicioId, DateTime FechaHoraInicio, string ClienteNombre, string ClienteWhatsApp, string ClienteEmail, int? ProfesionalId = null, string? ComprobanteBase64 = null);
 record AdminCrearTurnoRequest(int ServicioId, DateTime FechaHoraInicio, string ClienteNombre, string? ClienteWhatsApp, string? ClienteEmail, int? ProfesionalId = null);
 record HistorialItemDto(int Id, DateTime FechaHoraInicio, string ClienteNombre, string ServicioNombre, decimal Monto);
 record HistorialDto(List<HistorialItemDto> Items, decimal TotalHoy, decimal TotalSemana, decimal TotalMes);
