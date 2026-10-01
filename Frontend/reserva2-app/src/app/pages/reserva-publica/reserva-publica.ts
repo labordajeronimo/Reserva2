@@ -70,6 +70,16 @@ export class ReservaPublica implements OnInit {
   reservaConfirmada = signal(false);
   linkCopiado = signal(false);
   intentoEnviar = signal(false);
+  // Los errores de cada campo se muestran recién cuando el cliente sale del campo (o intentó
+  // reservar), no mientras está escribiendo.
+  camposTocados = signal<Set<string>>(new Set());
+
+  // Seña: si el servicio la pide, el comprobante (captura) es obligatorio para reservar.
+  comprobanteBase64 = signal<string | null>(null);
+  comprobanteVistaPrevia = signal<string | null>(null);
+  comprobanteNombre = signal('');
+  errorComprobante = signal<string | null>(null);
+  aliasCopiado = signal(false);
 
   hostActual = typeof window !== 'undefined' ? window.location.host : 'reservados2.com';
 
@@ -85,13 +95,21 @@ export class ReservaPublica implements OnInit {
       .join('');
   });
 
+  marcarTocado(campo: string): void {
+    this.camposTocados.update(s => new Set(s).add(campo));
+  }
+
+  private mostrarError(campo: string): boolean {
+    return this.intentoEnviar() || this.camposTocados().has(campo);
+  }
+
   errorNombre(): string | null {
-    if (!this.intentoEnviar()) return null;
+    if (!this.mostrarError('nombre')) return null;
     return this.clienteNombre.trim().length > 1 ? null : 'Ingresá tu nombre.';
   }
 
   errorWhatsApp(): string | null {
-    if (!this.intentoEnviar()) return null;
+    if (!this.mostrarError('whatsapp')) return null;
     const valor = this.clienteWhatsApp.trim();
     if (valor.length === 0) return 'Ingresá tu WhatsApp.';
     const cantidadDigitos = (valor.match(/\d/g) ?? []).length;
@@ -102,7 +120,7 @@ export class ReservaPublica implements OnInit {
   }
 
   errorEmail(): string | null {
-    if (!this.intentoEnviar()) return null;
+    if (!this.mostrarError('email')) return null;
     const valor = this.clienteEmail.trim();
     if (valor.length === 0) return 'Ingresá tu email.';
     if (!EMAIL_REGEX.test(valor)) return 'Ingresá un email válido (ej: tu@email.com).';
@@ -116,31 +134,101 @@ export class ReservaPublica implements OnInit {
       && EMAIL_REGEX.test(this.clienteEmail.trim());
   }
 
+  pideSenia(): boolean {
+    return (this.servicioSeleccionado()?.['montoSeña'] ?? 0) > 0;
+  }
+
   puedeReservar(): boolean {
     return !!this.servicioSeleccionado() &&
       !!this.slotSeleccionado() &&
       this.slotSeleccionado()!.disponible &&
-      this.formularioValido();
+      this.formularioValido() &&
+      (!this.pideSenia() || !!this.comprobanteBase64());
   }
 
-  // El texto de la pantalla de confirmación depende de si ESTE comercio tiene el bot de
-  // WhatsApp activado (exclusivo Premium) y si EL SERVICIO elegido tiene seña configurada —
-  // no todos los comercios ni todos los servicios tienen ninguna de las dos cosas, así que
-  // no hay que prometer ninguna que no vaya a pasar.
-  mensajeConfirmacion(): string {
-    const whatsAppActivo = this.comercio()?.whatsAppActivo ?? false;
-    const tieneSenia = !!this.servicioSeleccionado()?.['montoSeña'];
+  // El botón dice lo que falta, en el orden en que se completa el formulario.
+  textoBotonReservar(): string {
+    if (!this.servicioSeleccionado()) return 'Elegí un servicio';
+    if (!this.slotSeleccionado()) return 'Elegí un horario';
+    if (this.clienteNombre.trim().length <= 1) return 'Completá tu nombre';
+    const whatsapp = this.clienteWhatsApp.trim();
+    if (!WHATSAPP_REGEX.test(whatsapp) || (whatsapp.match(/\d/g) ?? []).length < 8) return 'Completá tu WhatsApp';
+    if (!EMAIL_REGEX.test(this.clienteEmail.trim())) return 'Completá tu email';
+    if (this.pideSenia() && !this.comprobanteBase64()) return 'Subí el comprobante de la seña';
+    const precio = this.servicioSeleccionado()!.precio;
+    return precio > 0 ? `Reservar turno · $${precio.toLocaleString('es-AR')}` : 'Reservar turno';
+  }
 
-    if (whatsAppActivo && tieneSenia) {
-      return `Te vamos a escribir por WhatsApp al ${this.clienteWhatsApp} con el alias para la seña. Tenés 2 horas para transferir antes de que el horario se libere.`;
+  // ================= RESUMEN =================
+  mesCorto(): string {
+    const dia = this.diaSeleccionado();
+    if (!dia) return '';
+    const [y, m, d] = dia.fecha.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('es-AR', { month: 'short' }).replace('.', '');
+  }
+
+  diaLargoSeleccionado(): string {
+    const dia = this.diaSeleccionado();
+    if (!dia) return '';
+    const [y, m, d] = dia.fecha.split('-').map(Number);
+    const texto = new Date(y, m - 1, d).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+  }
+
+  textoHorarioSeleccionado(): string {
+    const slot = this.slotSeleccionado();
+    return slot ? `${this.formatearHora(slot.inicio)} a ${this.formatearHora(slot.fin)} hs` : '';
+  }
+
+  // ================= SEÑA =================
+  elegirComprobante(evento: Event): void {
+    const input = evento.target as HTMLInputElement;
+    const archivo = input.files?.[0];
+    input.value = '';
+    if (!archivo) return;
+
+    this.errorComprobante.set(null);
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(archivo.type)) {
+      this.errorComprobante.set('Subí una imagen PNG, JPG o WEBP (una captura de pantalla).');
+      return;
     }
-    if (!whatsAppActivo && tieneSenia) {
-      return 'Te enviamos por mail los datos para la seña. Tenés 2 horas para transferir antes de que el horario se libere.';
+    if (archivo.size > 5 * 1024 * 1024) {
+      this.errorComprobante.set('La imagen no puede pesar más de 5MB.');
+      return;
     }
-    if (whatsAppActivo && !tieneSenia) {
-      return `Te vamos a escribir por WhatsApp al ${this.clienteWhatsApp} para confirmar tu turno.`;
-    }
-    return 'Te enviamos la confirmación de tu turno por mail.';
+
+    const lector = new FileReader();
+    lector.onload = () => {
+      const dataUrl = lector.result as string;
+      this.comprobanteBase64.set(dataUrl);
+      this.comprobanteVistaPrevia.set(dataUrl);
+      this.comprobanteNombre.set(archivo.name);
+    };
+    lector.onerror = () => this.errorComprobante.set('No pudimos leer la imagen. Probá con otra.');
+    lector.readAsDataURL(archivo);
+  }
+
+  quitarComprobante(): void {
+    this.comprobanteBase64.set(null);
+    this.comprobanteVistaPrevia.set(null);
+    this.comprobanteNombre.set('');
+    this.errorComprobante.set(null);
+  }
+
+  copiarAlias(): void {
+    const alias = this.comercio()?.datosBancarios ?? '';
+    navigator.clipboard?.writeText(alias).then(() => {
+      this.aliasCopiado.set(true);
+      setTimeout(() => this.aliasCopiado.set(false), 1600);
+    });
+  }
+
+  // Texto de la pantalla de confirmación (se rediseña en la Etapa 6). Ya no hay pre-reserva
+  // ni plazo de 2 horas: el turno queda reservado y la confirmación llega por mail.
+  mensajeConfirmacion(): string {
+    return this.pideSenia()
+      ? 'Te enviamos la confirmación por mail. El local va a verificar el comprobante de tu seña.'
+      : 'Te enviamos la confirmación de tu turno por mail.';
   }
 
   constructor(private route: ActivatedRoute, private api: Api) {}
@@ -371,7 +459,8 @@ export class ReservaPublica implements OnInit {
       clienteNombre: this.clienteNombre.trim(),
       clienteWhatsApp: this.clienteWhatsApp.trim(),
       clienteEmail: this.clienteEmail.trim(),
-      profesionalId: this.profesionalSeleccionado()?.id ?? null
+      profesionalId: this.profesionalSeleccionado()?.id ?? null,
+      comprobanteBase64: this.pideSenia() ? this.comprobanteBase64() : null
     }).subscribe({
       next: () => {
         this.reservando.set(false);
@@ -385,6 +474,8 @@ export class ReservaPublica implements OnInit {
           this.buscarDisponibilidad();
           this.cargarResumenDias();
           this.slotSeleccionado.set(null);
+        } else if (err.status === 400 && err.error?.mensaje) {
+          this.errorReserva.set(err.error.mensaje);
         } else {
           this.errorReserva.set('No pudimos guardar la reserva. Probá de nuevo.');
         }
@@ -399,6 +490,8 @@ export class ReservaPublica implements OnInit {
     this.clienteWhatsApp = '';
     this.clienteEmail = '';
     this.intentoEnviar.set(false);
+    this.camposTocados.set(new Set());
+    this.quitarComprobante();
     this.buscarDisponibilidad();
   }
 

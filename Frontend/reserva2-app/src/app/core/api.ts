@@ -23,6 +23,7 @@ export interface ComercioPublico {
   telefonoNotificaciones: string;
   logoUrl: string | null;
   whatsAppActivo: boolean;
+  datosBancarios: string; // alias/CBU para transferir la seña
 }
 
 export interface Servicio {
@@ -531,6 +532,7 @@ export class Api {
     clienteWhatsApp: string;
     clienteEmail: string;
     profesionalId?: number | null;
+    comprobanteBase64?: string | null; // captura del comprobante, solo si el servicio pide seña
   }): Observable<Turno> {
     return this.http.post<Turno>(`${API_BASE}/turnos`, turno);
   }

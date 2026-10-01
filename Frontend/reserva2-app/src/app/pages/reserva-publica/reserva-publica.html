@@ -68,7 +68,7 @@
       <div class="check-circle">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
       </div>
-      <h2>¡Turno pre-reservado!</h2>
+      <h2>¡Turno reservado!</h2>
       <p>{{ mensajeConfirmacion() }}</p>
       <p class="note">¿Necesitás cancelar? Usá el link que te llega por mail apenas confirmás la reserva.</p>
       <button class="again" type="button" (click)="reservarOtroTurno()">Reservar otro turno</button>
@@ -246,46 +246,92 @@
       </section>
     </div>
 
-    <div class="card form-card">
-      <h2>Confirmá tu turno</h2>
-      <p class="sub">{{ comercio()!.nombre }} recibe tu reserva al instante.</p>
+    <aside class="card form-card">
+      <h2>Tu turno</h2>
+
+      <div class="resumen-fecha">
+        <div class="mini-cal" aria-hidden="true">
+          <span class="mini-cal-mes">{{ mesCorto() }}</span>
+          <span class="mini-cal-dia">{{ diaSeleccionado()?.numeroDia ?? '—' }}</span>
+        </div>
+        <div class="resumen-fecha-texto">
+          <div class="resumen-dia-largo">{{ diaLargoSeleccionado() || 'Elegí un día' }}</div>
+          <div class="resumen-horario">{{ textoHorarioSeleccionado() || 'Elegí un horario' }}</div>
+        </div>
+      </div>
 
       <div class="summary-row"><span class="label">Servicio</span><span class="val">{{ servicioSeleccionado()?.nombre ?? '—' }}</span></div>
-      <div class="summary-row"><span class="label">Día</span><span class="val">{{ diaSeleccionado()?.etiquetaCompleta ?? '—' }}</span></div>
-      <div class="summary-row"><span class="label">Horario</span><span class="val">{{ slotSeleccionado() ? formatearHora(slotSeleccionado()!.inicio) + 'hs' : '—' }}</span></div>
-      <div class="summary-row"><span class="label">Precio</span><span class="val">{{ servicioSeleccionado() ? (servicioSeleccionado()!.precio | currency:'ARS':'$') : '—' }}</span></div>
-      @if (servicioSeleccionado()?.['montoSeña']) {
-        <div class="summary-row"><span class="label">Seña</span><span class="val">{{ servicioSeleccionado()!['montoSeña'] | currency:'ARS':'$' }}</span></div>
+      @if (profesionales().length > 0) {
+        <div class="summary-row"><span class="label">Profesional</span><span class="val">{{ profesionalSeleccionado()?.nombre ?? 'Cualquiera disponible' }}</span></div>
       }
+      @if (sucursalSeleccionada(); as sucursal) {
+        <div class="summary-row"><span class="label">Local</span><span class="val">{{ sucursal.nombre }}</span></div>
+      }
+      <div class="summary-row summary-total"><span class="label">Total</span><span class="val">{{ servicioSeleccionado() ? (servicioSeleccionado()!.precio | currency:'ARS':'$':'1.0-2') : '—' }}</span></div>
 
       <div class="field">
-        <label for="nombre">Tu nombre</label>
-        <input id="nombre" type="text" placeholder="Cómo te llamamos" [(ngModel)]="clienteNombre" [class.input-invalido]="errorNombre()">
+        <label for="nombre">Nombre</label>
+        <input id="nombre" type="text" placeholder="Cómo te llamamos" autocomplete="name"
+               [(ngModel)]="clienteNombre" (blur)="marcarTocado('nombre')" [class.input-invalido]="errorNombre()">
         @if (errorNombre()) { <div class="campo-error">{{ errorNombre() }}</div> }
       </div>
       <div class="field">
         <label for="whatsapp">WhatsApp</label>
-        <input id="whatsapp" type="tel" placeholder="341 000 0000" [(ngModel)]="clienteWhatsApp" [class.input-invalido]="errorWhatsApp()">
+        <input id="whatsapp" type="tel" placeholder="341 000 0000" autocomplete="tel"
+               [(ngModel)]="clienteWhatsApp" (blur)="marcarTocado('whatsapp')" [class.input-invalido]="errorWhatsApp()">
         @if (errorWhatsApp()) { <div class="campo-error">{{ errorWhatsApp() }}</div> }
       </div>
       <div class="field">
-        <label for="email">Email</label>
-        <input id="email" type="email" placeholder="tu@email.com" [(ngModel)]="clienteEmail" [class.input-invalido]="errorEmail()">
-        @if (errorEmail()) { <div class="campo-error">{{ errorEmail() }}</div> }
+        <label for="email">Email <span class="obligatorio">obligatorio</span></label>
+        <input id="email" type="email" placeholder="tu@email.com" autocomplete="email"
+               [(ngModel)]="clienteEmail" (blur)="marcarTocado('email')" [class.input-invalido]="errorEmail()">
+        @if (errorEmail()) {
+          <div class="campo-error">{{ errorEmail() }}</div>
+        } @else {
+          <div class="campo-ayuda">Ahí te llega la confirmación del turno.</div>
+        }
       </div>
+
+      @if (pideSenia()) {
+        <div class="senia-bloque">
+          <div class="senia-titulo">Este servicio pide una seña de {{ servicioSeleccionado()!['montoSeña'] | currency:'ARS':'$':'1.0-2' }}</div>
+          @if (comercio()!.datosBancarios) {
+            <p class="senia-texto">Transferila a este alias o CBU y subí la captura del comprobante:</p>
+            <div class="senia-alias">
+              <span>{{ comercio()!.datosBancarios }}</span>
+              <button type="button" (click)="copiarAlias()">{{ aliasCopiado() ? '¡Copiado!' : 'Copiar' }}</button>
+            </div>
+          } @else {
+            <p class="senia-texto">Pedile el alias al local y subí la captura del comprobante.</p>
+          }
+
+          @if (comprobanteVistaPrevia(); as vista) {
+            <div class="comprobante-cargado">
+              <img [src]="vista" alt="Comprobante cargado">
+              <div>
+                <div class="comprobante-nombre">{{ comprobanteNombre() }}</div>
+                <button type="button" class="comprobante-quitar" (click)="quitarComprobante()">Cambiar</button>
+              </div>
+            </div>
+          } @else {
+            <label class="comprobante-subir">
+              <input type="file" accept="image/png,image/jpeg,image/webp" hidden (change)="elegirComprobante($event)">
+              Subir comprobante (captura)
+            </label>
+          }
+          @if (errorComprobante()) { <div class="campo-error">{{ errorComprobante() }}</div> }
+        </div>
+      }
 
       @if (errorReserva()) {
         <div class="error-msg">{{ errorReserva() }}</div>
       }
 
       <button class="confirm-btn" type="button" [disabled]="!puedeReservar() || reservando()" (click)="confirmarReserva()">
-        {{ reservando() ? 'Reservando...' : 'Reservar este turno' }}
+        {{ reservando() ? 'Reservando...' : textoBotonReservar() }}
       </button>
-      <p class="note">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="display:inline"><path d="M4 12c0-4.4 3.6-8 8-8s8 3.6 8 8-3.6 8-8 8c-1.2 0-2.3-.25-3.3-.7L4 20l1.1-4.4A7.9 7.9 0 0 1 4 12Z"/></svg>
-        Te vamos a escribir por WhatsApp con el alias para la seña. Tenés 2 horas para transferir antes de que el turno se libere.
-      </p>
-    </div>
+      <p class="aviso-azul">La confirmación de tu turno te llega por email apenas reservás.</p>
+    </aside>
   </div>
 </main>
 
