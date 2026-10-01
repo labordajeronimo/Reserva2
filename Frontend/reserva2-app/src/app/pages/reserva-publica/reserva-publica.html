@@ -104,8 +104,21 @@
 } @else {
 
 <main>
+  <div class="wrap">
+    <ol class="pasos" aria-label="Pasos de la reserva">
+      @for (p of pasos(); track p.nombre; let i = $index) {
+        <li class="paso" [class.hecho]="p.estado === 'hecho'" [class.actual]="p.estado === 'actual'">
+          <span class="paso-marca">
+            @if (p.estado === 'hecho') { ✓ } @else { {{ i + 1 }} }
+          </span>
+          <span class="paso-nombre">{{ p.nombre }}</span>
+        </li>
+      }
+    </ol>
+  </div>
+
   <div class="wrap layout">
-    <div>
+    <div class="columna-flujo">
       @if (sucursalSeleccionada(); as sucursal) {
         <div class="local-elegido">
           <span class="local-icono local-icono-chico" aria-hidden="true">
@@ -124,24 +137,29 @@
       }
 
       @if (profesionales().length > 0) {
-        <div class="card" style="margin-bottom:22px;">
-          <h2>Elegí profesional</h2>
-          <p class="sub">Podés dejar que te atienda cualquiera disponible.</p>
+        <section class="card seccion">
+          <h2>¿Con quién te querés atender?</h2>
+          <p class="sub">Si te da igual, elegí "Cualquiera disponible".</p>
 
-          <div class="services">
-            <div class="service" [class.active]="profesionalSeleccionado() === null" (click)="elegirProfesional(null)">
-              <div><div class="name">Cualquiera disponible</div></div>
-            </div>
+          <div class="profesionales-grid">
+            <button type="button" class="profesional-card" [class.active]="profesionalSeleccionado() === null" (click)="elegirProfesional(null)">
+              <span class="profesional-avatar profesional-avatar-cualquiera" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.8-3 3-4.6 5.5-4.6s4.7 1.6 5.5 4.6"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.6c2.4.2 4.2 1.7 5 4.4"/></svg>
+              </span>
+              <span class="profesional-nombre">Cualquiera disponible</span>
+              <span class="profesional-detalle">Más horarios</span>
+            </button>
             @for (p of profesionales(); track p.id) {
-              <div class="service" [class.active]="profesionalSeleccionado()?.id === p.id" (click)="elegirProfesional(p)">
-                <div><div class="name">{{ p.nombre }}</div></div>
-              </div>
+              <button type="button" class="profesional-card" [class.active]="profesionalSeleccionado()?.id === p.id" (click)="elegirProfesional(p)">
+                <span class="profesional-avatar">{{ inicialesDe(p.nombre) }}</span>
+                <span class="profesional-nombre">{{ p.nombre }}</span>
+              </button>
             }
           </div>
-        </div>
+        </section>
       }
 
-      <div class="card" style="margin-bottom:22px;">
+      <section class="card seccion">
         <h2>Elegí el servicio</h2>
         <p class="sub">Los horarios se ajustan según la duración de cada uno.</p>
 
@@ -149,58 +167,83 @@
           <p class="sub">Este negocio todavía no cargó servicios.</p>
         }
 
-        <div class="services">
+        <div class="servicios-lista" role="radiogroup" aria-label="Servicios">
           @for (s of servicios(); track s.id) {
-            <div class="service" [class.active]="servicioSeleccionado()?.id === s.id" (click)="elegirServicio(s)">
-              <div>
-                <div class="name">{{ s.nombre }}</div>
-                <div class="dur">{{ s.duracionMinutos }} min</div>
-              </div>
-              <div>
-                <div class="price">{{ s.precio | currency:'ARS':'$' }}</div>
-                @if (s['montoSeña']) { <div class="senia">{{ s['montoSeña'] | currency:'ARS':'$' }} seña</div> }
-              </div>
-            </div>
+            <button type="button" class="servicio-fila" role="radio" [attr.aria-checked]="servicioSeleccionado()?.id === s.id"
+                    [class.active]="servicioSeleccionado()?.id === s.id" (click)="elegirServicio(s)">
+              <span class="radio" aria-hidden="true"></span>
+              <span class="servicio-texto">
+                <span class="servicio-nombre">{{ s.nombre }}</span>
+                <span class="servicio-duracion">{{ s.duracionMinutos }} min</span>
+              </span>
+              <span class="servicio-precio">
+                {{ s.precio | currency:'ARS':'$':'1.0-2' }}
+                @if (s['montoSeña']) { <span class="senia">{{ s['montoSeña'] | currency:'ARS':'$':'1.0-2' }} seña</span> }
+              </span>
+            </button>
           }
         </div>
-      </div>
+      </section>
 
-      <div class="card">
+      <section class="card seccion">
         <h2>Elegí día y horario</h2>
-        <p class="sub">Los bloques en gris ya fueron reservados por otra persona.</p>
 
-        <div class="day-tabs">
-          @for (d of diasDisponibles; track d.fecha) {
-            <div class="day-tab" [class.active]="diaSeleccionado()?.fecha === d.fecha" (click)="elegirDia(d)">
-              <div class="d">{{ d.etiquetaDia }}</div>
-              <div class="n">{{ d.numeroDia }}</div>
-            </div>
+        <div class="dias-grid">
+          @for (d of diasDisponibles; track d.fecha; let i = $index) {
+            <button type="button" class="dia" [class.active]="diaSeleccionado()?.fecha === d.fecha" [class.cerrado]="diaCerrado(d)" (click)="elegirDia(d)">
+              <span class="dia-nombre">{{ i === 0 ? 'hoy' : d.etiquetaDia }}</span>
+              <span class="dia-numero">{{ d.numeroDia }}</span>
+              <span class="dia-libres">{{ textoLibresDia(d) }}</span>
+            </button>
           }
+          <button type="button" class="dia dia-otra" [class.active]="esFechaManualSeleccionada()" (click)="mostrarFechaManual.set(!mostrarFechaManual())">
+            <span class="dia-nombre">{{ esFechaManualSeleccionada() ? diaSeleccionado()!.etiquetaDia : 'otra' }}</span>
+            <span class="dia-numero">{{ esFechaManualSeleccionada() ? diaSeleccionado()!.numeroDia : '+' }}</span>
+            <span class="dia-libres">{{ esFechaManualSeleccionada() ? 'elegida' : 'fecha' }}</span>
+          </button>
         </div>
 
-        <div class="fecha-manual">
-          <label for="fecha-manual">¿Buscás más adelante?</label>
-          <input id="fecha-manual" type="date" [min]="fechaMinima" [(ngModel)]="fechaManual" (change)="elegirFechaManual()">
-        </div>
+        @if (mostrarFechaManual()) {
+          <div class="fecha-manual">
+            <label for="fecha-manual">Elegí otra fecha</label>
+            <input id="fecha-manual" type="date" [min]="fechaMinima" [(ngModel)]="fechaManual" (change)="elegirFechaManual()">
+          </div>
+        }
 
         @if (cargandoSlots()) {
           <div class="empty-slots">Buscando horarios libres...</div>
         } @else if (slots().length === 0) {
-          <div class="empty-slots">No hay horarios cargados para este día.</div>
+          <div class="empty-slots dia-cerrado-aviso">Ese día el local está cerrado. Probá con otro día.</div>
         } @else {
-          <div class="slot-grid">
-            @for (slot of slots(); track slot.inicio) {
-              <div
-                class="slot"
-                [class.taken]="!slot.disponible"
-                [class.selected]="slotSeleccionado()?.inicio === slot.inicio"
-                (click)="elegirSlot(slot)">
-                {{ formatearHora(slot.inicio) }}
+          @for (grupo of gruposDeSlots(); track grupo.nombre) {
+            @if (grupo.slots.length > 0) {
+              <div class="franja">
+                <div class="franja-cabecera">
+                  <span class="franja-nombre">{{ grupo.nombre }}</span>
+                  <span class="franja-libres">{{ grupo.libres }} libre{{ grupo.libres === 1 ? '' : 's' }}</span>
+                </div>
+                <div class="slot-grid">
+                  @for (slot of grupo.slots; track slot.inicio) {
+                    <button
+                      type="button"
+                      class="slot"
+                      [class.taken]="!slot.disponible"
+                      [class.selected]="slotSeleccionado()?.inicio === slot.inicio"
+                      [disabled]="!slot.disponible"
+                      (click)="elegirSlot(slot)">
+                      {{ formatearHora(slot.inicio) }}
+                    </button>
+                  }
+                </div>
               </div>
             }
+          }
+          <div class="leyenda">
+            <span><i class="leyenda-libre"></i> Libre</span>
+            <span><i class="leyenda-ocupado"></i> Ya reservado</span>
           </div>
         }
-      </div>
+      </section>
     </div>
 
     <div class="card form-card">

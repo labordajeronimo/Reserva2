@@ -2,6 +2,7 @@ import { Component, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { catchError, forkJoin, of } from 'rxjs';
 
 import { Api, ComercioPublico, Servicio, SlotDisponibilidad, Sucursal, Profesional, urlArchivo } from '../../core/api';
 
@@ -45,9 +46,16 @@ export class ReservaPublica implements OnInit {
   servicios = signal<Servicio[]>([]);
   servicioSeleccionado = signal<Servicio | null>(null);
 
-  diasDisponibles: DiaGrilla[] = this.generarProximosDias(6);
+  diasDisponibles: DiaGrilla[] = this.generarProximosDias(7);
   diaSeleccionado = signal<DiaGrilla | null>(null);
   fechaManual = '';
+  mostrarFechaManual = signal(false);
+
+  // Cuántos horarios hay (total) y cuántos libres en cada uno de los 7 días, para apagar los
+  // días cerrados y mostrar los libres. Sale del mismo endpoint público de disponibilidad,
+  // una llamada por día; un día sin ningún horario es un día en que el local no atiende.
+  resumenDias = signal<Record<string, { total: number; libres: number }>>({});
+  private consultaResumenDias = 0;
   fechaMinima = this.formatearFechaISO(new Date());
 
   slots = signal<SlotDisponibilidad[]>([]);
@@ -188,6 +196,7 @@ export class ReservaPublica implements OnInit {
     this.profesionalSeleccionado.set(profesional);
     this.slotSeleccionado.set(null);
     this.buscarDisponibilidad();
+    this.cargarResumenDias();
   }
 
   private cargarServicios(comercioId: number): void {
@@ -201,6 +210,7 @@ export class ReservaPublica implements OnInit {
     this.servicioSeleccionado.set(servicio);
     this.slotSeleccionado.set(null);
     this.buscarDisponibilidad();
+    this.cargarResumenDias();
   }
 
   elegirDia(dia: DiaGrilla): void {
@@ -255,6 +265,70 @@ export class ReservaPublica implements OnInit {
     });
   }
 
+  private cargarResumenDias(): void {
+    const comercio = this.comercio();
+    const servicio = this.servicioSeleccionado();
+    if (!comercio || !servicio) return;
+
+    // Si el cliente cambia de servicio o profesional rápido, se descartan las respuestas viejas.
+    const consulta = ++this.consultaResumenDias;
+    const profesionalId = this.profesionalSeleccionado()?.id;
+    const sucursalId = this.sucursalSeleccionada()?.id;
+    forkJoin(this.diasDisponibles.map(d =>
+      this.api.getDisponibilidad(comercio.id, servicio.id, d.fecha, profesionalId, sucursalId).pipe(catchError(() => of(null)))
+    )).subscribe(resultados => {
+      if (consulta !== this.consultaResumenDias) return;
+      const resumen: Record<string, { total: number; libres: number }> = {};
+      resultados.forEach((slots, i) => {
+        if (slots) resumen[this.diasDisponibles[i].fecha] = { total: slots.length, libres: slots.filter(x => x.disponible).length };
+      });
+      this.resumenDias.set(resumen);
+    });
+  }
+
+  diaCerrado(d: DiaGrilla): boolean {
+    return this.resumenDias()[d.fecha]?.total === 0;
+  }
+
+  textoLibresDia(d: DiaGrilla): string {
+    const r = this.resumenDias()[d.fecha];
+    if (!r) return '';
+    if (r.total === 0) return 'cerrado';
+    return r.libres === 0 ? 'completo' : `${r.libres} libre${r.libres === 1 ? '' : 's'}`;
+  }
+
+  esFechaManualSeleccionada(): boolean {
+    const dia = this.diaSeleccionado();
+    return !!dia && !this.diasDisponibles.some(d => d.fecha === dia.fecha);
+  }
+
+  // Horarios agrupados en Mañana (antes de las 13:00) y Tarde.
+  gruposDeSlots(): { nombre: string; slots: SlotDisponibilidad[]; libres: number }[] {
+    const maniana = this.slots().filter(s => new Date(s.inicio).getHours() < 13);
+    const tarde = this.slots().filter(s => new Date(s.inicio).getHours() >= 13);
+    return [
+      { nombre: 'Mañana', slots: maniana, libres: maniana.filter(s => s.disponible).length },
+      { nombre: 'Tarde', slots: tarde, libres: tarde.filter(s => s.disponible).length }
+    ];
+  }
+
+  // Barra de pasos: ✓ los completos y resaltado el primero que falta.
+  pasos(): { nombre: string; estado: 'hecho' | 'actual' | 'pendiente' }[] {
+    const completos = [
+      { nombre: 'Local', hecho: !this.necesitaElegirSucursal() || !!this.sucursalSeleccionada() },
+      { nombre: 'Profesional', hecho: true },
+      { nombre: 'Servicio', hecho: !!this.servicioSeleccionado() },
+      { nombre: 'Día y hora', hecho: !!this.slotSeleccionado() },
+      { nombre: 'Tus datos', hecho: this.formularioValido() }
+    ];
+    const primeroPendiente = completos.findIndex(p => !p.hecho);
+    return completos.map((p, i) => ({ nombre: p.nombre, estado: p.hecho ? 'hecho' : i === primeroPendiente ? 'actual' : 'pendiente' }));
+  }
+
+  inicialesDe(nombre: string): string {
+    return nombre.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join('') || '?';
+  }
+
   formatearHora(iso: string): string {
     const d = new Date(iso);
     return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -302,12 +376,14 @@ export class ReservaPublica implements OnInit {
       next: () => {
         this.reservando.set(false);
         this.reservaConfirmada.set(true);
+        this.cargarResumenDias();
       },
       error: err => {
         this.reservando.set(false);
         if (err.status === 409) {
           this.errorReserva.set('Ese horario ya no está disponible. Elegí otro.');
           this.buscarDisponibilidad();
+          this.cargarResumenDias();
           this.slotSeleccionado.set(null);
         } else {
           this.errorReserva.set('No pudimos guardar la reserva. Probá de nuevo.');
