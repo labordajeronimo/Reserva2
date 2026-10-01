@@ -276,7 +276,7 @@
             <tbody>
               @for (i of historial()!.items; track i.id) {
                 <tr>
-                  <td>{{ i.fechaHoraInicio | date:'dd/MM HH:mm' }}</td>
+                  <td class="celda-fecha">{{ i.fechaHoraInicio | date:'dd/MM HH:mm' }}</td>
                   <td>{{ i.clienteNombre }}</td>
                   <td>{{ i.servicioNombre }}</td>
                   <td class="celda-monto">{{ i.monto | currency:'ARS':'$' }}</td>
@@ -290,33 +290,34 @@
 
     @if (tabActiva() === 'ganancias') {
       @if (!esPremium()) {
-        <div class="panel-card upsell-premium">
+        <div class="panel-card turnos-card upsell-premium">
+          <span class="chip chip-premium">Premium</span>
           <h2>Panel de ganancias</h2>
           <p class="sub-info">Esto es parte del plan Premium. Ves los ingresos por profesional y por período si actualizás tu plan.</p>
           <button class="btn-naranja" (click)="abrirTab('plan')">Actualizar mi plan</button>
         </div>
       } @else {
         @if (ganancias(); as g) {
-          <div class="metricas metricas-dashboard">
-            <div class="metrica-card">
-              <div class="valor ok">{{ g.facturadoHoy | currency:'ARS':'$':'1.0-0' }}</div>
-              <div class="etiqueta">Facturado hoy</div>
+          <div class="kpi-grid">
+            <div class="kpi">
+              <div class="kpi-etiqueta">Facturado hoy</div>
+              <div class="kpi-valor">{{ g.facturadoHoy | currency:'ARS':'$':'1.0-0' }}</div>
             </div>
-            <div class="metrica-card">
-              <div class="valor ok">{{ g.facturadoUltimos7Dias | currency:'ARS':'$':'1.0-0' }}</div>
-              <div class="etiqueta">Últimos 7 días</div>
+            <div class="kpi">
+              <div class="kpi-etiqueta">Últimos 7 días</div>
+              <div class="kpi-valor">{{ g.facturadoUltimos7Dias | currency:'ARS':'$':'1.0-0' }}</div>
             </div>
-            <div class="metrica-card">
-              <div class="valor ok">{{ g.facturadoEsteMes | currency:'ARS':'$':'1.0-0' }}</div>
-              <div class="etiqueta">Este mes</div>
+            <div class="kpi">
+              <div class="kpi-etiqueta">Este mes</div>
+              <div class="kpi-valor">{{ g.facturadoEsteMes | currency:'ARS':'$':'1.0-0' }}</div>
             </div>
-            <div class="metrica-card">
-              <div class="valor">{{ g.cortesTotales }}</div>
-              <div class="etiqueta">Cortes totales</div>
+            <div class="kpi">
+              <div class="kpi-etiqueta">Cortes totales</div>
+              <div class="kpi-valor">{{ g.cortesTotales }}</div>
             </div>
           </div>
 
-          <div class="panel-card grafico-card" style="margin-bottom:20px;">
+          <div class="panel-card turnos-card bloque">
             <h2>Facturación · últimos 7 días</h2>
             <div class="grafico-barras">
               @for (d of g.facturacionPorDia; track d.fecha) {
@@ -329,8 +330,8 @@
             </div>
           </div>
 
-          <div class="dashboard-columnas" style="margin-bottom:20px;">
-            <div class="panel-card">
+          <div class="dashboard-columnas bloque">
+            <div class="panel-card turnos-card">
               <h2>Servicio más pedido</h2>
               @if (g.servicioMasPedido.length === 0) {
                 <p class="empty">Todavía no hay turnos confirmados.</p>
@@ -351,12 +352,12 @@
               }
             </div>
 
-            <div class="panel-card">
+            <div class="panel-card turnos-card">
               <h2>Clientes más frecuentes</h2>
               @if (g.clientesFrecuentes.length === 0) {
                 <p class="empty">Todavía no hay turnos confirmados.</p>
               } @else {
-                <table class="tabla">
+                <table class="tabla tabla-limpia">
                   <thead>
                     <tr><th>Cliente</th><th>Visitas</th><th>Última visita</th></tr>
                   </thead>
@@ -374,13 +375,13 @@
             </div>
           </div>
 
-          <div class="panel-card" style="margin-bottom:20px;">
+          <div class="panel-card turnos-card bloque">
             <h2>Para reactivar</h2>
             <p class="sub-info">Clientes que no vuelven hace 30 días o más. Un mensaje corto por WhatsApp puede traerlos de vuelta.</p>
             @if (g.paraReactivar.length === 0) {
               <p class="empty">No hay clientes para reactivar por ahora.</p>
             } @else {
-              <table class="tabla">
+              <table class="tabla tabla-limpia">
                 <thead>
                   <tr><th>Cliente</th><th>Visitas</th><th>Última visita</th></tr>
                 </thead>
@@ -397,7 +398,7 @@
             }
           </div>
 
-          <div class="panel-card grafico-card" style="margin-bottom:20px;">
+          <div class="panel-card turnos-card bloque">
             <h2>Horarios ocupados</h2>
             @if (g.horariosOcupados.length === 0) {
               <p class="empty">Todavía no hay turnos confirmados.</p>
@@ -415,47 +416,49 @@
           </div>
         }
 
-        <div class="panel-card">
-          <div class="historial-header">
-            <h2>Ganancias por período</h2>
+        <div class="panel-card turnos-card">
+          <div class="turnos-toolbar">
+            <div>
+              <h2>Ganancias por período</h2>
+              <div class="historial-cantidad">Resumen agrupado por profesional para el rango elegido. Si buscás el detalle turno por turno, es la pestaña Historial.</div>
+            </div>
             <div class="rango-fechas">
               <input type="date" [(ngModel)]="gananciasDesde">
               <span>a</span>
               <input type="date" [(ngModel)]="gananciasHasta">
-              <button class="mini" (click)="cargarGanancias()">Aplicar</button>
+              <button class="btn-sec" (click)="cargarGanancias()">Aplicar</button>
             </div>
           </div>
-          <p class="sub-info">Resumen agrupado por profesional para el rango elegido. Si buscás el detalle turno por turno, es la pestaña Historial.</p>
 
           @if (errorGanancias()) { <div class="error-msg">{{ errorGanancias() }}</div> }
 
           @if (cargandoGanancias()) {
             <p class="empty">Cargando...</p>
           } @else if (ganancias(); as g) {
-            <div class="metricas metricas-ganancias">
-              <div class="metrica-card">
-                <div class="valor">{{ g.cantidadTotal }}</div>
-                <div class="etiqueta">Turnos confirmados</div>
+            <div class="kpi-grid kpi-grid-interno">
+              <div class="kpi kpi-interno">
+                <div class="kpi-etiqueta">Turnos confirmados</div>
+                <div class="kpi-valor">{{ g.cantidadTotal }}</div>
               </div>
-              <div class="metrica-card">
-                <div class="valor ok">{{ g.ingresosTotal | currency:'ARS':'$' }}</div>
-                <div class="etiqueta">Ingresos totales</div>
+              <div class="kpi kpi-interno">
+                <div class="kpi-etiqueta">Ingresos totales</div>
+                <div class="kpi-valor">{{ g.ingresosTotal | currency:'ARS':'$':'1.0-2' }}</div>
               </div>
             </div>
 
             @if (g.porProfesional.length === 0) {
               <p class="empty">No hay turnos confirmados en ese rango.</p>
             } @else {
-              <table class="tabla">
+              <table class="tabla tabla-limpia">
                 <thead>
-                  <tr><th>Profesional</th><th>Turnos</th><th>Ingresos</th></tr>
+                  <tr><th>Profesional</th><th>Turnos</th><th class="celda-monto">Ingresos</th></tr>
                 </thead>
                 <tbody>
                   @for (p of g.porProfesional; track p.profesionalId) {
                     <tr>
                       <td>{{ p.nombreProfesional }}</td>
                       <td>{{ p.cantidadTurnos }}</td>
-                      <td>{{ p.ingresos | currency:'ARS':'$' }}</td>
+                      <td class="celda-monto">{{ p.ingresos | currency:'ARS':'$' }}</td>
                     </tr>
                   }
                 </tbody>
@@ -463,20 +466,20 @@
             }
 
             @if (sucursales().length > 1) {
-              <h2 style="margin-top:28px;">Ganancias por sucursal</h2>
+              <h2 class="subtitulo-seccion">Ganancias por sucursal</h2>
               @if (g.porSucursal.length === 0) {
                 <p class="empty">No hay turnos confirmados en ese rango.</p>
               } @else {
-                <table class="tabla">
+                <table class="tabla tabla-limpia">
                   <thead>
-                    <tr><th>Sucursal</th><th>Turnos</th><th>Ingresos</th></tr>
+                    <tr><th>Sucursal</th><th>Turnos</th><th class="celda-monto">Ingresos</th></tr>
                   </thead>
                   <tbody>
                     @for (s of g.porSucursal; track s.sucursalId) {
                       <tr>
                         <td>{{ s.nombreSucursal }}</td>
                         <td>{{ s.cantidadTurnos }}</td>
-                        <td>{{ s.ingresos | currency:'ARS':'$' }}</td>
+                        <td class="celda-monto">{{ s.ingresos | currency:'ARS':'$' }}</td>
                       </tr>
                     }
                   </tbody>
