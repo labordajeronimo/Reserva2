@@ -66,3 +66,24 @@
 .ps-card-extra { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(232, 236, 246, 0.09); }
 
 .ps-nota { font-size: 0.78rem; color: #7C879E; margin-top: 14px; }
+
+/* Radio y etiqueta "Actual" (solo con conRadio / planActual, en el panel). */
+.ps-card-nombre { display: flex; align-items: center; gap: 8px; }
+.ps-radio {
+  flex-shrink: 0;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(232, 236, 246, 0.3);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ps-card.selected .ps-radio { border-color: #F97316; box-shadow: inset 0 0 0 3px #10172B, inset 0 0 0 9px #F97316; }
+.ps-actual {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(52, 211, 153, 0.16);
+  color: #6EE7B7;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}

@@ -12,6 +12,11 @@ export class PlanSelector {
   @Input() plan = 'Gratuito';
   @Output() planChange = new EventEmitter<string>();
 
+  // Solo el panel los usa: muestra un radio en cada tarjeta y marca cuál es el plan vigente.
+  // En el registro quedan apagados y el selector se ve como siempre.
+  @Input() conRadio = false;
+  @Input() planActual: string | null = null;
+
   @Input() ciclo = 'Mensual';
   @Output() cicloChange = new EventEmitter<string>();
 

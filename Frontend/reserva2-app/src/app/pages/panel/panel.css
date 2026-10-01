@@ -737,6 +737,24 @@
 .wa-datos { display: flex; gap: 8px; flex-wrap: wrap; }
 .wa-nota { margin: 14px 0 0; }
 
+/* ----- Mi Plan ----- */
+.plan-resumen { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+.plan-resumen-texto { flex: 1 1 280px; min-width: 0; }
+.plan-nombre { font-family: 'Sora', sans-serif; font-weight: 800; font-size: 1.6rem; color: #FFFFFF; margin: 4px 0 14px; }
+.plan-nombre span { font-size: 0.95rem; font-weight: 600; color: #A6AFC6; }
+.plan-resumen .renovacion-btn { margin-bottom: 0; }
+.plan-guardar { margin-top: 16px; }
+.anillo { position: relative; width: 132px; height: 132px; flex-shrink: 0; }
+.anillo svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.anillo circle { fill: none; stroke-width: 10; }
+.anillo-fondo { stroke: rgba(232, 236, 246, 0.08); }
+.anillo-progreso { stroke: #F97316; stroke-linecap: round; transition: stroke-dashoffset 0.4s ease; }
+.anillo.alerta .anillo-progreso { stroke: #F87171; }
+.anillo-centro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.anillo-numero { font-family: 'Sora', sans-serif; font-weight: 800; font-size: 2rem; color: #FFFFFF; line-height: 1; }
+.anillo.alerta .anillo-numero { color: #FCA5A5; }
+.anillo-etiqueta { color: #A6AFC6; font-size: 0.75rem; margin-top: 4px; }
+
 @media (max-width: 720px) {
   .horario-fila { grid-template-columns: 1fr; }
   .horario-escala { display: none; }

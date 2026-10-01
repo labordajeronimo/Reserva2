@@ -7,13 +7,21 @@
 
 <div class="ps-cards">
   <button type="button" class="ps-card" [class.selected]="plan === 'Gratuito'" (click)="elegirPlan('Gratuito')">
-    <div class="ps-card-nombre">Gratuito</div>
+    <div class="ps-card-nombre">
+      @if (conRadio) { <span class="ps-radio" aria-hidden="true"></span> }
+      Gratuito
+      @if (planActual === 'Gratuito') { <span class="ps-actual">Actual</span> }
+    </div>
     <div class="ps-card-precio">$0<span>/mes</span></div>
     <div class="ps-card-detalle">1 profesional · hasta 60 turnos/mes</div>
   </button>
 
   <button type="button" class="ps-card" [class.selected]="plan === 'Basico'" (click)="elegirPlan('Basico')">
-    <div class="ps-card-nombre">Básico</div>
+    <div class="ps-card-nombre">
+      @if (conRadio) { <span class="ps-radio" aria-hidden="true"></span> }
+      Básico
+      @if (planActual === 'Basico') { <span class="ps-actual">Actual</span> }
+    </div>
     @if (ciclo === 'Mensual') {
       <div class="ps-card-precio">$7.000<span>/mes</span></div>
       <div class="ps-card-detalle">único profesional</div>
@@ -27,7 +35,11 @@
   </button>
 
   <button type="button" class="ps-card" [class.selected]="plan === 'Premium'" (click)="elegirPlan('Premium')">
-    <div class="ps-card-nombre">Premium</div>
+    <div class="ps-card-nombre">
+      @if (conRadio) { <span class="ps-radio" aria-hidden="true"></span> }
+      Premium
+      @if (planActual === 'Premium') { <span class="ps-actual">Actual</span> }
+    </div>
     @if (ciclo === 'Mensual') {
       <div class="ps-card-precio">$11.000<span>/mes</span></div>
       <div class="ps-card-detalle">único profesional</div>

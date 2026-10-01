@@ -415,6 +415,16 @@ export class Panel {
     return Math.round((vencimiento.getTime() - hoy.getTime()) / msPorDia);
   }
 
+  // Para el anillo de Mi Plan: qué parte del ciclo (30 o 365 días) falta hasta la renovación.
+  readonly circunferenciaAnillo = 2 * Math.PI * 52;
+
+  progresoRenovacion(): number {
+    const dias = this.diasParaRenovacion();
+    if (dias === null) return 0;
+    const largoCiclo = this.sesion.cicloFacturacion === 'Anual' ? 365 : 30;
+    return Math.min(1, Math.max(0, dias / largoCiclo));
+  }
+
   renovacionUrgente(): boolean {
     const dias = this.diasParaRenovacion();
     return dias !== null && dias <= 7;

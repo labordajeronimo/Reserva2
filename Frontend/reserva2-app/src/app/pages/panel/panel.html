@@ -542,36 +542,56 @@
     }
 
     @if (tabActiva() === 'plan') {
-      <div class="panel-card">
-        <h2>Mi Plan</h2>
-        <p class="sub-info">Plan actual: <strong>{{ sesion.planActual }}</strong> · Facturación {{ sesion.cicloFacturacion | lowercase }}</p>
-
+      <div class="panel-card turnos-card plan-resumen">
         @if (diasParaRenovacion() !== null) {
-          <div class="renovacion-contador" [class.alerta]="renovacionUrgente()">
-            @if (diasParaRenovacion()! > 0) {
-              Te quedan <strong>{{ diasParaRenovacion() }}</strong> día{{ diasParaRenovacion() === 1 ? '' : 's' }} para tu próxima renovación.
-            } @else if (diasParaRenovacion() === 0) {
-              Tu plan vence hoy.
-            } @else {
-              Venciste hace <strong>{{ -diasParaRenovacion()! }}</strong> día{{ diasParaRenovacion() === -1 ? '' : 's' }}.
-            }
+          <div class="anillo" [class.alerta]="renovacionUrgente()">
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="anillo-fondo" cx="60" cy="60" r="52"></circle>
+              <circle class="anillo-progreso" cx="60" cy="60" r="52"
+                      [attr.stroke-dasharray]="circunferenciaAnillo"
+                      [attr.stroke-dashoffset]="circunferenciaAnillo * (1 - progresoRenovacion())"></circle>
+            </svg>
+            <div class="anillo-centro">
+              <div class="anillo-numero">{{ diasParaRenovacion()! < 0 ? -diasParaRenovacion()! : diasParaRenovacion() }}</div>
+              <div class="anillo-etiqueta">{{ diasParaRenovacion()! < 0 ? 'días vencido' : (diasParaRenovacion() === 1 ? 'día' : 'días') }}</div>
+            </div>
           </div>
         }
 
-        <p class="monto-estimado-info">
-          Monto estimado con tu plan actual y {{ profesionales().length }} profesional{{ profesionales().length === 1 ? '' : 'es' }}:
-          <strong>{{ montoEstimadoTexto() }}</strong>
-        </p>
-        <a class="btn-outline renovacion-btn" [href]="linkPagoWhatsApp()" target="_blank" rel="noopener">
-          Pagar / renovar plan por WhatsApp
-        </a>
+        <div class="plan-resumen-texto">
+          <div class="kpi-etiqueta">Tu plan actual</div>
+          <div class="plan-nombre">{{ sesion.planActual }} <span>· {{ sesion.cicloFacturacion | lowercase }}</span></div>
 
-        <app-plan-selector [(plan)]="planSeleccionado" [(ciclo)]="cicloSeleccionado"></app-plan-selector>
+          @if (diasParaRenovacion() !== null) {
+            <div class="renovacion-contador" [class.alerta]="renovacionUrgente()">
+              @if (diasParaRenovacion()! > 0) {
+                Te quedan <strong>{{ diasParaRenovacion() }}</strong> día{{ diasParaRenovacion() === 1 ? '' : 's' }} para tu próxima renovación.
+              } @else if (diasParaRenovacion() === 0) {
+                Tu plan vence hoy.
+              } @else {
+                Venciste hace <strong>{{ -diasParaRenovacion()! }}</strong> día{{ diasParaRenovacion() === -1 ? '' : 's' }}.
+              }
+            </div>
+          }
+
+          <p class="monto-estimado-info">
+            Monto estimado con tu plan actual y {{ profesionales().length }} profesional{{ profesionales().length === 1 ? '' : 'es' }}:
+            <strong>{{ montoEstimadoTexto() }}</strong>
+          </p>
+          <a class="btn-outline renovacion-btn" [href]="linkPagoWhatsApp()" target="_blank" rel="noopener">
+            Pagar / renovar plan por WhatsApp
+          </a>
+        </div>
+      </div>
+
+      <div class="panel-card turnos-card turno-manual-card">
+        <h2>Cambiar de plan</h2>
+        <app-plan-selector [(plan)]="planSeleccionado" [(ciclo)]="cicloSeleccionado" [conRadio]="true" [planActual]="sesion.planActual"></app-plan-selector>
 
         @if (errorPlan()) { <div class="error-msg">{{ errorPlan() }}</div> }
         @if (planGuardadoOk()) { <div class="ok-msg">¡Listo! Tu plan se actualizó.</div> }
 
-        <button class="btn-naranja" style="margin-top:16px;" [disabled]="guardandoPlan()" (click)="guardarPlan()">
+        <button class="btn-naranja plan-guardar" [disabled]="guardandoPlan()" (click)="guardarPlan()">
           {{ guardandoPlan() ? 'Guardando...' : 'Guardar plan' }}
         </button>
       </div>
