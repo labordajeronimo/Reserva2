@@ -641,6 +641,35 @@
 .historial-mes { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 0.95rem; color: #E8ECF6; min-width: 140px; text-align: center; }
 .historial-ayuda { margin: 0 0 16px; }
 
+/* ----- Filas (Servicios) ----- */
+.filas { display: flex; flex-direction: column; gap: 10px; }
+.fila {
+  display: flex;
+  align-items: center;
+  gap: 12px 18px;
+  flex-wrap: wrap;
+  background: #10172B;
+  border: 1px solid rgba(232, 236, 246, 0.09);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+.fila-editando { display: block; border-color: rgba(249, 115, 22, 0.4); }
+.fila-principal { flex: 1 1 220px; min-width: 0; }
+.fila-titulo { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 0.98rem; color: #E8ECF6; overflow-wrap: anywhere; }
+.fila-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.chip {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(232, 236, 246, 0.06);
+  border: 1px solid rgba(232, 236, 246, 0.12);
+  color: #A6AFC6;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+.fila-precio { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 1.05rem; color: #FFFFFF; white-space: nowrap; }
+.error-en-fila { margin: 12px 0 0; }
+
 .mini {
   border: 1px solid transparent;
   border-radius: 8px;
