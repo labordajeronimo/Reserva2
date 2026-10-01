@@ -670,6 +670,45 @@
 .fila-precio { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 1.05rem; color: #FFFFFF; white-space: nowrap; }
 .error-en-fila { margin: 12px 0 0; }
 
+/* ----- Horarios (semana con barra 06h-24h) ----- */
+.btn-chico { padding: 5px 10px; font-size: 0.78rem; border-radius: 8px; }
+.semana-horarios { display: flex; flex-direction: column; gap: 8px; }
+.horario-fila {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) minmax(220px, auto);
+  align-items: center;
+  gap: 10px 16px;
+  background: #10172B;
+  border: 1px solid rgba(232, 236, 246, 0.09);
+  border-radius: 14px;
+  padding: 12px 16px;
+}
+.horario-escala { background: none; border: none; padding: 0 17px; }
+.horario-escala-marcas { position: relative; height: 16px; }
+.horario-escala-marcas span { position: absolute; transform: translateX(-50%); color: #7C879E; font-size: 0.7rem; }
+.horario-escala-marcas span:first-child { transform: none; }
+.horario-escala-marcas span:last-child { transform: translateX(-100%); }
+.horario-dia { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 0.92rem; color: #E8ECF6; }
+.horario-fila.cerrado .horario-dia { color: #7C879E; }
+.horario-barra {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(232, 236, 246, 0.06);
+  overflow: hidden;
+}
+.horario-segmento { position: absolute; top: 0; bottom: 0; border-radius: 999px; background-image: linear-gradient(90deg, #F97316, #EA580C); }
+.horario-tramos { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.horario-tramo { display: flex; align-items: center; gap: 6px; }
+.horario-tramo-hora { font-family: 'Sora', sans-serif; font-weight: 600; font-size: 0.88rem; color: #E8ECF6; margin-right: 4px; white-space: nowrap; }
+.horario-cerrado { color: #7C879E; font-size: 0.85rem; font-weight: 600; }
+
+@media (max-width: 720px) {
+  .horario-fila { grid-template-columns: 1fr; }
+  .horario-escala { display: none; }
+  .horario-tramos { align-items: flex-start; }
+}
+
 .mini {
   border: 1px solid transparent;
   border-radius: 8px;

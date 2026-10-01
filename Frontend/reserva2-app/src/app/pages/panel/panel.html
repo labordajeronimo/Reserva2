@@ -682,15 +682,55 @@
     }
 
     @if (tabActiva() === 'horarios') {
-      <div class="panel-card">
-        <h2>Horarios de atención</h2>
+      <div class="panel-card turnos-card">
+        <div class="turnos-toolbar">
+          <div>
+            <h2>Horarios de atención</h2>
+            <div class="historial-cantidad">Es el horario general del negocio. Los profesionales pueden tener el suyo en la pestaña Profesionales.</div>
+          </div>
+        </div>
+
         @if (horarios().length === 0) {
           <p class="empty">Todavía no cargaste horarios. Sin esto, tu grilla pública va a aparecer vacía.</p>
-        } @else {
-          <ul class="lista">
-            @for (h of horarios(); track h.id) {
-              <li [class.lista-item-editando]="horarioEditandoId() === h.id">
-                @if (horarioEditandoId() === h.id) {
+        }
+
+        <div class="semana-horarios">
+          <div class="horario-fila horario-escala" aria-hidden="true">
+            <div></div>
+            <div class="horario-escala-marcas">
+              @for (m of marcasBarraHorario; track m) {
+                <span [style.left.%]="(m - 6) / 18 * 100">{{ m }}h</span>
+              }
+            </div>
+            <div></div>
+          </div>
+
+          @for (dia of diasSemanaOrden; track dia) {
+            <div class="horario-fila" [class.cerrado]="horariosDelDiaSemana(dia).length === 0">
+              <div class="horario-dia">{{ dias[dia] }}</div>
+              <div class="horario-barra">
+                @for (h of horariosDelDiaSemana(dia); track h.id) {
+                  <div class="horario-segmento" [style.left.%]="segmentoBarraHorario(h).izquierda" [style.width.%]="segmentoBarraHorario(h).ancho"></div>
+                }
+              </div>
+              <div class="horario-tramos">
+                @for (h of horariosDelDiaSemana(dia); track h.id) {
+                  @if (horarioEditandoId() !== h.id) {
+                    <div class="horario-tramo">
+                      <span class="horario-tramo-hora">{{ h.horaInicio.substring(0,5) }} – {{ h.horaFin.substring(0,5) }}</span>
+                      <button class="btn-sec btn-chico" (click)="iniciarEdicionHorario(h)">Editar</button>
+                      <button class="btn-peligro btn-chico" (click)="quitarHorario(h)">Quitar</button>
+                    </div>
+                  }
+                } @empty {
+                  <span class="horario-cerrado">Cerrado</span>
+                }
+              </div>
+            </div>
+
+            @for (h of horariosDelDiaSemana(dia); track h.id) {
+              @if (horarioEditandoId() === h.id) {
+                <div class="fila fila-editando">
                   <div class="form-inline form-inline-edicion">
                     <select [(ngModel)]="editHorarioDia">
                       @for (d of dias; track d; let i = $index) {
@@ -700,24 +740,21 @@
                     <input type="time" [(ngModel)]="editHorarioInicio">
                     <input type="time" [(ngModel)]="editHorarioFin">
                     <div class="acciones">
-                      <button class="mini ok" (click)="guardarEdicionHorario(h)">Guardar</button>
-                      <button class="mini" (click)="cancelarEdicionHorario()">Cancelar</button>
+                      <button class="btn-ok" (click)="guardarEdicionHorario(h)">Guardar</button>
+                      <button class="btn-sec" (click)="cancelarEdicionHorario()">Cancelar</button>
                     </div>
                   </div>
-                  @if (errorEditHorario()) { <div class="error-msg">{{ errorEditHorario() }}</div> }
-                } @else {
-                  <div>{{ dias[h.diaSemana] }} de {{ h.horaInicio.substring(0,5) }} a {{ h.horaFin.substring(0,5) }}</div>
-                  <div class="acciones">
-                    <button class="mini" (click)="iniciarEdicionHorario(h)">Editar</button>
-                    <button class="mini danger" (click)="quitarHorario(h)">Quitar</button>
-                  </div>
-                }
-              </li>
+                  @if (errorEditHorario()) { <div class="error-msg error-en-fila">{{ errorEditHorario() }}</div> }
+                </div>
+              }
             }
-          </ul>
-        }
+          }
+        </div>
+      </div>
 
-        <div class="form-inline">
+      <div class="panel-card turnos-card turno-manual-card">
+        <h2>Agregar horario</h2>
+        <div class="form-inline form-inline-edicion">
           <select [(ngModel)]="nuevoHorarioDia">
             @for (d of dias; track d; let i = $index) {
               <option [ngValue]="i">{{ d }}</option>

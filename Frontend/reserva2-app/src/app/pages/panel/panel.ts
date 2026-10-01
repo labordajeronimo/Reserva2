@@ -846,6 +846,25 @@ export class Panel {
     this.api.getHorarios(this.sesion.comercioId).subscribe(horarios => this.horarios.set(horarios));
   }
 
+  // Vista semanal de Horarios: de lunes a domingo, con una barra de 06h a 24h por día.
+  readonly diasSemanaOrden = [1, 2, 3, 4, 5, 6, 0];
+  readonly marcasBarraHorario = [6, 12, 18, 24];
+
+  horariosDelDiaSemana(dia: number): Horario[] {
+    return this.horarios()
+      .filter(h => h.diaSemana === dia)
+      .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
+  }
+
+  segmentoBarraHorario(h: Horario): { izquierda: number; ancho: number } {
+    const inicioBarra = 6 * 60;
+    const largoBarra = 18 * 60;
+    const ini = Math.min(Math.max(this.horaAMinutos(h.horaInicio), inicioBarra), 24 * 60);
+    const finCrudo = this.horaAMinutos(h.horaFin);
+    const fin = Math.min(Math.max(finCrudo === 0 ? 24 * 60 : finCrudo, inicioBarra), 24 * 60);
+    return { izquierda: (ini - inicioBarra) / largoBarra * 100, ancho: Math.max(0, fin - ini) / largoBarra * 100 };
+  }
+
   agregarHorario(): void {
     this.api.crearHorario(this.sesion.comercioId, {
       diaSemana: this.nuevoHorarioDia,
