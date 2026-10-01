@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Reserva2.Api.Data;
 using Reserva2.Api.Models;
@@ -37,6 +38,17 @@ if (args.Length > 0 && args[0] == "hash-password")
 Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "logos"));
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Archivos subidos por los usuarios (logos y comprobantes de seña). Tienen que vivir FUERA de
+// la carpeta de la app: deploy.ps1 borra /root/reserva2-api entero en cada deploy, y con eso
+// se perdían los logos. En producción la ruta viene de Uploads__Ruta (override de systemd,
+// /var/lib/reserva2/uploads); en desarrollo, si no está configurada, se usa ./uploads (fuera
+// de wwwroot, para que los comprobantes nunca queden servidos como archivos estáticos).
+var rutaUploads = builder.Configuration["Uploads:Ruta"] ?? Path.Combine(builder.Environment.ContentRootPath, "uploads");
+var rutaLogos = Path.Combine(rutaUploads, "logos");
+var rutaComprobantes = Path.Combine(rutaUploads, "comprobantes");
+Directory.CreateDirectory(rutaLogos);
+Directory.CreateDirectory(rutaComprobantes);
 
 // Configuración de la base de datos SQL Server
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -123,7 +135,14 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseStaticFiles(); // Sirve los logos subidos desde wwwroot/uploads/logos
+app.UseStaticFiles();
+// Solo los logos son públicos (/uploads/logos/...). Los comprobantes de seña NO se sirven
+// como archivos estáticos: se leen por un endpoint que valida que sea el comercio dueño.
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(rutaLogos),
+    RequestPath = "/uploads/logos"
+});
 app.UseCors("AllowAngular");
 app.UseRateLimiter();
 app.UseAuthentication();
@@ -1065,7 +1084,7 @@ app.MapPost("/api/comercios/{comercioId:int}/logo", async (AppDbContext context,
     if (archivo.Length > tamañoMaximo)
         return Results.BadRequest(new { mensaje = "El logo no puede pesar más de 2MB." });
 
-    var carpeta = Path.Combine(env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot"), "uploads", "logos");
+    var carpeta = rutaLogos;
     Directory.CreateDirectory(carpeta);
 
     // Si ya tenía un logo con otra extensión, lo borramos para no dejar basura.
