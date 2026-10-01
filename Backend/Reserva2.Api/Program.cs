@@ -1655,6 +1655,131 @@ app.MapGet("/api/comercios/{comercioId:int}/ganancias", async (AppDbContext cont
 }).RequireAuthorization("AdminCliente");
 
 // ==========================================
+// RESUMEN (pestaña Inicio del panel, todos los planes)
+// Todo agregado en una sola llamada para el rango desde/hasta (por defecto, los últimos
+// 30 días contando hoy). "Turno reservado" = el mismo criterio que usa la grilla pública
+// para ocupar un horario: confirmado, o pre-reserva todavía vigente (OcupaHorario).
+// ==========================================
+app.MapGet("/api/comercios/{comercioId:int}/resumen", async (AppDbContext context, int comercioId, DateOnly? desde, DateOnly? hasta, ClaimsPrincipal user) =>
+{
+    if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
+
+    var comercio = await context.Comercios.FindAsync(comercioId);
+    if (comercio is null) return Results.NotFound();
+
+    var hoy = DateOnly.FromDateTime(AhoraArgentina());
+    var fechaHasta = hasta ?? hoy;
+    var fechaDesde = desde ?? fechaHasta.AddDays(-29);
+    if (fechaDesde > fechaHasta) return Results.BadRequest(new { mensaje = "La fecha \"desde\" no puede ser posterior a \"hasta\"." });
+    if (fechaHasta.DayNumber - fechaDesde.DayNumber > 366) return Results.BadRequest(new { mensaje = "El rango no puede superar un año." });
+
+    var cantidadDias = fechaHasta.DayNumber - fechaDesde.DayNumber + 1;
+    // Período anterior del mismo largo, para comparar los KPIs ("vs. los N días anteriores").
+    var fechaDesdeAnterior = fechaDesde.AddDays(-cantidadDias);
+
+    var inicioRango = fechaDesdeAnterior.ToDateTime(TimeOnly.MinValue);
+    var finRango = fechaHasta.ToDateTime(TimeOnly.MaxValue);
+
+    var turnosCrudos = await context.Turnos
+        .Where(t => t.ComercioId == comercioId && t.EstadoReserva != 3 && t.FechaHoraInicio >= inicioRango && t.FechaHoraInicio <= finRango)
+        .ToListAsync();
+    var turnosReservados = turnosCrudos.Where(OcupaHorario).ToList();
+
+    var inicioPeriodo = fechaDesde.ToDateTime(TimeOnly.MinValue);
+    var turnos = turnosReservados.Where(t => t.FechaHoraInicio >= inicioPeriodo).ToList();
+    var turnosAnteriores = turnosReservados.Where(t => t.FechaHoraInicio < inicioPeriodo).ToList();
+
+    var servicios = await context.Servicios.Where(s => s.ComercioId == comercioId).ToDictionaryAsync(s => s.Id);
+    var profesionales = await context.Profesionales.Where(p => p.ComercioId == comercioId).OrderBy(p => p.Nombre).ToListAsync();
+    var horarios = await context.Horarios.Where(h => h.ComercioId == comercioId).ToListAsync();
+
+    // Monto del turno: lo cobrado al reservar (MontoCobrado) y, si no quedó guardado, el
+    // precio actual del servicio. Es una estimación: incluye turnos que todavía no pasaron.
+    decimal MontoTurno(Turno t) =>
+        t.MontoCobrado ?? (t.ServicioId is not null && servicios.TryGetValue(t.ServicioId.Value, out var s) ? s.Precio : 0m);
+
+    static int MinutosTurno(Turno t) => Math.Max(0, (int)(t.FechaHoraFin - t.FechaHoraInicio).TotalMinutes);
+
+    // Minutos de atención disponibles en el período para una "agenda" (un profesional con
+    // sus propios horarios, o el horario general con ProfesionalId nulo): se suma, día por
+    // día, el largo de los bloques horarios de ese día de la semana.
+    int MinutosDisponibles(int? profesionalId)
+    {
+        var minutosPorDiaSemana = new int[7];
+        foreach (var h in horarios.Where(h => h.ProfesionalId == profesionalId))
+            minutosPorDiaSemana[h.DiaSemana] += Math.Max(0, (int)(h.HoraFin - h.HoraInicio).TotalMinutes);
+
+        var total = 0;
+        for (var d = fechaDesde; d <= fechaHasta; d = d.AddDays(1))
+            total += minutosPorDiaSemana[(int)d.DayOfWeek];
+        return total;
+    }
+
+    // La ocupación total junta todas las agendas que pueden recibir turnos: el horario
+    // general (turnos sin profesional) más el de cada profesional.
+    var minutosDisponiblesTotal = MinutosDisponibles(null) + profesionales.Sum(p => MinutosDisponibles(p.Id));
+    var minutosReservadosTotal = turnos.Sum(MinutosTurno);
+
+    var ocupacionPorProfesional = profesionales
+        .Select(p =>
+        {
+            var reservados = turnos.Where(t => t.ProfesionalId == p.Id).Sum(MinutosTurno);
+            return new OcupacionProfesionalDto(p.Id, p.Nombre, reservados, MinutosDisponibles(p.Id));
+        })
+        .ToList();
+
+    var turnosPorDia = new List<TurnosDiaDto>();
+    var cantidadPorFecha = turnos.GroupBy(t => DateOnly.FromDateTime(t.FechaHoraInicio)).ToDictionary(g => g.Key, g => g.Count());
+    for (var d = fechaDesde; d <= fechaHasta; d = d.AddDays(1))
+        turnosPorDia.Add(new TurnosDiaDto(d, cantidadPorFecha.GetValueOrDefault(d)));
+
+    var horariosMasPedidos = turnos
+        .GroupBy(t => new { DiaSemana = (int)t.FechaHoraInicio.DayOfWeek, Hora = t.FechaHoraInicio.Hour })
+        .Select(g => new CeldaHeatmapDto(g.Key.DiaSemana, g.Key.Hora, g.Count()))
+        .OrderBy(c => c.DiaSemana).ThenBy(c => c.Hora)
+        .ToList();
+
+    var serviciosMasReservados = turnos
+        .GroupBy(t => t.ServicioId)
+        .Select(g => new ServicioResumenDto(
+            g.Key,
+            g.Key is not null && servicios.TryGetValue(g.Key.Value, out var s) ? s.Nombre : "Sin servicio",
+            g.Count(),
+            g.Sum(MontoTurno)))
+        .OrderByDescending(x => x.Cantidad)
+        .Take(5)
+        .ToList();
+
+    // "¿A qué hora reservan tus clientes?": hora (de Argentina) en la que se CREÓ el turno.
+    // Solo reservas online: la carga presencial del panel no pide email y la página pública
+    // sí, así que se toman los turnos con email. FechaCreacion se guarda en UTC.
+    var reservasOnline = turnos.Where(t => !string.IsNullOrWhiteSpace(t.ClienteEmail)).ToList();
+    var reservasPorHora = new int[24];
+    var reservasFueraDeHorario = 0;
+    foreach (var t in reservasOnline)
+    {
+        var creacionLocal = t.FechaCreacion.AddHours(-3);
+        reservasPorHora[creacionLocal.Hour]++;
+
+        // "Fuera de horario" = en ese momento el negocio no estaba atendiendo según ningún
+        // horario cargado (general o de algún profesional) para ese día de la semana.
+        var hora = creacionLocal.TimeOfDay;
+        var abierto = horarios.Any(h => h.DiaSemana == (int)creacionLocal.DayOfWeek && hora >= h.HoraInicio && hora < h.HoraFin);
+        if (!abierto) reservasFueraDeHorario++;
+    }
+
+    return Results.Ok(new ResumenDto(
+        fechaDesde, fechaHasta,
+        turnos.Count, turnosAnteriores.Count,
+        turnos.Sum(MontoTurno), turnosAnteriores.Sum(MontoTurno),
+        minutosReservadosTotal, minutosDisponiblesTotal,
+        turnosPorDia, horariosMasPedidos, serviciosMasReservados,
+        reservasPorHora.Select((cantidad, hora) => new ReservasHoraDto(hora, cantidad)).ToList(),
+        reservasOnline.Count, reservasFueraDeHorario,
+        ocupacionPorProfesional));
+}).RequireAuthorization("AdminCliente");
+
+// ==========================================
 // WHATSAPP (placeholder — exclusivo plan Premium)
 // Todavía no conecta a la Cloud API real de Meta: solo guarda si el comercio
 // activó o no el bot. La integración real se hace aparte con las credenciales.
@@ -1851,4 +1976,17 @@ record GananciasDto(
     decimal FacturadoHoy, decimal FacturadoUltimos7Dias, decimal FacturadoEsteMes, int CortesTotales, List<FacturacionDiaDto> FacturacionPorDia,
     List<ServicioPedidoDto> ServicioMasPedido, List<HorarioOcupadoDto> HorariosOcupados,
     List<ClienteFrecuenteDto> ClientesFrecuentes, List<ClienteReactivarDto> ParaReactivar);
+record TurnosDiaDto(DateOnly Fecha, int Cantidad);
+record CeldaHeatmapDto(int DiaSemana, int Hora, int Cantidad);
+record ServicioResumenDto(int? ServicioId, string NombreServicio, int Cantidad, decimal Ingresos);
+record ReservasHoraDto(int Hora, int Cantidad);
+record OcupacionProfesionalDto(int ProfesionalId, string Nombre, int MinutosReservados, int MinutosDisponibles);
+record ResumenDto(
+    DateOnly Desde, DateOnly Hasta,
+    int Turnos, int TurnosPeriodoAnterior,
+    decimal IngresosEstimados, decimal IngresosPeriodoAnterior,
+    int MinutosReservados, int MinutosDisponibles,
+    List<TurnosDiaDto> TurnosPorDia, List<CeldaHeatmapDto> HorariosMasPedidos, List<ServicioResumenDto> ServiciosMasReservados,
+    List<ReservasHoraDto> ReservasPorHoraDeCreacion, int ReservasOnline, int ReservasFueraDeHorario,
+    List<OcupacionProfesionalDto> OcupacionPorProfesional);
 record WhatsAppConfigDto(bool Activado);
