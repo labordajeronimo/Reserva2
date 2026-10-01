@@ -46,9 +46,13 @@
 .panel-shell { min-height: 100vh; background: #0C1122; color: #E8ECF6; display: flex; align-items: flex-start; }
 
 /* ----- Menú lateral ----- */
+/* Fija (no sticky): styles.css pone overflow-x: hidden en html y body, y eso hace que
+   position: sticky no se pegue y la barra se corte al scrollear el contenido. */
 .sidebar {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  z-index: 10;
   flex: 0 0 248px;
   width: 248px;
   height: 100vh;
@@ -169,7 +173,7 @@
 .sidebar-salir:hover { color: #FCA5A5; background: rgba(248, 113, 113, 0.08); }
 
 /* ----- Contenido ----- */
-.panel-contenido { flex: 1; min-width: 0; }
+.panel-contenido { flex: 1; min-width: 0; margin-left: 248px; }
 
 .panel-header {
   max-width: 1100px;
@@ -248,7 +252,7 @@
   .sidebar-item { width: auto; flex-shrink: 0; }
   .sidebar-plan { order: 4; margin-top: 0; flex: 1 1 auto; width: auto; }
   .sidebar-salir { order: 5; width: auto; }
-  .panel-contenido { flex: 1 1 100%; }
+  .panel-contenido { flex: 1 1 100%; margin-left: 0; }
 }
 
 
@@ -461,6 +465,7 @@
 
 /* ----- Turnos ----- */
 .turnos-card { padding: 22px 24px; }
+.turnos-card.upsell-premium { padding: 44px 28px; }
 .turno-manual-card { margin-top: 20px; }
 .turnos-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .turnos-toolbar h2 { margin: 0; }
@@ -610,7 +615,7 @@
 /* ----- Historial ----- */
 .historial-cantidad { color: #7C879E; font-size: 0.82rem; margin-top: 4px; }
 .historial-mes { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 0.95rem; color: #E8ECF6; min-width: 140px; text-align: center; }
-.historial-ayuda { margin: 0 0 16px; }
+.sub-info.historial-ayuda { margin: 0 0 16px; }
 
 /* ----- Filas (Servicios) ----- */
 .filas { display: flex; flex-direction: column; gap: 10px; }
@@ -692,7 +697,7 @@
 .tarjeta-texto { flex: 1; min-width: 0; }
 .tarjeta-sub { color: #A6AFC6; font-size: 0.82rem; margin-top: 3px; overflow-wrap: anywhere; }
 .tarjeta-acciones { display: flex; gap: 6px; flex-wrap: wrap; }
-.tarjeta-form { grid-template-columns: minmax(0, 1fr); }
+.form-inline.tarjeta-form { grid-template-columns: minmax(0, 1fr); }
 .tarjeta-horarios { margin: 0 -16px -16px; border-radius: 0 0 16px 16px; }
 .tarjeta-horarios .filas { margin-bottom: 4px; }
 .fila-compacta { padding: 10px 14px; background: #131A2E; }
@@ -735,7 +740,7 @@
 .wa-explicacion li { position: relative; padding-left: 18px; color: #A6AFC6; font-size: 0.88rem; }
 .wa-explicacion li::before { content: ''; position: absolute; left: 0; top: 0.5em; width: 7px; height: 7px; border-radius: 50%; background: #34D399; }
 .wa-datos { display: flex; gap: 8px; flex-wrap: wrap; }
-.wa-nota { margin: 14px 0 0; }
+.sub-info.wa-nota { margin: 14px 0 0; }
 
 /* ----- Mi Plan ----- */
 .plan-resumen { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
@@ -762,7 +767,7 @@
 .link-publico-ver { text-decoration: none; display: inline-flex; align-items: center; }
 .campos-2col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
 .campo-ancho { grid-column: 1 / -1; }
-.perfil-logo-ayuda { margin: 6px 0 0; }
+.sub-info.perfil-logo-ayuda { margin: 6px 0 0; }
 .ok-msg-form { margin: 0 0 14px; }
 @media (max-width: 720px) {
   .campos-2col { grid-template-columns: minmax(0, 1fr); }
@@ -790,7 +795,7 @@
 .mini.danger { background: rgba(248, 113, 113, 0.16); border-color: rgba(248, 113, 113, 0.32); color: #FCA5A5; }
 .mini.danger:hover { background: rgba(248, 113, 113, 0.26); }
 
-.form-inline-edicion { padding-top: 0; border-top: none; }
+.form-inline.form-inline-edicion { padding-top: 0; border-top: none; }
 
 .form-inline {
   display: grid;
