@@ -41,20 +41,20 @@
     <div class="biz-info">
       <h1>{{ comercio()!.nombre }}</h1>
       <div class="biz-meta">
-        <span>
+        <span class="pastilla">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.1 7-11a7 7 0 0 0-14 0c0 4.9 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
           {{ comercio()!.tipoPlantilla }}
         </span>
-        @if (comercio()!.telefonoNotificaciones) {
-          <span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5a2 2 0 0 1 2-2h3l2 5-2.5 1.5a11 11 0 0 0 5 5L14 12l5 2v3a2 2 0 0 1-2 2h-1C9.16 19 3 12.84 3 5Z"/></svg>
+        @if (linkWhatsAppComercio(); as wa) {
+          <a class="pastilla pastilla-whatsapp" [href]="wa" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12c0-4.4 3.6-8 8-8s8 3.6 8 8-3.6 8-8 8c-1.2 0-2.3-.25-3.3-.7L4 20l1.1-4.4A7.9 7.9 0 0 1 4 12Z"/></svg>
             {{ comercio()!.telefonoNotificaciones }}
-          </span>
+          </a>
         }
       </div>
     </div>
     <div class="share-box">
-      <span><strong>{{ hostActual }}/</strong>{{ comercio()!.aliasUrl }}</span>
+      <span class="share-link"><strong>{{ hostActual }}/</strong>{{ comercio()!.aliasUrl }}</span>
       <button type="button" (click)="copiarLink()">{{ linkCopiado() ? '¡Copiado!' : 'Copiar link' }}</button>
     </div>
   </div>

@@ -264,8 +264,19 @@ export class ReservaPublica implements OnInit {
     const url = `${this.hostActual}/${this.comercio()?.aliasUrl ?? ''}`;
     navigator.clipboard?.writeText(url).then(() => {
       this.linkCopiado.set(true);
-      setTimeout(() => this.linkCopiado.set(false), 2000);
+      setTimeout(() => this.linkCopiado.set(false), 1600);
     });
+  }
+
+  // Link wa.me al WhatsApp del comercio. Mismo formato que usa el backend para enviar
+  // WhatsApp (FormatearNumeroWhatsApp): solo dígitos, con 54 y el 9 de celular adelante.
+  linkWhatsAppComercio(): string | null {
+    const telefono = this.comercio()?.telefonoNotificaciones ?? '';
+    let numero = telefono.replace(/\D/g, '');
+    if (!numero) return null;
+    if (!numero.startsWith('54')) numero = '54' + numero;
+    if (numero[2] !== '9') numero = numero.slice(0, 2) + '9' + numero.slice(2);
+    return `https://wa.me/${numero}`;
   }
 
   confirmarReserva(): void {
