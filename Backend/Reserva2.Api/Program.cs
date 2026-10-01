@@ -928,12 +928,41 @@ app.MapGet("/api/admin/comercios/{id:int}/detalle", async (AppDbContext context,
         turnosPorSemana.Add(new TurnosPorSemanaDto(DateOnly.FromDateTime(semanaInicio), DateOnly.FromDateTime(semanaFin.AddDays(-1)), cantidad));
     }
 
+    // --- Datos del panel lateral del Super Admin (Etapa C) ---
+    var cantidadServicios = await context.Servicios.CountAsync(s => s.ComercioId == id);
+
+    // Lo que facturó el local en el mes: misma lógica que Ganancias (confirmados, monto
+    // cobrado, ya realizados), pero para cualquier plan: es una métrica para el dueño de la
+    // plataforma, no la pestaña Ganancias del comercio.
+    var facturacionDelMes = await context.Turnos
+        .Where(t => t.ComercioId == id && t.EstadoReserva == 2 && t.FechaHoraInicio >= inicioMes && t.FechaHoraInicio <= ahora)
+        .SumAsync(t => t.MontoCobrado ?? 0);
+
+    // Turnos (sin cancelados) por día de los últimos 30 días, incluido hoy.
+    var hoy = DateOnly.FromDateTime(ahora);
+    var desde30 = hoy.AddDays(-29);
+    var inicio30 = desde30.ToDateTime(TimeOnly.MinValue);
+    var fin30 = hoy.ToDateTime(TimeOnly.MaxValue);
+    var fechas30 = await context.Turnos
+        .Where(t => t.ComercioId == id && t.EstadoReserva != 3 && t.FechaHoraInicio >= inicio30 && t.FechaHoraInicio <= fin30)
+        .Select(t => t.FechaHoraInicio)
+        .ToListAsync();
+    var porFecha30 = fechas30.GroupBy(f => DateOnly.FromDateTime(f)).ToDictionary(g => g.Key, g => g.Count());
+    var turnosPorDia = new List<TurnosDiaDto>();
+    for (var d = desde30; d <= hoy; d = d.AddDays(1))
+        turnosPorDia.Add(new TurnosDiaDto(d, porFecha30.GetValueOrDefault(d)));
+
     return Results.Ok(new ComercioDetalleDto(
         comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla, comercio.PlanActual, comercio.CicloFacturacion,
         comercio.MontoMensualAcordado, comercio.FechaAlta, comercio.FechaProximoPago, comercio.Activo,
         profesionales.Count, sucursales.Count,
         turnosHistoricosTotal, turnosDelMes, facturacionHistorica,
-        sucursales, profesionales, turnosPorSemana));
+        sucursales, profesionales, turnosPorSemana,
+        comercio.Email, comercio.TelefonoNotificaciones,
+        string.IsNullOrWhiteSpace(comercio.TelefonoNotificaciones) ? null : FormatearNumeroWhatsApp(comercio.TelefonoNotificaciones),
+        comercio.UltimoAcceso is null ? null : DateTime.SpecifyKind(comercio.UltimoAcceso.Value, DateTimeKind.Utc),
+        comercio.FechaActivacion, comercio.FechaBaja,
+        cantidadServicios, facturacionDelMes, turnosPorDia, TopeTurnosMensualesGratuito));
 }).RequireAuthorization("SuperAdmin");
 
 app.MapGet("/api/comercios/alias/{alias}", async (AppDbContext context, string alias) =>
@@ -2090,7 +2119,10 @@ record ComercioDetalleDto(
     decimal? MontoMensualAcordado, DateTime FechaAlta, DateTime? FechaProximoPago, bool Activo,
     int CantidadProfesionales, int CantidadSucursales,
     int TurnosHistoricosTotal, int TurnosDelMes, decimal? FacturacionHistorica,
-    List<Sucursal> Sucursales, List<Profesional> Profesionales, List<TurnosPorSemanaDto> TurnosPorSemana);
+    List<Sucursal> Sucursales, List<Profesional> Profesionales, List<TurnosPorSemanaDto> TurnosPorSemana,
+    string Email, string TelefonoNotificaciones, string? WhatsAppNumero, DateTime? UltimoAcceso,
+    DateTime? FechaActivacion, DateTime? FechaBaja,
+    int CantidadServicios, decimal FacturacionDelMes, List<TurnosDiaDto> TurnosPorDia, int TopeTurnosGratuito);
 record RegistroRequest(string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string DatosBancarios, string Email, string Password, string? PlanActual = null, string? CicloFacturacion = null, int? CantidadProfesionales = null, int? CantidadSucursales = null);
 record MiPlanRequest(string PlanActual, string CicloFacturacion);
 record MiPlanDto(string PlanActual, string CicloFacturacion, DateTime? FechaProximoPago);
