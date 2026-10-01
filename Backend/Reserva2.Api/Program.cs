@@ -408,6 +408,15 @@ static string FormatearNumeroWhatsApp(string numero)
     return limpio;
 }
 
+// Meta rechaza la plantilla entera si una variable viene vacía, o trae saltos de línea,
+// tabs o más de 4 espacios seguidos (error 132018). Ej.: un comercio con seña que todavía
+// no cargó su alias/CBU haría fallar el aviso completo; en ese caso se manda "-".
+static string LimpiarParametroWhatsApp(string? valor)
+{
+    var limpio = System.Text.RegularExpressions.Regex.Replace(valor ?? string.Empty, @"\s+", " ").Trim();
+    return limpio.Length == 0 ? "-" : limpio;
+}
+
 // Si falta configuración (ej. en desarrollo sin credenciales todavía), no falla: simplemente
 // no se envía nada y queda logueado el motivo. "parametros" van en el mismo orden que las
 // variables numeradas de la plantilla en WhatsApp Business.
@@ -439,7 +448,7 @@ async Task EnviarPlantillaWhatsApp(IConfiguration config, ILogger logger, string
                     new
                     {
                         type = "body",
-                        parameters = parametros.Select(p => new { type = "text", text = p }).ToArray()
+                        parameters = parametros.Select(p => new { type = "text", text = LimpiarParametroWhatsApp(p) }).ToArray()
                     }
                 }
             }
