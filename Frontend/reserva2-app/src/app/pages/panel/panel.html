@@ -65,6 +65,78 @@
 
   <main class="panel-main">
 
+    @if (tabActiva() === 'inicio') {
+      @if (turnosSinConfirmar() > 0) {
+        <div class="aviso-pendientes" role="status">
+          <span><strong>{{ turnosSinConfirmar() }}</strong> turno{{ turnosSinConfirmar() === 1 ? ' espera' : 's esperan' }} tu confirmación.</span>
+          <button class="btn-sec" (click)="vistaTurnos.set('lista'); abrirTab('turnos')">Ver en Turnos</button>
+        </div>
+      }
+
+      <div class="inicio-grid">
+        <div class="panel-card turnos-card">
+          <div class="turnos-toolbar">
+            <div>
+              <h2>Agenda de hoy</h2>
+              <div class="historial-cantidad">{{ turnosDeHoy().length }} turno{{ turnosDeHoy().length === 1 ? '' : 's' }} hoy</div>
+            </div>
+            <button class="btn-sec" (click)="agendaHoy(); vistaTurnos.set('calendario'); abrirTab('turnos')">Ver calendario</button>
+          </div>
+
+          @if (turnosDeHoy().length === 0) {
+            <p class="empty">No tenés más turnos para hoy.</p>
+          } @else {
+            <div class="filas">
+              @for (t of turnosDeHoy(); track t.id) {
+                <button class="inicio-fila" [class]="'estado-' + t.estadoReserva" (click)="verTurnoEnCalendario(t)">
+                  <span class="inicio-hora">{{ t.fechaHoraInicio | date:'HH:mm' }}</span>
+                  <span class="inicio-detalle">
+                    <span class="fila-titulo">{{ t.clienteNombre }}</span>
+                    <span class="tarjeta-sub">
+                      {{ nombreServicio(t.servicioId) || 'Sin servicio' }}@if (profesionales().length > 0) { · {{ nombreProfesional(t.profesionalId) }} }
+                    </span>
+                  </span>
+                  <span class="badge" [class]="'estado-' + t.estadoReserva">{{ etiquetaEstado(t.estadoReserva) }}</span>
+                </button>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="panel-card turnos-card">
+          <div class="turnos-toolbar">
+            <div>
+              <h2>Pendientes de confirmar</h2>
+              <div class="historial-cantidad">Si no las confirmás a tiempo, las pre-reservas vencen y el horario se libera.</div>
+            </div>
+          </div>
+
+          @if (pendientesDeConfirmar().length === 0) {
+            <p class="empty">No hay turnos esperando confirmación.</p>
+          } @else {
+            <div class="filas">
+              @for (t of pendientesDeConfirmar(); track t.id) {
+                <div class="inicio-fila inicio-pendiente">
+                  <span class="inicio-detalle">
+                    <span class="fila-titulo">{{ t.clienteNombre }}</span>
+                    <span class="tarjeta-sub">
+                      {{ t.fechaHoraInicio | date:'dd/MM HH:mm' }} · {{ nombreServicio(t.servicioId) || 'Sin servicio' }}
+                    </span>
+                  </span>
+                  <span class="chip chip-vence" [class.urgente]="minutosParaVencer(t) < 30">{{ textoVencimiento(t) }}</span>
+                  <span class="acciones">
+                    <button class="btn-ok btn-chico" (click)="confirmar(t)">Confirmar</button>
+                    <button class="btn-peligro btn-chico" (click)="cancelar(t)">Cancelar</button>
+                  </span>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+
     @if (tabActiva() === 'turnos') {
       <div class="panel-card turnos-card">
         <div class="turnos-toolbar">

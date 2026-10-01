@@ -8,11 +8,12 @@ import { Session } from '../../core/session';
 import { linkWhatsApp } from '../../core/whatsapp';
 import { PlanSelector } from '../../shared/plan-selector/plan-selector';
 
-type TabPanel = 'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'sucursales' | 'historial' | 'ganancias' | 'whatsapp' | 'plan' | 'perfil';
+type TabPanel = 'inicio' | 'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'sucursales' | 'historial' | 'ganancias' | 'whatsapp' | 'plan' | 'perfil';
 
 // Items del menú lateral, en el orden en que se dibujan. "soloPremium" replica la condición
 // que antes tenían los botones de Ganancias y WhatsApp en la barra de pestañas.
 const MENU_PANEL: { tab: TabPanel; etiqueta: string; soloPremium?: boolean }[] = [
+  { tab: 'inicio', etiqueta: 'Inicio' },
   { tab: 'turnos', etiqueta: 'Turnos' },
   { tab: 'historial', etiqueta: 'Historial' },
   { tab: 'servicios', etiqueta: 'Servicios' },
@@ -24,6 +25,11 @@ const MENU_PANEL: { tab: TabPanel; etiqueta: string; soloPremium?: boolean }[] =
   { tab: 'plan', etiqueta: 'Mi Plan' },
   { tab: 'perfil', etiqueta: 'Perfil' }
 ];
+
+// Mismo valor que HorasLimiteParaConfirmar en el backend: una pre-reserva que no se confirma
+// en ese plazo desde que se creó deja de ocupar el horario (y el endpoint de turnos deja de
+// devolverla). Se usa solo para mostrar cuánto le falta a cada una en la pestaña Inicio.
+const HORAS_LIMITE_PARA_CONFIRMAR = 2;
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -56,7 +62,7 @@ export class Panel {
   meses = MESES;
 
   sesion: LoginResponse;
-  tabActiva = signal<TabPanel>('turnos');
+  tabActiva = signal<TabPanel>('inicio');
 
   // --- Perfil del comercio ---
   perfilNombre = '';
@@ -287,6 +293,46 @@ export class Panel {
 
   nombreProfesional(profesionalId: number | null): string {
     return this.profesionales().find(p => p.id === profesionalId)?.nombre ?? 'Sin asignar';
+  }
+
+  // --- Inicio: solo bloques que salen de los turnos ya cargados (activos). Las estadísticas
+  // por rango (ocupación, turnos por día, horarios más pedidos, etc.) necesitan un endpoint
+  // que todavía no existe, así que por ahora no se muestran. ---
+  turnosDeHoy(): Turno[] {
+    return this.turnosDelDia(this.ahora()).filter(t => t.estadoReserva !== 3);
+  }
+
+  pendientesDeConfirmar(): Turno[] {
+    return this.turnos()
+      .filter(t => t.estadoReserva === 1)
+      .sort((a, b) => this.vencimientoPreReserva(a).getTime() - this.vencimientoPreReserva(b).getTime());
+  }
+
+  // FechaCreacion se guarda en UTC; si viene sin zona (como la devuelve EF al leer de la
+  // base), se le agrega la "Z" para que el navegador no la tome como hora local.
+  private vencimientoPreReserva(t: Turno): Date {
+    const iso = /Z$|[+-]\d{2}:\d{2}$/.test(t.fechaCreacion) ? t.fechaCreacion : `${t.fechaCreacion}Z`;
+    return new Date(new Date(iso).getTime() + HORAS_LIMITE_PARA_CONFIRMAR * 60 * 60 * 1000);
+  }
+
+  minutosParaVencer(t: Turno): number {
+    return Math.floor((this.vencimientoPreReserva(t).getTime() - this.ahora().getTime()) / 60000);
+  }
+
+  textoVencimiento(t: Turno): string {
+    const minutos = this.minutosParaVencer(t);
+    if (minutos <= 0) return 'Vencida';
+    if (minutos < 60) return `Vence en ${minutos} min`;
+    const horas = Math.floor(minutos / 60);
+    const resto = minutos % 60;
+    return resto === 0 ? `Vence en ${horas} h` : `Vence en ${horas} h ${resto} min`;
+  }
+
+  verTurnoEnCalendario(t: Turno): void {
+    this.irADia(new Date(t.fechaHoraInicio));
+    this.vistaTurnos.set('calendario');
+    this.turnoSeleccionadoId.set(t.id);
+    this.abrirTab('turnos');
   }
 
   // --- Carga manual de turno presencial ---
