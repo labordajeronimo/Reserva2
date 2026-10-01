@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 
-import { Api, ComercioAdmin, ComercioEstadistica, Dashboard, SuperAdminSession } from '../../core/api';
+import { Api, ComercioAdmin, ComercioEstadistica, Dashboard, SuperAdminResumen, SuperAdminSession } from '../../core/api';
 import { Session } from '../../core/session';
 import { linkWhatsApp } from '../../core/whatsapp';
 
@@ -32,6 +32,13 @@ export class SuperAdmin {
   // Fecha de alta, si está pendiente de activación y turnos del mes, por id de comercio.
   // Si esta llamada falla, la tabla funciona igual (sin esos datos para ordenar/filtrar).
   estadisticas = signal<Map<number, ComercioEstadistica>>(new Map());
+  // MRR, turnos/facturación del mes vs. el anterior, turnos por día, altas/bajas y rubros.
+  // Si falla, esos bloques no se muestran.
+  resumen = signal<SuperAdminResumen | null>(null);
+
+  // Mismo valor que TopeTurnosMensualesGratuito en el backend; la alerta salta al 75%.
+  readonly topeTurnosGratuito = 60;
+  readonly avisoTurnosGratuito = 45;
 
   // --- Búsqueda, filtros y orden ---
   busqueda = signal('');
@@ -84,6 +91,7 @@ export class SuperAdmin {
       next: lista => this.estadisticas.set(new Map(lista.map(e => [e.id, e]))),
       error: () => this.estadisticas.set(new Map())
     });
+    this.cargarResumen();
 
     this.errorComercios.set(null);
     this.cargandoComercios.set(true);
@@ -106,6 +114,7 @@ export class SuperAdmin {
         this.comercios.update(lista => lista.map(x => x.id === actualizado.id ? actualizado : x));
         this.actualizandoEstadoId.set(null);
         this.api.getDashboard().subscribe(d => this.dashboard.set(d));
+        this.cargarResumen();
       },
       error: () => this.actualizandoEstadoId.set(null)
     });
@@ -124,6 +133,7 @@ export class SuperAdmin {
       next: actualizado => {
         this.comercios.update(lista => lista.map(x => x.id === actualizado.id ? actualizado : x));
         this.actualizandoMontoId.set(null);
+        this.cargarResumen();
       },
       error: () => this.actualizandoMontoId.set(null)
     });
@@ -134,6 +144,135 @@ export class SuperAdmin {
     this.api.actualizarCicloFacturacion(c.id, nuevoCiclo).subscribe(actualizado => {
       this.comercios.update(lista => lista.map(x => x.id === actualizado.id ? actualizado : x));
     });
+  }
+
+  private cargarResumen(): void {
+    this.api.getResumenSuperAdmin().subscribe({
+      next: r => this.resumen.set(r),
+      error: () => this.resumen.set(null)
+    });
+  }
+
+  // ================= MÉTRICAS DEL NEGOCIO (Etapa B) =================
+  // "Pagando" = activos con un plan pago (Básico o Premium).
+  pagando(): number {
+    return this.comercios().filter(c => c.activo && c.planActual !== 'Gratuito').length;
+  }
+
+  activos(): number {
+    return this.comercios().filter(c => c.activo).length;
+  }
+
+  porcentaje(parte: number, total: number): number {
+    return total > 0 ? Math.round((parte / total) * 100) : 0;
+  }
+
+  variacion(actual: number, anterior: number | null): number | null {
+    if (anterior === null || anterior <= 0) return null;
+    return Math.round(((actual - anterior) / anterior) * 100);
+  }
+
+  textoVariacion(actual: number, anterior: number | null): string {
+    const v = this.variacion(actual, anterior) ?? 0;
+    return `${v > 0 ? '+' : ''}${v}% vs. mes anterior`;
+  }
+
+  ticketPromedio(r: SuperAdminResumen): number | null {
+    const pagando = this.pagando();
+    return pagando > 0 ? Math.round(r.mrrActual / pagando) : null;
+  }
+
+  // ================= ALERTAS =================
+  private diasDesdeUltimoAcceso(c: ComercioAdmin): number | null {
+    const ultimo = this.estadisticas().get(c.id)?.ultimoAcceso;
+    if (!ultimo) return null;
+    const iso = /Z$|[+-]\d{2}:\d{2}$/.test(ultimo) ? ultimo : `${ultimo}Z`;
+    return Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
+  }
+
+  textoUltimoAcceso(c: ComercioAdmin): string {
+    const dias = this.diasDesdeUltimoAcceso(c);
+    if (dias === null) return 'Sin datos';
+    if (dias === 0) return 'Hoy';
+    return `Hace ${dias} día${dias === 1 ? '' : 's'}`;
+  }
+
+  alertas = computed(() => {
+    const activosPagos = this.comercios().filter(c => c.activo && c.planActual !== 'Gratuito');
+    return {
+      vencidos: activosPagos.filter(c => (this.diasParaVencimiento(c) ?? 0) < 0),
+      vencen7: activosPagos.filter(c => {
+        const dias = this.diasParaVencimiento(c);
+        return dias !== null && dias >= 0 && dias <= 7;
+      }),
+      pendientes: this.comercios().filter(c => this.estadoComercio(c) === 'Pendiente'),
+      limiteGratis: this.comercios().filter(c => c.planActual === 'Gratuito' && this.turnosDelMes(c) >= this.avisoTurnosGratuito),
+      // Sin dato de último acceso no se marca: el campo existe desde este cambio, así que
+      // al principio casi nadie lo tiene y no corresponde alarmar por eso.
+      sinActividad: this.comercios().filter(c => c.activo && (this.diasDesdeUltimoAcceso(c) ?? 0) > 14)
+    };
+  });
+
+  hayAlertas(): boolean {
+    const a = this.alertas();
+    return a.vencidos.length + a.vencen7.length + a.pendientes.length + a.limiteGratis.length + a.sinActividad.length > 0;
+  }
+
+  // ================= SALUD =================
+  // Caída de turnos: el mes en curso contra lo esperable según el mes anterior y cuántos
+  // días del mes pasaron (si no, el día 2 todos parecerían en caída). Solo con un mes
+  // anterior de al menos 4 turnos, para no sacar conclusiones de muy pocos datos.
+  private caidaTurnos(c: ComercioAdmin): number {
+    const e = this.estadisticas().get(c.id);
+    if (!e || e.turnosMesAnterior < 4) return 0;
+    const hoy = new Date();
+    const diasDelMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+    const esperado = e.turnosMesAnterior * (hoy.getDate() / diasDelMes);
+    if (esperado <= 0) return 0;
+    return Math.max(0, 1 - e.turnosDelMes / esperado);
+  }
+
+  // Solo para comercios activos: En riesgo si venció, no entra hace más de 21 días o sus
+  // turnos cayeron a la mitad; Atención si vence en 7 días o menos, no entra hace más de 7,
+  // cayeron un 25% o está cerca del tope del plan gratuito.
+  salud(c: ComercioAdmin): 'Sano' | 'Atención' | 'En riesgo' | null {
+    if (!c.activo) return null;
+    const venc = this.claseVencimiento(c);
+    const sinAcceso = this.diasDesdeUltimoAcceso(c) ?? 0;
+    const caida = this.caidaTurnos(c);
+    if (venc === 'vencido' || sinAcceso > 21 || caida >= 0.5) return 'En riesgo';
+    if (venc === 'alerta' || sinAcceso > 7 || caida >= 0.25
+      || (c.planActual === 'Gratuito' && this.turnosDelMes(c) >= this.avisoTurnosGratuito)) return 'Atención';
+    return 'Sano';
+  }
+
+  claseSalud(c: ComercioAdmin): string {
+    const s = this.salud(c);
+    return s === 'En riesgo' ? 'riesgo' : s === 'Atención' ? 'atencion' : s === 'Sano' ? 'sano' : 'sin';
+  }
+
+  // ================= GRÁFICOS DEL RESUMEN =================
+  alturaRelativa(valor: number, valores: number[]): number {
+    const max = Math.max(1, ...valores);
+    return valor === 0 ? 2 : Math.max(4, Math.round((valor / max) * 100));
+  }
+
+  maxAltasBajas(r: SuperAdminResumen): number[] {
+    return r.altasYBajasPorMes.flatMap(m => [m.altas, m.bajas]);
+  }
+
+  cantidadesTurnosPorDia(r: SuperAdminResumen): number[] {
+    return r.turnosPorDia.map(d => d.cantidad);
+  }
+
+  etiquetaFechaCorta(fecha: string): string {
+    const [, m, d] = fecha.split('-');
+    return `${d}/${m}`;
+  }
+
+  anchoRubro(r: SuperAdminResumen, cantidad: number): number {
+    const max = Math.max(1, ...r.porRubro.map(x => x.cantidad));
+    return Math.round((cantidad / max) * 100);
   }
 
   // ================= ESTADO, ORDEN Y PRESENTACIÓN =================

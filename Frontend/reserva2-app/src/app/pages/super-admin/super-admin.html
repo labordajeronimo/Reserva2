@@ -50,18 +50,101 @@
         </div>
       </div>
 
-      <div class="graficos-row">
-        <div class="panel-card">
-          <h2>Altas de comercios por mes</h2>
-          <div class="grafico-barras">
-            @for (m of d.altasPorMes; track m.anio + '-' + m.mes) {
-              <div class="barra-col">
-                <div class="barra-valor">{{ m.cantidad }}</div>
-                <div class="barra" [style.height.%]="alturaBarraAltas(m.cantidad)"></div>
-                <div class="barra-etiqueta">{{ etiquetaMes(m) }}</div>
-              </div>
+
+      @if (resumen(); as r) {
+        <h2 class="seccion-titulo">Negocio</h2>
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="kpi-etiqueta">MRR</div>
+            <div class="kpi-valor">{{ r.mrrActual | currency:'ARS':'$':'1.0-0' }}</div>
+            @if (variacion(r.mrrActual, r.mrrMesAnterior) !== null) {
+              <div class="kpi-pie" [class.sube]="variacion(r.mrrActual, r.mrrMesAnterior)! > 0" [class.baja]="variacion(r.mrrActual, r.mrrMesAnterior)! < 0">{{ textoVariacion(r.mrrActual, r.mrrMesAnterior) }}</div>
+            } @else {
+              <div class="kpi-pie">Sin dato del mes anterior todavía</div>
             }
           </div>
+          <div class="kpi">
+            <div class="kpi-etiqueta">Pagando</div>
+            <div class="kpi-valor">{{ pagando() }}</div>
+            <div class="kpi-pie">{{ porcentaje(pagando(), activos()) }}% de los {{ activos() }} activos</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-etiqueta">Ticket promedio</div>
+            <div class="kpi-valor">{{ ticketPromedio(r) !== null ? (ticketPromedio(r)! | currency:'ARS':'$':'1.0-0') : '—' }}</div>
+            <div class="kpi-pie">MRR ÷ comercios que pagan</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-etiqueta">Turnos del mes</div>
+            <div class="kpi-valor">{{ r.turnosDelMes }}</div>
+            <div class="kpi-pie">{{ r.turnosMesAnterior }} el mes anterior</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-etiqueta">Facturación de los locales</div>
+            <div class="kpi-valor">{{ r.facturacionLocalesMes | currency:'ARS':'$':'1.0-0' }}</div>
+            <div class="kpi-pie">{{ r.facturacionLocalesMesAnterior | currency:'ARS':'$':'1.0-0' }} el mes anterior</div>
+          </div>
+        </div>
+      }
+
+      @if (hayAlertas()) {
+        <div class="panel-card alertas-card">
+          <h2>Alertas</h2>
+          <div class="alertas-grid">
+            @for (grupo of [
+              { titulo: 'Vencidos', lista: alertas().vencidos, tono: 'riesgo' },
+              { titulo: 'Vencen en 7 días', lista: alertas().vencen7, tono: 'atencion' },
+              { titulo: 'Pendientes de activación', lista: alertas().pendientes, tono: 'atencion' },
+              { titulo: 'Cerca del límite gratis (' + avisoTurnosGratuito + '+ de ' + topeTurnosGratuito + ' turnos)', lista: alertas().limiteGratis, tono: 'info' },
+              { titulo: 'Sin actividad (más de 14 días sin entrar)', lista: alertas().sinActividad, tono: 'riesgo' }
+            ]; track grupo.titulo) {
+              @if (grupo.lista.length > 0) {
+                <div class="alerta-grupo" [class]="'tono-' + grupo.tono">
+                  <div class="alerta-cabecera">
+                    <span class="alerta-cantidad">{{ grupo.lista.length }}</span>
+                    <span class="alerta-titulo">{{ grupo.titulo }}</span>
+                  </div>
+                  <ul>
+                    @for (c of grupo.lista.slice(0, 5); track c.id) {
+                      <li><a [routerLink]="['/super-admin/comercios', c.id]">{{ c.nombre }}</a></li>
+                    }
+                    @if (grupo.lista.length > 5) { <li class="alerta-mas">y {{ grupo.lista.length - 5 }} más</li> }
+                  </ul>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      }
+
+      <div class="graficos-row">
+        <div class="panel-card">
+          @if (resumen(); as r) {
+            <h2>Altas y bajas por mes</h2>
+            <div class="grafico-barras">
+              @for (m of r.altasYBajasPorMes; track m.anio + '-' + m.mes) {
+                <div class="barra-col">
+                  <div class="barra-valor">{{ m.altas }} / {{ m.bajas }}</div>
+                  <div class="barra-par">
+                    <div class="barra" [style.height.%]="alturaRelativa(m.altas, maxAltasBajas(r))" [title]="m.altas + ' altas'"></div>
+                    <div class="barra barra-baja" [style.height.%]="alturaRelativa(m.bajas, maxAltasBajas(r))" [title]="m.bajas + ' bajas'"></div>
+                  </div>
+                  <div class="barra-etiqueta">{{ etiquetaMes(m) }}</div>
+                </div>
+              }
+            </div>
+            <div class="leyenda-chica"><span class="punto punto-alta"></span> Altas <span class="punto punto-baja"></span> Bajas (pausados)</div>
+          } @else {
+            <h2>Altas de comercios por mes</h2>
+            <div class="grafico-barras">
+              @for (m of d.altasPorMes; track m.anio + '-' + m.mes) {
+                <div class="barra-col">
+                  <div class="barra-valor">{{ m.cantidad }}</div>
+                  <div class="barra" [style.height.%]="alturaBarraAltas(m.cantidad)"></div>
+                  <div class="barra-etiqueta">{{ etiquetaMes(m) }}</div>
+                </div>
+              }
+            </div>
+          }
         </div>
 
         <div class="panel-card">
@@ -87,6 +170,44 @@
           }
         </div>
       </div>
+
+      @if (resumen(); as r) {
+        <div class="graficos-row">
+          <div class="panel-card">
+            <h2>Turnos por día · últimos 30 días</h2>
+            <div class="barras-dias">
+              @for (dia of r.turnosPorDia; track dia.fecha) {
+                <div class="barra-dia" [class.vacia]="dia.cantidad === 0"
+                     [style.height.%]="alturaRelativa(dia.cantidad, cantidadesTurnosPorDia(r))"
+                     [title]="etiquetaFechaCorta(dia.fecha) + ': ' + dia.cantidad + ' turnos'"></div>
+              }
+            </div>
+            @if (r.turnosPorDia.length > 0) {
+              <div class="barras-dias-ejes">
+                <span>{{ etiquetaFechaCorta(r.turnosPorDia[0].fecha) }}</span>
+                <span>{{ etiquetaFechaCorta(r.turnosPorDia[r.turnosPorDia.length - 1].fecha) }}</span>
+              </div>
+            }
+          </div>
+
+          <div class="panel-card">
+            <h2>Comercios por rubro</h2>
+            @if (r.porRubro.length === 0) {
+              <p class="empty">Todavía no hay comercios registrados.</p>
+            } @else {
+              <div class="rubros">
+                @for (x of r.porRubro; track x.rubro) {
+                  <div class="rubro-fila">
+                    <span class="rubro-nombre">{{ x.rubro }}</span>
+                    <div class="rubro-pista"><div class="rubro-barra" [style.width.%]="anchoRubro(r, x.cantidad)"></div></div>
+                    <span class="rubro-cantidad">{{ x.cantidad }}</span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      }
     }
 
     <div class="panel-card">
@@ -134,7 +255,7 @@
         <div class="tabla-scroll">
           <table class="tabla">
             <thead>
-              <tr><th>Comercio</th><th>Plan</th><th>Ciclo</th><th>Monto mensual</th><th>Vencimiento</th><th>Turnos mes</th><th>Estado</th><th></th></tr>
+              <tr><th>Comercio</th><th>Plan</th><th>Ciclo</th><th>Monto mensual</th><th>Vencimiento</th><th>Turnos mes</th><th>Estado</th><th>Salud</th><th></th></tr>
             </thead>
             <tbody>
               @for (c of comerciosFiltrados(); track c.id) {
@@ -177,6 +298,9 @@
                   <td><span class="pastilla" [class]="'venc-' + claseVencimiento(c)">{{ textoVencimiento(c) }}</span></td>
                   <td class="celda-numero">{{ turnosDelMes(c) }}</td>
                   <td><span class="pastilla" [class]="'estado-' + estadoComercio(c)">{{ estadoComercio(c) }}</span></td>
+                  <td>
+                    <span class="pastilla" [class]="'salud-' + claseSalud(c)" [title]="'Último acceso: ' + textoUltimoAcceso(c)">{{ salud(c) ?? '—' }}</span>
+                  </td>
                   <td>
                     <div class="acciones">
                       <button

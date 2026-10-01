@@ -224,3 +224,47 @@
   .panel-main { padding: 84px 16px 60px; }
   .panel-card { padding: 18px 16px; }
 }
+
+/* ===================== ETAPA B ===================== */
+.seccion-titulo { font-family: 'Sora', sans-serif; font-size: 1.05rem; font-weight: 700; color: #A6AFC6; margin: 6px 0 12px; }
+.kpi-pie.sube { color: #6EE7B7; }
+.kpi-pie.baja { color: #FCA5A5; }
+
+.alertas-card { margin-bottom: 20px; }
+.alertas-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.alerta-grupo { background: #10172B; border: 1px solid rgba(232, 236, 246, 0.09); border-left: 3px solid #7C879E; border-radius: 12px; padding: 12px 14px; }
+.alerta-grupo.tono-riesgo { border-left-color: #F87171; }
+.alerta-grupo.tono-atencion { border-left-color: #FBBF24; }
+.alerta-grupo.tono-info { border-left-color: #60A5FA; }
+.alerta-cabecera { display: flex; align-items: baseline; gap: 8px; }
+.alerta-cantidad { font-family: 'Sora', sans-serif; font-weight: 800; font-size: 1.3rem; color: #FFFFFF; }
+.alerta-titulo { color: #A6AFC6; font-size: 0.8rem; font-weight: 600; }
+.alerta-grupo ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.alerta-grupo a { color: #E8ECF6; font-size: 0.84rem; text-decoration: none; }
+.alerta-grupo a:hover { color: #FB923C; }
+.alerta-mas { color: #7C879E; font-size: 0.78rem; }
+
+.barra-par { display: flex; align-items: flex-end; justify-content: center; gap: 3px; width: 100%; height: 100%; }
+.barra-par .barra { max-width: 18px; }
+.barra-baja { background-image: none; background: #F87171; }
+.leyenda-chica { display: flex; align-items: center; gap: 6px; color: #7C879E; font-size: 0.76rem; margin-top: 12px; }
+.punto { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.punto-alta { background: #F97316; }
+.punto-baja { background: #F87171; margin-left: 10px; }
+
+.barras-dias { display: flex; align-items: flex-end; gap: 3px; height: 150px; padding-top: 10px; }
+.barra-dia { flex: 1; min-width: 0; background-image: linear-gradient(180deg, #F97316, #EA580C); border-radius: 4px 4px 0 0; }
+.barra-dia.vacia { background: rgba(232, 236, 246, 0.08); }
+.barras-dias-ejes { display: flex; justify-content: space-between; color: #7C879E; font-size: 0.72rem; margin-top: 8px; }
+
+.rubros { display: flex; flex-direction: column; gap: 12px; }
+.rubro-fila { display: grid; grid-template-columns: minmax(80px, 140px) minmax(0, 1fr) 32px; align-items: center; gap: 10px; font-size: 0.86rem; }
+.rubro-nombre { color: #E8ECF6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rubro-pista { height: 10px; border-radius: 999px; background: rgba(232, 236, 246, 0.06); overflow: hidden; }
+.rubro-barra { height: 100%; border-radius: 999px; background-image: linear-gradient(90deg, #EA580C, #F97316); }
+.rubro-cantidad { color: #FFFFFF; font-family: 'Sora', sans-serif; font-weight: 700; text-align: right; }
+
+.salud-sano { background: rgba(52, 211, 153, 0.16); color: #6EE7B7; }
+.salud-atencion { background: rgba(251, 191, 36, 0.16); color: #FBBF24; }
+.salud-riesgo { background: rgba(248, 113, 113, 0.14); color: #FCA5A5; }
+.salud-sin { background: none; color: #7C879E; padding-left: 0; }

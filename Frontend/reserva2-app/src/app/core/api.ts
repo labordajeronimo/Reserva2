@@ -297,6 +297,22 @@ export interface ComercioEstadistica {
   pendiente: boolean;
   turnosDelMes: number;
   turnosMesAnterior: number;
+  // Último login del dueño al panel (UTC); null si no entró desde que se registra.
+  ultimoAcceso: string | null;
+}
+
+// Resumen del Super Admin (GET /admin/resumen).
+export interface SuperAdminResumen {
+  mrrActual: number;
+  mrrMesAnterior: number | null;
+  mrrHistorico: { anio: number; mes: number; monto: number }[];
+  turnosDelMes: number;
+  turnosMesAnterior: number;
+  facturacionLocalesMes: number;
+  facturacionLocalesMesAnterior: number;
+  turnosPorDia: { fecha: string; cantidad: number }[];
+  altasYBajasPorMes: { anio: number; mes: number; altas: number; bajas: number }[];
+  porRubro: { rubro: string; cantidad: number }[];
 }
 
 export interface Dashboard {
@@ -366,6 +382,10 @@ export class Api {
 
   getEstadisticasComercios(): Observable<ComercioEstadistica[]> {
     return this.http.get<ComercioEstadistica[]>(`${API_BASE}/admin/comercios/estadisticas`);
+  }
+
+  getResumenSuperAdmin(): Observable<SuperAdminResumen> {
+    return this.http.get<SuperAdminResumen>(`${API_BASE}/admin/resumen`);
   }
 
   actualizarEstadoComercio(id: number, activo: boolean): Observable<ComercioAdmin> {
