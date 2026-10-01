@@ -741,6 +741,19 @@
 .wa-explicacion li::before { content: ''; position: absolute; left: 0; top: 0.5em; width: 7px; height: 7px; border-radius: 50%; background: #34D399; }
 .wa-datos { display: flex; gap: 8px; flex-wrap: wrap; }
 .sub-info.wa-nota { margin: 14px 0 0; }
+.aviso-construccion {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  border-radius: 14px;
+  padding: 14px 18px;
+  color: #FCA5A5;
+  font-size: 0.88rem;
+}
+.aviso-construccion strong { font-family: 'Sora', sans-serif; font-weight: 800; letter-spacing: 0.06em; color: #F87171; }
 
 /* ----- Mi Plan ----- */
 .plan-resumen { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
