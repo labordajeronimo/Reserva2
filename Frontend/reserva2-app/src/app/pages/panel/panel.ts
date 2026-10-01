@@ -36,12 +36,12 @@ const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', '
 const PRECIOS_PLAN: Record<string, { unico: number; porProfesional: number }> = {
   Gratuito: { unico: 0, porProfesional: 0 },
   Basico: { unico: 7000, porProfesional: 4800 },
-  Premium: { unico: 11000, porProfesional: 8500 }
+  Premium: { unico: 10000, porProfesional: 7500 }
 };
 const PRECIOS_PLAN_ANUAL: Record<string, { unico: number; porProfesional: number }> = {
   Gratuito: { unico: 0, porProfesional: 0 },
   Basico: { unico: 63000, porProfesional: 43200 },
-  Premium: { unico: 99000, porProfesional: 76500 }
+  Premium: { unico: 90000, porProfesional: 67500 }
 };
 
 @Component({

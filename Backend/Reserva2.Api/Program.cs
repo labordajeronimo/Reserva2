@@ -161,7 +161,7 @@ var PreciosPlanMensual = new Dictionary<string, (decimal Unico, decimal PorProfe
 {
     ["Gratuito"] = (0m, 0m),
     ["Basico"] = (7000m, 4800m),
-    ["Premium"] = (11000m, 8500m)
+    ["Premium"] = (10000m, 7500m)
 };
 
 // "Unidades" = profesionales + (sucursales - 1): la primera sucursal no suma nada, cada
