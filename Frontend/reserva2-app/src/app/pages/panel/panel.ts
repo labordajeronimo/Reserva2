@@ -8,6 +8,23 @@ import { Session } from '../../core/session';
 import { linkWhatsApp } from '../../core/whatsapp';
 import { PlanSelector } from '../../shared/plan-selector/plan-selector';
 
+type TabPanel = 'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'sucursales' | 'historial' | 'ganancias' | 'whatsapp' | 'plan' | 'perfil';
+
+// Items del menú lateral, en el orden en que se dibujan. "soloPremium" replica la condición
+// que antes tenían los botones de Ganancias y WhatsApp en la barra de pestañas.
+const MENU_PANEL: { tab: TabPanel; etiqueta: string; soloPremium?: boolean }[] = [
+  { tab: 'turnos', etiqueta: 'Turnos' },
+  { tab: 'historial', etiqueta: 'Historial' },
+  { tab: 'servicios', etiqueta: 'Servicios' },
+  { tab: 'horarios', etiqueta: 'Horarios' },
+  { tab: 'profesionales', etiqueta: 'Profesionales' },
+  { tab: 'sucursales', etiqueta: 'Sucursales' },
+  { tab: 'ganancias', etiqueta: 'Ganancias', soloPremium: true },
+  { tab: 'whatsapp', etiqueta: 'WhatsApp', soloPremium: true },
+  { tab: 'plan', etiqueta: 'Mi Plan' },
+  { tab: 'perfil', etiqueta: 'Perfil' }
+];
+
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
@@ -39,7 +56,7 @@ export class Panel {
   meses = MESES;
 
   sesion: LoginResponse;
-  tabActiva = signal<'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'sucursales' | 'historial' | 'ganancias' | 'whatsapp' | 'plan' | 'perfil'>('turnos');
+  tabActiva = signal<TabPanel>('turnos');
 
   // --- Perfil del comercio ---
   perfilNombre = '';
@@ -295,7 +312,31 @@ export class Panel {
     this.router.navigateByUrl('/panel/login');
   }
 
-  abrirTab(tab: 'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'sucursales' | 'historial' | 'ganancias' | 'whatsapp' | 'plan' | 'perfil'): void {
+  // ================= MENÚ LATERAL =================
+  itemsMenu() {
+    return MENU_PANEL.filter(i => !i.soloPremium || this.esPremium());
+  }
+
+  tituloTabActiva(): string {
+    return MENU_PANEL.find(i => i.tab === this.tabActiva())?.etiqueta ?? '';
+  }
+
+  fechaHoyTexto(): string {
+    const texto = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+  }
+
+  // Sale de los turnos ya cargados, no pega al backend.
+  turnosSinConfirmar(): number {
+    return this.turnos().filter(t => t.estadoReserva === 1).length;
+  }
+
+  inicialesComercio(): string {
+    const palabras = this.sesion.nombre.trim().split(/\s+/).filter(Boolean);
+    return palabras.slice(0, 2).map(p => p[0].toUpperCase()).join('') || 'R2';
+  }
+
+  abrirTab(tab: TabPanel): void {
     this.tabActiva.set(tab);
     if (tab === 'ganancias' && !this.gananciasCargadaAlMenosUnaVez) this.cargarGanancias();
     if (tab === 'whatsapp' && !this.whatsAppCargadoAlMenosUnaVez) this.cargarWhatsAppConfig();
