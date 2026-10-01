@@ -493,28 +493,50 @@
 
     @if (tabActiva() === 'whatsapp') {
       @if (!esPremium()) {
-        <div class="panel-card upsell-premium">
-          <h2>Bot de WhatsApp</h2>
-          <p class="sub-info">Esto es parte del plan Premium. Activás los recordatorios y confirmaciones automáticas por WhatsApp si actualizás tu plan.</p>
+        <div class="panel-card turnos-card upsell-premium">
+          <span class="chip chip-premium">Premium</span>
+          <h2>Aviso por WhatsApp</h2>
+          <p class="sub-info">Esto es parte del plan Premium. Si actualizás tu plan, tus clientes reciben un aviso automático por WhatsApp con los datos de su turno.</p>
           <button class="btn-naranja" (click)="abrirTab('plan')">Actualizar mi plan</button>
         </div>
       } @else {
-        <div class="panel-card">
-          <h2>Bot de WhatsApp</h2>
-          <p class="sub-info">La integración completa con WhatsApp está en camino. Por ahora podés activar o desactivar el bot; cuando esté conectado, va a mandar recordatorios y confirmaciones automáticas a tus clientes.</p>
-
+        <div class="panel-card turnos-card">
           @if (errorWhatsApp()) { <div class="error-msg">{{ errorWhatsApp() }}</div> }
 
           @if (whatsappConfig(); as w) {
-            <div class="whatsapp-estado">
-              <span class="badge" [class.badge-ok]="w.activado" [class.badge-danger]="!w.activado">{{ w.activado ? 'Activado' : 'Desactivado' }}</span>
-              <button class="btn-naranja" [disabled]="cargandoWhatsApp()" (click)="toggleWhatsApp()">
-                {{ w.activado ? 'Desactivar' : 'Activar' }}
+            <div class="wa-cabecera">
+              <div>
+                <h2>Aviso automático por WhatsApp</h2>
+                <div class="historial-cantidad">
+                  <span class="badge" [class.estado-2]="w.activado" [class.estado-3]="!w.activado">{{ w.activado ? 'Activado' : 'Desactivado' }}</span>
+                </div>
+              </div>
+              <button class="switch" role="switch" [attr.aria-checked]="w.activado" [class.on]="w.activado"
+                      [disabled]="cargandoWhatsApp()" (click)="toggleWhatsApp()"
+                      [attr.aria-label]="w.activado ? 'Desactivar aviso por WhatsApp' : 'Activar aviso por WhatsApp'">
+                <span class="switch-perilla"></span>
               </button>
             </div>
           } @else if (cargandoWhatsApp()) {
             <p class="empty">Cargando...</p>
           }
+
+          <ul class="wa-explicacion">
+            <li>Se envía solo, cuando un cliente reserva un turno desde tu página pública.</li>
+            <li>Sale desde el número de WhatsApp de Reserva2, no desde el tuyo.</li>
+            <li>Es solo un aviso: el cliente no puede responder por ese chat.</li>
+          </ul>
+        </div>
+
+        <div class="panel-card turnos-card turno-manual-card">
+          <h2>Qué datos lleva el aviso</h2>
+          <div class="wa-datos">
+            <span class="chip">Nombre del cliente</span>
+            <span class="chip">{{ sesion.nombre }}</span>
+            <span class="chip">Día del turno</span>
+            <span class="chip">Hora del turno</span>
+          </div>
+          <p class="sub-info wa-nota">Si el servicio tiene seña, el aviso suma el monto de la seña y tu alias o CBU{{ sesion.datosBancarios ? ' (' + sesion.datosBancarios + ')' : '' }}.</p>
         </div>
       }
     }

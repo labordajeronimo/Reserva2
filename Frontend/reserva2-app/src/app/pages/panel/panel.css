@@ -368,7 +368,6 @@
   margin-top: 14px;
 }
 
-.whatsapp-estado { display: flex; align-items: center; gap: 14px; margin-top: 20px; }
 
 .renovacion-contador {
   background: rgba(232, 236, 246, 0.06);
@@ -708,6 +707,35 @@
 .subtitulo-seccion { margin-top: 28px !important; }
 .turnos-card .grafico-barras { margin-top: 4px; }
 .barra-valor { font-family: 'Sora', sans-serif; }
+
+/* ----- WhatsApp ----- */
+.wa-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.wa-cabecera h2 { margin: 0 0 8px; }
+.switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 52px; height: 30px;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 236, 246, 0.16);
+  background: rgba(232, 236, 246, 0.1);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.switch.on { background: #F97316; border-color: #F97316; }
+.switch:disabled { opacity: 0.5; cursor: default; }
+.switch-perilla {
+  position: absolute; top: 3px; left: 3px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  transition: transform 0.2s ease;
+}
+.switch.on .switch-perilla { transform: translateX(22px); }
+.wa-explicacion { margin: 18px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.wa-explicacion li { position: relative; padding-left: 18px; color: #A6AFC6; font-size: 0.88rem; }
+.wa-explicacion li::before { content: ''; position: absolute; left: 0; top: 0.5em; width: 7px; height: 7px; border-radius: 50%; background: #34D399; }
+.wa-datos { display: flex; gap: 8px; flex-wrap: wrap; }
+.wa-nota { margin: 14px 0 0; }
 
 @media (max-width: 720px) {
   .horario-fila { grid-template-columns: 1fr; }
