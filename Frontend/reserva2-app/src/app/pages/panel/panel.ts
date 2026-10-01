@@ -615,6 +615,66 @@ export class Panel {
     return this.turnos().filter(t => t.estadoReserva === 1).length;
   }
 
+  // Turnos que necesitan algo del comercio: pre-reservas viejas sin confirmar y señas a
+  // verificar (la pastilla del menú cuenta los dos).
+  turnosParaRevisar(): number {
+    return this.turnosSinConfirmar() + this.seniasAVerificar().length;
+  }
+
+  // ================= SEÑA =================
+  seniasAVerificar(): Turno[] {
+    return this.turnos()
+      .filter(t => t.estadoReserva !== 3 && t.señaVerificada === false)
+      .sort((a, b) => a.fechaHoraInicio.localeCompare(b.fechaHoraInicio));
+  }
+
+  montoSenia(t: Turno): number | null {
+    return this.servicios().find(s => s.id === t.servicioId)?.montoSeña ?? null;
+  }
+
+  // Comprobante abierto en el visor (se pide con el token del comercio, no es un link público).
+  comprobanteTurno = signal<Turno | null>(null);
+  comprobanteUrl = signal<string | null>(null);
+  cargandoComprobante = signal(false);
+  errorComprobante = signal<string | null>(null);
+
+  verComprobante(t: Turno): void {
+    this.cerrarComprobante();
+    this.comprobanteTurno.set(t);
+    this.cargandoComprobante.set(true);
+    this.api.getComprobanteTurno(t.id).subscribe({
+      next: blob => {
+        this.comprobanteUrl.set(URL.createObjectURL(blob));
+        this.cargandoComprobante.set(false);
+      },
+      error: () => {
+        this.cargandoComprobante.set(false);
+        this.errorComprobante.set('No pudimos abrir el comprobante.');
+      }
+    });
+  }
+
+  cerrarComprobante(): void {
+    const url = this.comprobanteUrl();
+    if (url) URL.revokeObjectURL(url);
+    this.comprobanteUrl.set(null);
+    this.comprobanteTurno.set(null);
+    this.errorComprobante.set(null);
+  }
+
+  marcarSeniaVerificada(t: Turno): void {
+    this.api.marcarSeniaVerificada(t.id).subscribe(() => {
+      if (this.comprobanteTurno()?.id === t.id) this.cerrarComprobante();
+      this.cargarTurnos();
+    });
+  }
+
+  cancelarDesdeComprobante(t: Turno): void {
+    if (!confirm(`¿Cancelar el turno de ${t.clienteNombre}? El horario vuelve a quedar libre.`)) return;
+    this.cerrarComprobante();
+    this.cancelar(t);
+  }
+
   inicialesComercio(): string {
     const palabras = this.sesion.nombre.trim().split(/\s+/).filter(Boolean);
     return palabras.slice(0, 2).map(p => p[0].toUpperCase()).join('') || 'R2';

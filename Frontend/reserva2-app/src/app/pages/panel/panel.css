@@ -910,3 +910,30 @@ button.inicio-fila:hover { border-color: rgba(232, 236, 246, 0.2); border-left-c
   .tabla { display: block; overflow-x: auto; }
   .form-inline, .form-inline-servicios { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ----- Seña ----- */
+.senias-card { margin-bottom: 20px; border-color: rgba(251, 191, 36, 0.35); }
+.cal-turno-senia { color: #FBBF24; font-weight: 700; font-size: 0.68rem; }
+.badge-senia { margin-left: 6px; }
+.badge-senia-ok { margin-left: 6px; background: rgba(52, 211, 153, 0.16); color: #6EE7B7; }
+.senia-detalle {
+  margin-top: 14px; padding: 12px; border-radius: 12px;
+  background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #FBBF24; font-size: 0.85rem; font-weight: 600;
+}
+.senia-detalle.verificada { background: rgba(52, 211, 153, 0.1); border-color: rgba(52, 211, 153, 0.3); color: #6EE7B7; }
+.senia-detalle .turno-detalle-acciones { margin-top: 10px; flex-wrap: wrap; }
+.senia-detalle .turno-detalle-acciones button { flex: 1 1 auto; }
+
+.visor-overlay { position: fixed; inset: 0; z-index: 50; background: rgba(5, 8, 18, 0.7); }
+.visor {
+  position: fixed; z-index: 51; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(560px, calc(100% - 32px)); max-height: calc(100vh - 32px); overflow-y: auto;
+  background: #10172B; border: 1px solid rgba(232, 236, 246, 0.14); border-radius: 20px; padding: 20px;
+}
+.visor-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.visor-top h3 { font-family: 'Sora', sans-serif; font-size: 1.1rem; color: #FFFFFF; margin: 0 0 4px; }
+.visor-imagen { background: #0C1122; border-radius: 14px; min-height: 120px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.visor-imagen img { max-width: 100%; max-height: 60vh; object-fit: contain; display: block; }
+.visor-nota { color: #A6AFC6; font-size: 0.8rem; margin: 12px 0 0; }
+.visor .turno-detalle-acciones { margin-top: 14px; }

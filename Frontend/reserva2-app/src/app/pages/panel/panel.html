@@ -17,8 +17,8 @@
       @for (item of itemsMenu(); track item.tab) {
         <button class="sidebar-item" [class.active]="tabActiva() === item.tab" (click)="abrirTab(item.tab)">
           <span>{{ item.etiqueta }}</span>
-          @if (item.tab === 'turnos' && turnosSinConfirmar() > 0) {
-            <span class="sidebar-pastilla" title="Turnos sin confirmar">{{ turnosSinConfirmar() }}</span>
+          @if (item.tab === 'turnos' && turnosParaRevisar() > 0) {
+            <span class="sidebar-pastilla" title="Turnos sin confirmar o con seña a verificar">{{ turnosParaRevisar() }}</span>
           }
         </button>
       }
@@ -70,6 +70,35 @@
         <div class="aviso-pendientes" role="status">
           <span><strong>{{ turnosSinConfirmar() }}</strong> turno{{ turnosSinConfirmar() === 1 ? ' espera' : 's esperan' }} tu confirmación.</span>
           <button class="btn-sec" (click)="vistaTurnos.set('lista'); abrirTab('turnos')">Ver en Turnos</button>
+        </div>
+      }
+
+      @if (seniasAVerificar().length > 0) {
+        <div class="panel-card turnos-card senias-card">
+          <div class="turnos-toolbar">
+            <div>
+              <h2>Señas a verificar</h2>
+              <div class="historial-cantidad">El turno ya está reservado. Revisá que la transferencia te haya llegado y marcala como verificada, o cancelá el turno si no corresponde.</div>
+            </div>
+          </div>
+          <div class="filas">
+            @for (t of seniasAVerificar(); track t.id) {
+              <div class="inicio-fila inicio-pendiente">
+                <span class="inicio-detalle">
+                  <span class="fila-titulo">{{ t.clienteNombre }}</span>
+                  <span class="tarjeta-sub">
+                    {{ t.fechaHoraInicio | date:'dd/MM HH:mm' }} · {{ nombreServicio(t.servicioId) || 'Sin servicio' }}@if (montoSenia(t)) { · seña {{ montoSenia(t) | currency:'ARS':'$':'1.0-2' }} }
+                  </span>
+                </span>
+                <span class="acciones">
+                  @if (t.tieneComprobante) {
+                    <button class="btn-sec btn-chico" (click)="verComprobante(t)">Ver comprobante</button>
+                  }
+                  <button class="btn-ok btn-chico" (click)="marcarSeniaVerificada(t)">Verificada</button>
+                </span>
+              </div>
+            }
+          </div>
         </div>
       }
 
@@ -339,6 +368,9 @@
                         @if (nombreServicio(b.turno.servicioId)) {
                           <span class="cal-turno-servicio">{{ nombreServicio(b.turno.servicioId) }}</span>
                         }
+                        @if (b.turno['señaVerificada'] === false && b.turno.estadoReserva !== 3) {
+                          <span class="cal-turno-senia">Seña a verificar</span>
+                        }
                       </button>
                     }
                     @if (ahoraTopPx() !== null) {
@@ -372,6 +404,20 @@
                     <dd>{{ t.clienteWhatsApp }}</dd>
                   }
                 </dl>
+                @if (t['señaVerificada'] !== null) {
+                  <div class="senia-detalle" [class.verificada]="t['señaVerificada']">
+                    <span>{{ t['señaVerificada'] ? 'Seña verificada' : 'Seña a verificar' }}@if (montoSenia(t)) { · {{ montoSenia(t) | currency:'ARS':'$':'1.0-2' }} }</span>
+                    <div class="turno-detalle-acciones">
+                      @if (t.tieneComprobante) {
+                        <button class="btn-sec" (click)="verComprobante(t)">Ver comprobante</button>
+                      }
+                      @if (!t['señaVerificada'] && t.estadoReserva !== 3) {
+                        <button class="btn-ok" (click)="marcarSeniaVerificada(t)">Marcar verificada</button>
+                        <button class="btn-peligro" (click)="cancelarDesdeComprobante(t)">Cancelar</button>
+                      }
+                    </div>
+                  </div>
+                }
                 @if (t.estadoReserva === 1) {
                   <div class="turno-detalle-acciones">
                     <button class="btn-ok" (click)="confirmar(t)">Confirmar</button>
@@ -394,11 +440,20 @@
                   <td>{{ t.clienteNombre }}</td>
                   <td>{{ t.clienteWhatsApp }}</td>
                   <td>{{ t.fechaHoraInicio | date:'dd/MM HH:mm' }}</td>
-                  <td><span class="badge" [class]="'estado-' + t.estadoReserva">{{ etiquetaEstado(t.estadoReserva) }}</span></td>
+                  <td>
+                    <span class="badge" [class]="'estado-' + t.estadoReserva">{{ etiquetaEstado(t.estadoReserva) }}</span>
+                    @if (t['señaVerificada'] === false && t.estadoReserva !== 3) { <span class="badge estado-1 badge-senia">Seña a verificar</span> }
+                    @if (t['señaVerificada'] === true) { <span class="badge badge-senia-ok">Seña verificada</span> }
+                  </td>
                   <td class="acciones">
                     @if (t.estadoReserva === 1) {
                       <button class="mini ok" (click)="confirmar(t)">Confirmar</button>
                       <button class="mini danger" (click)="cancelar(t)">Cancelar</button>
+                    }
+                    @if (t['señaVerificada'] === false && t.estadoReserva !== 3) {
+                      @if (t.tieneComprobante) { <button class="btn-sec btn-chico" (click)="verComprobante(t)">Ver comprobante</button> }
+                      <button class="btn-ok btn-chico" (click)="marcarSeniaVerificada(t)">Verificada</button>
+                      <button class="btn-peligro btn-chico" (click)="cancelarDesdeComprobante(t)">Cancelar</button>
                     }
                   </td>
                 </tr>
@@ -1234,4 +1289,33 @@
 
   </main>
   </div>
+
+  @if (comprobanteTurno(); as t) {
+    <div class="visor-overlay" (click)="cerrarComprobante()"></div>
+    <div class="visor" role="dialog" aria-modal="true" aria-label="Comprobante de seña">
+      <div class="visor-top">
+        <div>
+          <h3>Comprobante de seña</h3>
+          <div class="historial-cantidad">{{ t.clienteNombre }} · {{ t.fechaHoraInicio | date:'dd/MM HH:mm' }}@if (montoSenia(t)) { · seña {{ montoSenia(t) | currency:'ARS':'$':'1.0-2' }} }</div>
+        </div>
+        <button class="turno-detalle-cerrar" (click)="cerrarComprobante()" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="visor-imagen">
+        @if (cargandoComprobante()) {
+          <p class="empty">Cargando...</p>
+        } @else if (errorComprobante()) {
+          <div class="error-msg">{{ errorComprobante() }}</div>
+        } @else if (comprobanteUrl(); as url) {
+          <img [src]="url" alt="Comprobante de la transferencia de la seña">
+        }
+      </div>
+      <p class="visor-nota">Una captura se puede editar: antes de marcarla como verificada, fijate que la transferencia te haya llegado a tu cuenta.</p>
+      @if (t['señaVerificada'] === false && t.estadoReserva !== 3) {
+        <div class="turno-detalle-acciones">
+          <button class="btn-ok" (click)="marcarSeniaVerificada(t)">Marcar seña verificada</button>
+          <button class="btn-peligro" (click)="cancelarDesdeComprobante(t)">Cancelar turno</button>
+        </div>
+      }
+    </div>
+  }
 </div>

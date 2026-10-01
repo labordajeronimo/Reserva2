@@ -78,6 +78,9 @@ export interface Turno {
   clienteWhatsApp: string;
   fechaCreacion: string;
   montoCobrado: number | null;
+  // Seña: null = el servicio no pedía seña; false = a verificar; true = verificada.
+  señaVerificada: boolean | null;
+  tieneComprobante: boolean;
 }
 
 export interface HistorialItem {
@@ -544,6 +547,15 @@ export class Api {
 
   cancelarTurno(id: number): Observable<Turno> {
     return this.http.patch<Turno>(`${API_BASE}/turnos/${id}/cancelar`, {});
+  }
+
+  // Captura del comprobante de seña (solo el comercio dueño); viene como imagen.
+  getComprobanteTurno(id: number): Observable<Blob> {
+    return this.http.get(`${API_BASE}/turnos/${id}/comprobante`, { responseType: 'blob' });
+  }
+
+  marcarSeniaVerificada(id: number): Observable<Turno> {
+    return this.http.patch<Turno>(`${API_BASE}/turnos/${id}/sena-verificada`, {});
   }
 
   getTurnoPorToken(token: string): Observable<TurnoPorToken> {
