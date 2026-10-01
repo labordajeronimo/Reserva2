@@ -47,8 +47,10 @@ var builder = WebApplication.CreateBuilder(args);
 var rutaUploads = builder.Configuration["Uploads:Ruta"] ?? Path.Combine(builder.Environment.ContentRootPath, "uploads");
 var rutaLogos = Path.Combine(rutaUploads, "logos");
 var rutaComprobantes = Path.Combine(rutaUploads, "comprobantes");
+var rutaFotosProfesionales = Path.Combine(rutaUploads, "profesionales");
 Directory.CreateDirectory(rutaLogos);
 Directory.CreateDirectory(rutaComprobantes);
+Directory.CreateDirectory(rutaFotosProfesionales);
 
 // Configuración de la base de datos SQL Server
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -136,12 +138,18 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
-// Solo los logos son públicos (/uploads/logos/...). Los comprobantes de seña NO se sirven
-// como archivos estáticos: se leen por un endpoint que valida que sea el comercio dueño.
+// Solo los logos y las fotos de los profesionales son públicos (/uploads/logos/... y
+// /uploads/profesionales/...). Los comprobantes de seña NO se sirven como archivos
+// estáticos: se leen por un endpoint que valida que sea el comercio dueño.
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(rutaLogos),
     RequestPath = "/uploads/logos"
+});
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(rutaFotosProfesionales),
+    RequestPath = "/uploads/profesionales"
 });
 app.UseCors("AllowAngular");
 app.UseRateLimiter();
@@ -234,6 +242,15 @@ static bool EstaDentroDeAlgunHorario(IEnumerable<Horario> bloques, DateTime inic
 static string? NormalizarEspecialidad(string? especialidad) =>
     string.IsNullOrWhiteSpace(especialidad) ? null : especialidad.Trim();
 
+// Borra del disco la foto de un profesional (si tenía). Se llama después de guardar en la
+// base, para no perder el archivo si falla el SaveChanges.
+void BorrarFotoProfesional(string? fotoUrl)
+{
+    if (fotoUrl is null) return;
+    var ruta = Path.Combine(rutaFotosProfesionales, Path.GetFileName(fotoUrl));
+    if (File.Exists(ruta)) File.Delete(ruta);
+}
+
 static bool EmailValido(string email) =>
     System.Text.RegularExpressions.Regex.IsMatch(email, @"^[^\s@]+@[^\s@]+\.[^\s@]+$") && email.Length <= 254;
 
@@ -254,10 +271,17 @@ static (byte[] Contenido, string Extension)? LeerComprobante(string? base64)
     const int tamañoMaximo = 5 * 1024 * 1024;
     if (bytes.Length == 0 || bytes.Length > tamañoMaximo) return null;
 
-    if (bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) return (bytes, ".png");
-    if (bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) return (bytes, ".jpg");
+    var extension = ExtensionDeImagen(bytes);
+    return extension is null ? null : (bytes, extension);
+}
+
+// Extensión según los primeros bytes del archivo (PNG, JPG o WEBP); null si no es ninguna.
+static string? ExtensionDeImagen(byte[] bytes)
+{
+    if (bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) return ".png";
+    if (bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) return ".jpg";
     if (bytes.Length >= 12 && bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F'
-        && bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P') return (bytes, ".webp");
+        && bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P') return ".webp";
     return null;
 }
 
@@ -737,6 +761,11 @@ app.MapDelete("/api/comercios/{id:int}", async (AppDbContext context, int id) =>
         .Select(t => t.ComprobanteArchivo!)
         .ToListAsync();
 
+    var fotosDeProfesionales = await context.Profesionales
+        .Where(p => p.ComercioId == id && p.FotoUrl != null)
+        .Select(p => p.FotoUrl!)
+        .ToListAsync();
+
     context.Turnos.RemoveRange(context.Turnos.Where(t => t.ComercioId == id));
     context.Servicios.RemoveRange(context.Servicios.Where(s => s.ComercioId == id));
     context.Horarios.RemoveRange(context.Horarios.Where(h => h.ComercioId == id));
@@ -755,6 +784,7 @@ app.MapDelete("/api/comercios/{id:int}", async (AppDbContext context, int id) =>
         var ruta = Path.Combine(rutaComprobantes, Path.GetFileName(nombreArchivo));
         if (File.Exists(ruta)) File.Delete(ruta);
     }
+    foreach (var fotoUrl in fotosDeProfesionales) BorrarFotoProfesional(fotoUrl);
 
     return Results.NoContent();
 }).RequireAuthorization("SuperAdmin");
@@ -1279,6 +1309,58 @@ app.MapDelete("/api/profesionales/{id:int}", async (AppDbContext context, int id
 
     context.Profesionales.Remove(profesional);
     await context.SaveChangesAsync();
+    BorrarFotoProfesional(profesional.FotoUrl);
+    return Results.NoContent();
+}).RequireAuthorization("AdminCliente");
+
+// Foto de perfil del profesional (opcional). Si no tiene, se muestran sus iniciales.
+app.MapPost("/api/profesionales/{id:int}/foto", async (AppDbContext context, int id, IFormFile archivo, ClaimsPrincipal user) =>
+{
+    var profesional = await context.Profesionales.FindAsync(id);
+    if (profesional is null) return Results.NotFound();
+    if (ComercioIdDelToken(user) != profesional.ComercioId) return Results.Forbid();
+
+    const long tamañoMaximo = 2 * 1024 * 1024; // 2MB
+    if (archivo.Length == 0 || archivo.Length > tamañoMaximo)
+        return Results.BadRequest(new { mensaje = "La foto no puede pesar más de 2MB." });
+
+    // Se valida por el contenido, no por la extensión que manda el navegador: este archivo
+    // queda servido públicamente.
+    byte[] contenido;
+    using (var memoria = new MemoryStream())
+    {
+        await archivo.CopyToAsync(memoria);
+        contenido = memoria.ToArray();
+    }
+    var extension = ExtensionDeImagen(contenido);
+    if (extension is null)
+        return Results.BadRequest(new { mensaje = "La foto tiene que ser una imagen (PNG, JPG o WEBP)." });
+
+    var nombreArchivo = $"{id}-{Guid.NewGuid():N}{extension}";
+    await File.WriteAllBytesAsync(Path.Combine(rutaFotosProfesionales, nombreArchivo), contenido);
+
+    var fotoAnterior = profesional.FotoUrl;
+    profesional.FotoUrl = $"/uploads/profesionales/{nombreArchivo}";
+    await context.SaveChangesAsync();
+    BorrarFotoProfesional(fotoAnterior);
+
+    return Results.Ok(new { fotoUrl = profesional.FotoUrl });
+})
+// Igual que el logo: sin esto, la subida de archivos tira 500 (la API no usa cookies).
+.DisableAntiforgery()
+.RequireAuthorization("AdminCliente");
+
+app.MapDelete("/api/profesionales/{id:int}/foto", async (AppDbContext context, int id, ClaimsPrincipal user) =>
+{
+    var profesional = await context.Profesionales.FindAsync(id);
+    if (profesional is null) return Results.NotFound();
+    if (ComercioIdDelToken(user) != profesional.ComercioId) return Results.Forbid();
+
+    var fotoAnterior = profesional.FotoUrl;
+    profesional.FotoUrl = null;
+    await context.SaveChangesAsync();
+    BorrarFotoProfesional(fotoAnterior);
+
     return Results.NoContent();
 }).RequireAuthorization("AdminCliente");
 
