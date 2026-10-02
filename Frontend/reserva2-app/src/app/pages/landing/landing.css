@@ -823,6 +823,8 @@ body {
 .footer-links li { margin-bottom: 0.8rem; }
 .footer-links a { color: #A6AFC6; text-decoration: none; transition: color 0.2s ease; font-size: 0.95rem; }
 .footer-links a:hover { color: #FB923C; }
+.footer-bottom a { color: inherit; }
+.footer-bottom a:hover { color: #FB923C; }
 
 .footer-bottom {
   display: flex;
