@@ -17,11 +17,26 @@ namespace Reserva2.Api.Migrations
                 type: "bigint",
                 nullable: true);
 
+            migrationBuilder.AddColumn<decimal>(
+                name: "MontoMercadoPago",
+                table: "Turnos",
+                type: "decimal(18,2)",
+                precision: 18,
+                scale: 2,
+                nullable: true);
+
             migrationBuilder.AddColumn<string>(
                 name: "SeñaMedio",
                 table: "Turnos",
                 type: "nvarchar(max)",
                 nullable: true);
+
+            migrationBuilder.AddColumn<bool>(
+                name: "CobroMercadoPagoTotal",
+                table: "Comercios",
+                type: "bit",
+                nullable: false,
+                defaultValue: false);
 
             migrationBuilder.AddColumn<string>(
                 name: "MercadoPagoAccessToken",
@@ -99,8 +114,16 @@ namespace Reserva2.Api.Migrations
                 table: "Turnos");
 
             migrationBuilder.DropColumn(
+                name: "MontoMercadoPago",
+                table: "Turnos");
+
+            migrationBuilder.DropColumn(
                 name: "SeñaMedio",
                 table: "Turnos");
+
+            migrationBuilder.DropColumn(
+                name: "CobroMercadoPagoTotal",
+                table: "Comercios");
 
             migrationBuilder.DropColumn(
                 name: "MercadoPagoAccessToken",

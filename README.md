@@ -62,8 +62,8 @@ no se pierde ningún dato — el panel del dueño sigue funcionando.
 Dos usos, cada uno con su cuenta:
 
 - **Seña de los turnos**: cada comercio conecta *su* cuenta desde Perfil
-  (OAuth) y elige si la seña se paga por Mercado Pago, por transferencia con
-  comprobante, o las dos. La plata va directo al comercio. El turno queda
+  (OAuth) y elige si cobra por Mercado Pago la seña o el servicio completo, y
+  si además acepta la seña por transferencia con comprobante. La plata va directo al comercio. El turno queda
   apartado 30 minutos y se confirma solo cuando Mercado Pago aprueba el pago.
 - **Plan del comercio**: desde Mi plan, el comercio le paga a Reserva2 con
   Checkout Pro. Al aprobarse se renueva (o cambia) el plan, se reactiva el

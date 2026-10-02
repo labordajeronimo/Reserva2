@@ -81,7 +81,7 @@
       <h2>¡Listo{{ r.primerNombre ? ', ' + r.primerNombre : '' }}!</h2>
       <p class="confirm-sub">Tu turno quedó reservado. {{ comercio()!.nombre }} ya lo tiene en su agenda.</p>
       @if (r.seniaMercadoPago) {
-        <p class="confirm-sub">Tu seña quedó pagada con Mercado Pago.</p>
+        <p class="confirm-sub">{{ r.pagoCompleto ? 'Tu turno quedó pagado con Mercado Pago.' : 'Tu seña quedó pagada con Mercado Pago.' }}</p>
       } @else if (r.conSenia) {
         <p class="confirm-sub">Recibimos el comprobante de tu seña: el local lo va a verificar.</p>
       }
@@ -328,7 +328,7 @@
 
       @if (pideSenia()) {
         <div class="senia-bloque">
-          <div class="senia-titulo">Este servicio pide una seña de {{ servicioSeleccionado()!['montoSeña'] | currency:'ARS':'$':'1.0-2' }}</div>
+          <div class="senia-titulo">{{ tituloPago() }}</div>
           @if (ofreceAmbosMedios()) {
             <div class="senia-medios" role="radiogroup" aria-label="Cómo pagar la seña">
               <button type="button" role="radio" [attr.aria-checked]="medioSenia() === 'MercadoPago'"
@@ -338,7 +338,7 @@
             </div>
           }
           @if (seniaPorMercadoPago()) {
-            <p class="senia-texto">La pagás con Mercado Pago (tarjeta, dinero en cuenta o débito) en el paso siguiente. Tenés 30 minutos para pagarla; si no, el horario se libera.</p>
+            <p class="senia-texto">{{ pagoCompletoMercadoPago() ? 'Lo pagás' : 'La pagás' }} con Mercado Pago (tarjeta, dinero en cuenta o débito) en el paso siguiente. Tenés 30 minutos para pagar; si no, el horario se libera.</p>
           } @else if (comercio()!.datosBancarios) {
             <p class="senia-texto">Transferila a este alias o CBU y subí la captura del comprobante:</p>
             <div class="senia-alias">

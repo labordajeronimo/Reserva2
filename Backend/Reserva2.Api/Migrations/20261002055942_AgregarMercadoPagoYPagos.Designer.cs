@@ -12,7 +12,7 @@ using Reserva2.Api.Data;
 namespace Reserva2.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261002054953_AgregarMercadoPagoYPagos")]
+    [Migration("20261002055942_AgregarMercadoPagoYPagos")]
     partial class AgregarMercadoPagoYPagos
     {
         /// <inheritdoc />
@@ -53,6 +53,9 @@ namespace Reserva2.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("nvarchar(max)")
                         .HasDefaultValue("Mensual");
+
+                    b.Property<bool>("CobroMercadoPagoTotal")
+                        .HasColumnType("bit");
 
                     b.Property<string>("DatosBancarios")
                         .IsRequired()
@@ -401,6 +404,10 @@ namespace Reserva2.Api.Migrations
                         .HasColumnType("bigint");
 
                     b.Property<decimal?>("MontoCobrado")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MontoMercadoPago")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 

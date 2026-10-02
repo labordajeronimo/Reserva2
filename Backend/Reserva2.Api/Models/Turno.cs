@@ -54,6 +54,10 @@ namespace Reserva2.Api.Models
         // Id del pago aprobado en Mercado Pago (para no procesarlo dos veces y poder buscarlo).
         public long? MercadoPagoPagoId { get; set; }
 
+        // Monto que se cobró (o se está cobrando) por Mercado Pago: la seña o el precio
+        // completo del servicio, según lo que eligió el comercio al momento de reservar.
+        public decimal? MontoMercadoPago { get; set; }
+
         [NotMapped]
         public bool TieneComprobante => ComprobanteArchivo is not null;
     }

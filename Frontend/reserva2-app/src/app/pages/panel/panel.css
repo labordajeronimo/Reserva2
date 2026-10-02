@@ -978,3 +978,6 @@ button.inicio-fila:hover { border-color: rgba(232, 236, 246, 0.2); border-left-c
 .mp-opcion:last-of-type { margin-bottom: 14px; border-bottom: 1px solid rgba(232, 236, 246, 0.08); }
 .mp-opcion-titulo { font-weight: 700; color: #FFFFFF; font-size: 0.92rem; margin-bottom: 2px; }
 .mp-estado .sub-info, .mp-opcion .sub-info { margin: 0; }
+.mp-cobro { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 10px; background: #10172B; border: 1px solid rgba(232, 236, 246, 0.13); flex-shrink: 0; }
+.mp-cobro button { border: 0; background: transparent; color: #A6AFC6; font: inherit; font-size: 0.82rem; font-weight: 600; padding: 7px 12px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
+.mp-cobro button.activo { background: #F97316; color: #FFFFFF; }

@@ -642,8 +642,11 @@ async Task EnviarPlantillaWhatsApp(IConfiguration config, ILogger logger, string
 async Task NotificarTurnoReservado(AppDbContext context, IConfiguration config, ILogger logger, Turno turno, Comercio comercio, Servicio servicio)
 {
     var seniaPorMercadoPago = turno.SeñaMedio == "MercadoPago";
-    var montoSenia = turno.SeñaMedio is null ? null : servicio.MontoSeña;
+    var montoSenia = turno.SeñaMedio is null ? null : seniaPorMercadoPago ? turno.MontoMercadoPago ?? servicio.MontoSeña : servicio.MontoSeña;
     var montoSeniaTexto = montoSenia?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+    // Por Mercado Pago el comercio puede cobrar el servicio completo en vez de la seña.
+    var pagoCompleto = seniaPorMercadoPago && montoSenia >= servicio.Precio;
+    var queSePago = pagoCompleto ? "El turno ya está pagado" : "La seña ya está pagada";
 
     // Aviso al comercio: hasta ahora solo se enteraba entrando al panel.
     if (EmailValido(comercio.Email))
@@ -653,7 +656,7 @@ async Task NotificarTurnoReservado(AppDbContext context, IConfiguration config, 
             : await context.Profesionales.Where(p => p.Id == turno.ProfesionalId).Select(p => p.Nombre).FirstOrDefaultAsync() ?? "Sin asignar";
         var linkPanel = $"{config["Frontend:BaseUrl"] ?? "http://localhost:4200"}/panel";
         var textoSeniaComercio = montoSenia is null ? ""
-            : seniaPorMercadoPago ? $"Seña de ${montoSeniaTexto} pagada con Mercado Pago (ya está en tu cuenta).\n\n"
+            : seniaPorMercadoPago ? $"{queSePago} con Mercado Pago (${montoSeniaTexto}): la plata está en tu cuenta.\n\n"
             : "Seña a verificar: revisá el comprobante en el panel.\n\n";
 
         EnviarEmailEnSegundoPlano(config, logger, comercio.Email, $"Nuevo turno: {turno.ClienteNombre} - {FormatoFechaTurno(turno.FechaHoraInicio)}",
@@ -702,7 +705,7 @@ async Task NotificarTurnoReservado(AppDbContext context, IConfiguration config, 
                     GenerarIcs(tituloEvento, fechaHoraInicio, fechaHoraFin, descripcionEvento, nombreComercio)));
 
                 var textoSenia = montoSenia is null ? ""
-                    : seniaPorMercadoPago ? $"Tu seña de ${montoSeniaTexto} quedó pagada con Mercado Pago.\n\n"
+                    : seniaPorMercadoPago ? (pagoCompleto ? $"Tu turno quedó pagado con Mercado Pago (${montoSeniaTexto}).\n\n" : $"Tu seña de ${montoSeniaTexto} quedó pagada con Mercado Pago.\n\n")
                     : $"Recibimos el comprobante de tu seña de ${montoSeniaTexto}. {nombreComercio} lo va a verificar.\n\n";
 
                 await EnviarEmail(config, logger, clienteEmail, $"Turno reservado en {nombreComercio}",
@@ -846,6 +849,15 @@ async Task<string?> AccessTokenMercadoPagoComercio(AppDbContext context, IConfig
 }
 
 bool CobraSeniaPorMercadoPago(Comercio comercio) => comercio.SeñaPorMercadoPago && comercio.MercadoPagoAccessToken is not null;
+
+// Cuánto se cobra por Mercado Pago al reservar este servicio: el precio completo si el
+// comercio eligió cobrar el servicio entero, si no la seña. Null si no se cobra nada.
+decimal? MontoMercadoPagoServicio(Comercio comercio, Servicio servicio)
+{
+    if (!CobraSeniaPorMercadoPago(comercio)) return null;
+    if (comercio.CobroMercadoPagoTotal && servicio.Precio > 0) return servicio.Precio;
+    return servicio.MontoSeña is > 0 ? servicio.MontoSeña : null;
+}
 
 // El id del pago llega en el query (?data.id=...&type=payment, o ?id=...&topic=payment en el
 // formato viejo) y/o en el cuerpo JSON ({"type":"payment","data":{"id":"123"}}). Null si la
@@ -1673,7 +1685,8 @@ app.MapGet("/api/comercios/alias/{alias}", async (AppDbContext context, string a
 
     return Results.Ok(new ComercioPublicoDto(
         comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla, comercio.TelefonoNotificaciones, comercio.LogoUrl, whatsAppActivo,
-        comercio.DatosBancarios, CobraSeniaPorMercadoPago(comercio), comercio.SeñaPorTransferencia || !CobraSeniaPorMercadoPago(comercio)));
+        comercio.DatosBancarios, CobraSeniaPorMercadoPago(comercio), comercio.SeñaPorTransferencia || !CobraSeniaPorMercadoPago(comercio),
+        CobraSeniaPorMercadoPago(comercio) && comercio.CobroMercadoPagoTotal));
 });
 
 // El cambio de plan ya no es autogestionado: el dueño lo pide por WhatsApp desde "Mi plan"
@@ -2191,14 +2204,16 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
     if (comercio is null) return Results.NotFound();
     if (!comercio.Activo) return ResultadoComercioInactivo();
 
-    // Si el servicio pide seña, se paga con Mercado Pago (si el comercio lo ofrece) o por
-    // transferencia, y en ese caso el comprobante es obligatorio.
-    var pideSenia = servicio.MontoSeña is > 0;
+    // Se paga al reservar si el servicio pide seña, o si el comercio cobra el servicio completo
+    // por Mercado Pago. Por Mercado Pago (si el comercio lo ofrece) o por transferencia de la
+    // seña, y en ese caso el comprobante es obligatorio.
+    var montoMercadoPago = MontoMercadoPagoServicio(comercio, servicio);
+    var pideSenia = servicio.MontoSeña is > 0 || montoMercadoPago is not null;
     var seniaPorMercadoPago = false;
     (byte[] Contenido, string Extension)? comprobante = null;
     if (pideSenia)
     {
-        var mercadoPagoDisponible = CobraSeniaPorMercadoPago(comercio);
+        var mercadoPagoDisponible = montoMercadoPago is not null;
         if (req.MedioSenia == "MercadoPago")
         {
             if (!mercadoPagoDisponible)
@@ -2207,6 +2222,9 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
         }
         else
         {
+            // Sin seña no hay nada para transferir: ese turno se paga solo por Mercado Pago.
+            if (servicio.MontoSeña is not > 0)
+                return Results.BadRequest(new { mensaje = "Este local cobra el turno con Mercado Pago al reservar." });
             if (mercadoPagoDisponible && !comercio.SeñaPorTransferencia)
                 return Results.BadRequest(new { mensaje = "Este local cobra la seña solo con Mercado Pago." });
             comprobante = LeerComprobante(req.ComprobanteBase64);
@@ -2270,6 +2288,7 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
         EstadoReserva = seniaPorMercadoPago ? 1 : 2,
         SeñaVerificada = pideSenia ? false : null,
         SeñaMedio = !pideSenia ? null : seniaPorMercadoPago ? "MercadoPago" : "Transferencia",
+        MontoMercadoPago = seniaPorMercadoPago ? montoMercadoPago : null,
         FechaCreacion = DateTime.UtcNow,
         MontoCobrado = servicio.Precio
     };
@@ -2304,7 +2323,7 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
         var accessToken = await AccessTokenMercadoPagoComercio(context, config, logger, comercio);
         var urlVuelta = $"{UrlFrontend(config)}/{comercio.AliasUrl}?pagoTurno={turno.TokenCancelacion}";
         var preferencia = accessToken is null ? null : await mercadoPago.CrearPreferencia(accessToken, new PreferenciaMp(
-            Items: [new ItemPreferenciaMp($"Seña: {servicio.Nombre} - {comercio.Nombre}", 1, servicio.MontoSeña!.Value)],
+            Items: [new ItemPreferenciaMp($"{(montoMercadoPago >= servicio.Precio ? "Turno" : "Seña")}: {servicio.Nombre} - {comercio.Nombre}", 1, montoMercadoPago!.Value)],
             ExternalReference: $"turno-{turno.Id}",
             NotificationUrl: $"{UrlApi(config)}/api/mercadopago/webhook/senias?comercioId={comercio.Id}",
             BackUrls: new BackUrlsMp(urlVuelta, urlVuelta, urlVuelta),
@@ -2935,7 +2954,7 @@ app.MapGet("/api/comercios/{comercioId:int}/mercadopago", async (AppDbContext co
     if (comercio is null) return Results.NotFound();
 
     return Results.Ok(new MercadoPagoConfigDto(OAuthMercadoPagoConfigurado(config), comercio.MercadoPagoAccessToken is not null,
-        comercio.MercadoPagoUserId, comercio.SeñaPorMercadoPago, comercio.SeñaPorTransferencia));
+        comercio.MercadoPagoUserId, comercio.SeñaPorMercadoPago, comercio.SeñaPorTransferencia, comercio.CobroMercadoPagoTotal));
 }).RequireAuthorization("AdminCliente");
 
 // Link para que el dueño autorice a Reserva2 a cobrar en su nombre. "state" va firmado y
@@ -2997,10 +3016,11 @@ app.MapPatch("/api/comercios/{comercioId:int}/mercadopago", async (AppDbContext 
 
     comercio.SeñaPorMercadoPago = req.SeñaPorMercadoPago;
     comercio.SeñaPorTransferencia = req.SeñaPorTransferencia;
+    comercio.CobroMercadoPagoTotal = req.CobroTotal;
     await context.SaveChangesAsync();
 
     return Results.Ok(new MercadoPagoConfigDto(OAuthMercadoPagoConfigurado(config), comercio.MercadoPagoAccessToken is not null,
-        comercio.MercadoPagoUserId, comercio.SeñaPorMercadoPago, comercio.SeñaPorTransferencia));
+        comercio.MercadoPagoUserId, comercio.SeñaPorMercadoPago, comercio.SeñaPorTransferencia, comercio.CobroMercadoPagoTotal));
 }).RequireAuthorization("AdminCliente");
 
 // Desconectar: se borran los tokens y las señas vuelven a ser solo por transferencia. (El
@@ -3019,7 +3039,7 @@ app.MapDelete("/api/comercios/{comercioId:int}/mercadopago", async (AppDbContext
     comercio.SeñaPorTransferencia = true;
     await context.SaveChangesAsync();
 
-    return Results.Ok(new MercadoPagoConfigDto(OAuthMercadoPagoConfigurado(config), false, null, false, true));
+    return Results.Ok(new MercadoPagoConfigDto(OAuthMercadoPagoConfigurado(config), false, null, false, true, false));
 }).RequireAuthorization("AdminCliente");
 
 // ==========================================
@@ -3228,7 +3248,7 @@ app.Run();
 // (Acá es donde tienen que ir los 'record' y 'class' para que C# 9+ no tire error CS8803)
 // ==========================================
 record ComercioPublicoDto(int Id, string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string? LogoUrl, bool WhatsAppActivo, string DatosBancarios,
-    bool SeñaMercadoPago, bool SeñaTransferencia);
+    bool SeñaMercadoPago, bool SeñaTransferencia, bool CobroMercadoPagoTotal);
 record ComercioDto(int Id, string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones,
     string DatosBancarios, string Email, bool Activo, string PlanActual, DateTime? FechaProximoPago, decimal? MontoMensualAcordado, string CicloFacturacion);
 record ActualizarEstadoRequest(bool Activo);
@@ -3311,8 +3331,8 @@ record ResumenDto(
     List<ReservasHoraDto> ReservasPorHoraDeCreacion, int ReservasOnline, int ReservasFueraDeHorario,
     List<OcupacionProfesionalDto> OcupacionPorProfesional);
 record WhatsAppConfigDto(bool Activado);
-record MercadoPagoConfigDto(bool Disponible, bool Conectado, long? CuentaId, bool SeñaPorMercadoPago, bool SeñaPorTransferencia);
-record MercadoPagoPreferenciasRequest(bool SeñaPorMercadoPago, bool SeñaPorTransferencia);
+record MercadoPagoConfigDto(bool Disponible, bool Conectado, long? CuentaId, bool SeñaPorMercadoPago, bool SeñaPorTransferencia, bool CobroTotal);
+record MercadoPagoPreferenciasRequest(bool SeñaPorMercadoPago, bool SeñaPorTransferencia, bool CobroTotal = false);
 record VerificarPagoRequest(long? PagoId);
 record PagarPlanRequest(string Plan, string Ciclo);
 record EstadoPagoPlanDto(string Estado, string PlanActual, string CicloFacturacion, DateTime? FechaProximoPago, bool Activo);

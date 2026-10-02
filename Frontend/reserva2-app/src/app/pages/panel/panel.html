@@ -967,8 +967,8 @@
       </div>
 
       <div class="panel-card turnos-card turno-manual-card">
-        <h2>Cobrar señas con Mercado Pago</h2>
-        <p class="sub-info">Conectá tu cuenta y tus clientes pagan la seña con tarjeta o dinero en cuenta al reservar. La plata va directo a tu Mercado Pago y el turno se confirma solo, sin revisar comprobantes.</p>
+        <h2>Cobrar con Mercado Pago</h2>
+        <p class="sub-info">Conectá tu cuenta y tus clientes pagan la seña o el turno completo (vos elegís) con tarjeta o dinero en cuenta al reservar. La plata va directo a tu Mercado Pago y el turno se confirma solo, sin revisar comprobantes.</p>
 
         @if (avisoMercadoPago()) { <div class="ok-msg ok-msg-form">{{ avisoMercadoPago() }}</div> }
         @if (errorMercadoPago()) { <div class="error-msg">{{ errorMercadoPago() }}</div> }
@@ -982,13 +982,27 @@
 
             <div class="mp-opcion">
               <div>
-                <div class="mp-opcion-titulo">Seña con Mercado Pago</div>
+                <div class="mp-opcion-titulo">Cobrar con Mercado Pago</div>
                 <div class="sub-info">El cliente paga al reservar; tiene 30 minutos o se libera el horario.</div>
               </div>
               <button class="switch" role="switch" [attr.aria-checked]="mp['señaPorMercadoPago']" [class.on]="mp['señaPorMercadoPago']"
                       [disabled]="cargandoMercadoPago()" (click)="cambiarMediosSenia(!mp['señaPorMercadoPago'], mp['señaPorTransferencia'] || mp['señaPorMercadoPago'])"
                       aria-label="Seña con Mercado Pago"><span class="switch-perilla"></span></button>
             </div>
+            @if (mp['señaPorMercadoPago']) {
+              <div class="mp-opcion">
+                <div>
+                  <div class="mp-opcion-titulo">Qué cobrás por Mercado Pago</div>
+                  <div class="sub-info">{{ mp.cobroTotal ? 'El servicio completo, en todos los que tienen precio.' : 'La seña, en los servicios que la piden.' }}</div>
+                </div>
+                <div class="mp-cobro" role="radiogroup" aria-label="Qué cobrás por Mercado Pago">
+                  <button type="button" role="radio" [attr.aria-checked]="!mp.cobroTotal" [class.activo]="!mp.cobroTotal"
+                          [disabled]="cargandoMercadoPago()" (click)="cambiarMediosSenia(mp['señaPorMercadoPago'], mp['señaPorTransferencia'], false)">Seña</button>
+                  <button type="button" role="radio" [attr.aria-checked]="mp.cobroTotal" [class.activo]="mp.cobroTotal"
+                          [disabled]="cargandoMercadoPago()" (click)="cambiarMediosSenia(mp['señaPorMercadoPago'], mp['señaPorTransferencia'], true)">Servicio completo</button>
+                </div>
+              </div>
+            }
             <div class="mp-opcion">
               <div>
                 <div class="mp-opcion-titulo">Seña por transferencia</div>

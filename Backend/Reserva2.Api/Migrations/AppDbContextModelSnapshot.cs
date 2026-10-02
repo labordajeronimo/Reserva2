@@ -51,6 +51,9 @@ namespace Reserva2.Api.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasDefaultValue("Mensual");
 
+                    b.Property<bool>("CobroMercadoPagoTotal")
+                        .HasColumnType("bit");
+
                     b.Property<string>("DatosBancarios")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -398,6 +401,10 @@ namespace Reserva2.Api.Migrations
                         .HasColumnType("bigint");
 
                     b.Property<decimal?>("MontoCobrado")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MontoMercadoPago")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 

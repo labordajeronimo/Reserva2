@@ -69,6 +69,7 @@ namespace Reserva2.Api.Data
 
             modelBuilder.Entity<Comercio>().Property(c => c.SeñaPorTransferencia).HasDefaultValue(true);
             modelBuilder.Entity<Pago>().Property(p => p.Monto).HasPrecision(18, 2);
+            modelBuilder.Entity<Turno>().Property(t => t.MontoMercadoPago).HasPrecision(18, 2);
             modelBuilder.Entity<Pago>().HasIndex(p => p.ComercioId);
         }
     }

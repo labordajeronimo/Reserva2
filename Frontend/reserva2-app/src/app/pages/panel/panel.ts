@@ -697,7 +697,7 @@ export class Panel {
   }
 
   textoSenia(t: Turno): string {
-    if (t.señaMedio === 'MercadoPago') return t.señaVerificada ? 'Seña pagada con Mercado Pago' : 'Esperando el pago de la seña';
+    if (t.señaMedio === 'MercadoPago') return t.señaVerificada ? 'Pagado con Mercado Pago' : 'Esperando el pago';
     return t.señaVerificada ? 'Seña verificada' : 'Seña a verificar';
   }
 
@@ -1086,11 +1086,11 @@ export class Panel {
     });
   }
 
-  cambiarMediosSenia(señaPorMercadoPago: boolean, señaPorTransferencia: boolean): void {
+  cambiarMediosSenia(señaPorMercadoPago: boolean, señaPorTransferencia: boolean, cobroTotal = this.mercadoPago()?.cobroTotal ?? false): void {
     this.errorMercadoPago.set(null);
     this.avisoMercadoPago.set(null);
     this.cargandoMercadoPago.set(true);
-    this.api.actualizarMercadoPagoConfig(this.sesion.comercioId, señaPorMercadoPago, señaPorTransferencia).subscribe({
+    this.api.actualizarMercadoPagoConfig(this.sesion.comercioId, señaPorMercadoPago, señaPorTransferencia, cobroTotal).subscribe({
       next: c => {
         this.mercadoPago.set(c);
         this.cargandoMercadoPago.set(false);

@@ -27,6 +27,8 @@ export interface ComercioPublico {
   // Formas de pagar la seña que ofrece el comercio (al menos una siempre es true).
   señaMercadoPago: boolean;
   señaTransferencia: boolean;
+  // true = por Mercado Pago se cobra el servicio completo (no la seña).
+  cobroMercadoPagoTotal: boolean;
 }
 
 export interface Servicio {
@@ -197,6 +199,8 @@ export interface MercadoPagoConfig {
   cuentaId: number | null;
   señaPorMercadoPago: boolean;
   señaPorTransferencia: boolean;
+  // Qué se cobra por Mercado Pago al reservar: true = el servicio completo, false = la seña.
+  cobroTotal: boolean;
 }
 
 // "confirmado" | "pendiente" | "rechazado" | "horario_ocupado" | "sin_pago" | "cancelado" | "desconocido"
@@ -671,8 +675,8 @@ export class Api {
     return this.http.post<{ url: string }>(`${API_BASE}/comercios/${comercioId}/mercadopago/conectar`, {});
   }
 
-  actualizarMercadoPagoConfig(comercioId: number, señaPorMercadoPago: boolean, señaPorTransferencia: boolean): Observable<MercadoPagoConfig> {
-    return this.http.patch<MercadoPagoConfig>(`${API_BASE}/comercios/${comercioId}/mercadopago`, { señaPorMercadoPago, señaPorTransferencia });
+  actualizarMercadoPagoConfig(comercioId: number, señaPorMercadoPago: boolean, señaPorTransferencia: boolean, cobroTotal: boolean): Observable<MercadoPagoConfig> {
+    return this.http.patch<MercadoPagoConfig>(`${API_BASE}/comercios/${comercioId}/mercadopago`, { señaPorMercadoPago, señaPorTransferencia, cobroTotal });
   }
 
   desconectarMercadoPago(comercioId: number): Observable<MercadoPagoConfig> {

@@ -76,5 +76,9 @@ namespace Reserva2.Api.Models
         // captura del comprobante); Mercado Pago solo cuenta si la cuenta está conectada.
         public bool SeñaPorMercadoPago { get; set; }
         public bool SeñaPorTransferencia { get; set; } = true;
+
+        // Qué se cobra por Mercado Pago al reservar: false = la seña del servicio (solo en los
+        // servicios que la piden); true = el servicio completo (en todos los que tienen precio).
+        public bool CobroMercadoPagoTotal { get; set; }
     }
 }
