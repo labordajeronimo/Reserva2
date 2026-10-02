@@ -857,14 +857,19 @@
 
       <div class="panel-card turnos-card turno-manual-card">
         <h2>Cambiar de plan</h2>
-        <app-plan-selector [(plan)]="planSeleccionado" [(ciclo)]="cicloSeleccionado" [conRadio]="true" [planActual]="sesion.planActual"></app-plan-selector>
+        <app-plan-selector
+          [plan]="planSeleccionado" (planChange)="planSeleccionado = $event; onPlanPedidoCambio()"
+          [ciclo]="cicloSeleccionado" (cicloChange)="cicloSeleccionado = $event; onPlanPedidoCambio()"
+          [conRadio]="true" [planActual]="sesion.planActual"></app-plan-selector>
 
-        @if (errorPlan()) { <div class="error-msg">{{ errorPlan() }}</div> }
-        @if (planGuardadoOk()) { <div class="ok-msg">¡Listo! Tu plan se actualizó.</div> }
+        <p class="monto-estimado-info">
+          Elegí el plan que querés y mandanos la solicitud: lo cambiamos nosotros cuando coordinemos el pago.
+          Precio del plan elegido: <strong>{{ precioPlanPedidoTexto() }}</strong>
+        </p>
 
-        <button class="btn-naranja plan-guardar" [disabled]="guardandoPlan()" (click)="guardarPlan()">
-          {{ guardandoPlan() ? 'Guardando...' : 'Guardar plan' }}
-        </button>
+        <a class="btn-naranja plan-guardar" [href]="linkCambioPlanWhatsApp()" target="_blank" rel="noopener">
+          Solicitar cambio por WhatsApp
+        </a>
       </div>
     }
 

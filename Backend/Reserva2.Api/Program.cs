@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
@@ -7,6 +8,7 @@ using Reserva2.Api.Data;
 using Reserva2.Api.Models;
 using Reserva2.Api.Utils;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -100,6 +102,20 @@ builder.Services.AddCors(options =>
     });
 });
 
+// === IP real del cliente detrás de nginx ===
+// nginx le pasa los pedidos a la API desde la misma máquina, así que sin esto
+// RemoteIpAddress es siempre 127.0.0.1 y el rate limiting termina siendo un único cupo
+// compartido por toda la plataforma. Solo se confía en X-Forwarded-For si el pedido viene
+// del propio servidor (el proxy local); si alguien manda ese header desde afuera, se ignora.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+    options.KnownProxies.Add(IPAddress.Loopback);
+    options.KnownProxies.Add(IPAddress.IPv6Loopback);
+});
+
 // === Rate limiting: frena fuerza bruta en login y spam de reservas ===
 builder.Services.AddRateLimiter(options =>
 {
@@ -128,6 +144,9 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+// Primero que todo: el resto del pipeline (rate limiting incluido) ya ve la IP real.
+app.UseForwardedHeaders();
 
 // Configuración para poder probar la API visualmente
 if (app.Environment.IsDevelopment())
@@ -162,6 +181,11 @@ app.UseAuthorization();
 const int HorasLimiteParaConfirmar = 2;
 const int TopeTurnosMensualesGratuito = 60;
 const int DuracionTokenHoras = 24;
+// El cliente puede cancelar por el link del mail hasta 2 horas antes del turno; después
+// tiene que hablar con el comercio (que ya no llega a ofrecer ese horario a otro).
+const int HorasMinimasParaCancelar = 2;
+const int LargoMinimoPassword = 8;
+const int LargoMaximoNombreCliente = 80;
 
 var PlanesValidos = new[] { "Gratuito", "Basico", "Premium" };
 
@@ -254,6 +278,62 @@ void BorrarFotoProfesional(string? fotoUrl)
 static bool EmailValido(string email) =>
     System.Text.RegularExpressions.Regex.IsMatch(email, @"^[^\s@]+@[^\s@]+\.[^\s@]+$") && email.Length <= 254;
 
+// Alias del link público (reservados2.com/{alias}): minúsculas, números y guiones, de 3 a
+// 40 caracteres. Los reservados chocarían con rutas del frontend o del backend/nginx.
+var AliasReservados = new[] { "panel", "super-admin", "terminos", "privacidad", "cancelar-turno", "api", "uploads" };
+
+string? ErrorAlias(string alias)
+{
+    if (!System.Text.RegularExpressions.Regex.IsMatch(alias, "^[a-z0-9-]{3,40}$"))
+        return "El link tiene que tener entre 3 y 40 caracteres: solo minúsculas, números y guiones.";
+    if (AliasReservados.Contains(alias))
+        return "Ese link está reservado. Elegí otro.";
+    return null;
+}
+
+// Mismas reglas para el alta y la edición de un servicio. Una duración de 0 dejaba colgado
+// el armado de la grilla de disponibilidad (el cursor nunca avanzaba).
+static string? ErrorServicio(string? nombre, int duracionMinutos, decimal precio, decimal? montoSenia)
+{
+    if (string.IsNullOrWhiteSpace(nombre)) return "El nombre del servicio no puede estar vacío.";
+    if (duracionMinutos < 5 || duracionMinutos > 600) return "La duración tiene que estar entre 5 y 600 minutos.";
+    if (precio < 0) return "El precio no puede ser negativo.";
+    if (montoSenia < 0) return "La seña no puede ser negativa.";
+    if (montoSenia > precio) return "La seña no puede ser mayor que el precio.";
+    return null;
+}
+
+// DiaSemana como DayOfWeek (0 = domingo ... 6 = sábado); el bloque tiene que terminar después
+// de empezar y dentro del mismo día.
+static string? ErrorHorario(HorarioRequest req)
+{
+    if (req.DiaSemana < 0 || req.DiaSemana > 6) return "El día de la semana tiene que estar entre 0 (domingo) y 6 (sábado).";
+    if (req.HoraInicio < TimeSpan.Zero || req.HoraFin >= TimeSpan.FromDays(1)) return "El horario tiene que estar dentro del día.";
+    if (req.HoraFin <= req.HoraInicio) return "La hora de fin tiene que ser posterior a la de inicio.";
+    return null;
+}
+
+// El cliente cancela por el link solo si el turno no está cancelado y faltan al menos
+// HorasMinimasParaCancelar horas para que empiece (esto también deja afuera los ya pasados).
+bool PuedeCancelarOnline(Turno t) =>
+    t.EstadoReserva != 3 && t.FechaHoraInicio - AhoraArgentina() >= TimeSpan.FromHours(HorasMinimasParaCancelar);
+
+// Lock exclusivo sobre la agenda (comercio + profesional) hasta el fin de la transacción
+// actual: dos reservas al mismo tiempo para la misma agenda se hacen de a una, así la
+// segunda ya ve el turno de la primera al chequear choques. Va con sp_getapplock en vez de
+// aislamiento serializable para no terminar en deadlocks entre las dos reservas.
+static async Task BloquearAgenda(AppDbContext context, int comercioId, int? profesionalId)
+{
+    var recurso = $"reserva2-agenda-{comercioId}-{profesionalId?.ToString() ?? "general"}";
+    await context.Database.ExecuteSqlInterpolatedAsync($@"
+        DECLARE @resultado int;
+        EXEC @resultado = sp_getapplock @Resource = {recurso}, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000;
+        IF @resultado < 0 THROW 50001, 'No se pudo bloquear la agenda para reservar.', 1;");
+}
+
+static string FormatoFechaTurno(DateTime fecha) =>
+    fecha.ToString("dddd d 'de' MMMM 'a las' HH:mm", new System.Globalization.CultureInfo("es-AR"));
+
 // Decodifica la captura del comprobante de seña y verifica que de verdad sea una imagen
 // PNG, JPG o WEBP (por su contenido, no por un nombre o tipo que manda el navegador) y que
 // no pase de 5MB. Devuelve null si falta o no es válida.
@@ -322,8 +402,11 @@ var brevoHttpClient = new HttpClient();
 
 // Si no hay Brevo:ApiKey configurado (ej. en desarrollo sin credenciales todavía), no falla:
 // simplemente no se envía el mail y queda logueado el motivo. "adjunto" es opcional (ej. el
-// .ics de un turno) — Brevo lo soporta nativo en el mismo POST, en base64.
-async Task EnviarEmail(IConfiguration config, ILogger logger, string destinatario, string asunto, string cuerpo, (string NombreArchivo, string ContenidoBase64)? adjunto = null)
+// .ics de un turno) — Brevo lo soporta nativo en el mismo POST, en base64. "links" son las
+// URLs que armamos nosotros (cancelación, calendario, panel...): son las únicas que quedan
+// clickeables en el mail.
+async Task EnviarEmail(IConfiguration config, ILogger logger, string destinatario, string asunto, string cuerpo,
+    (string NombreArchivo, string ContenidoBase64)? adjunto = null, IEnumerable<string>? links = null)
 {
     var apiKey = config["Brevo:ApiKey"];
     if (string.IsNullOrWhiteSpace(apiKey))
@@ -339,9 +422,7 @@ async Task EnviarEmail(IConfiguration config, ILogger logger, string destinatari
         ["sender"] = new { email = remitente, name = "Reserva2" },
         ["to"] = new[] { new { email = destinatario } },
         ["subject"] = asunto,
-        // Los cuerpos de acá se arman como texto plano con "\n"; Brevo espera HTML, así
-        // que se convierten los saltos de línea para que no quede todo el mail pegado.
-        ["htmlContent"] = cuerpo.Replace("\n", "<br>")
+        ["htmlContent"] = CuerpoEmailHtml(cuerpo, links ?? [])
     };
     if (adjunto is not null)
         body["attachment"] = new[] { new { name = adjunto.Value.NombreArchivo, content = adjunto.Value.ContenidoBase64 } };
@@ -359,6 +440,46 @@ async Task EnviarEmail(IConfiguration config, ILogger logger, string destinatari
         logger.LogError("Brevo devolvió {StatusCode} al enviar el email a {Destinatario} ({Asunto}): {Detalle}",
             respuesta.StatusCode, destinatario, asunto, detalle);
     }
+}
+
+// Los cuerpos se arman como texto plano con "\n" y traen datos que escribe cualquiera
+// (nombre del cliente, del servicio, del comercio), así que primero se escapa TODO el texto
+// —nadie puede meter HTML ni links propios en un mail que sale a nombre de Reserva2— y
+// recién después se convierten en <a> solo las URLs nuestras y los saltos de línea en <br>.
+static string CuerpoEmailHtml(string cuerpo, IEnumerable<string> links)
+{
+    var html = WebUtility.HtmlEncode(cuerpo.Replace("\r\n", "\n"));
+
+    var patron = string.Join("|", links
+        .Where(l => !string.IsNullOrWhiteSpace(l))
+        .Select(l => WebUtility.HtmlEncode(l))
+        .Distinct()
+        .OrderByDescending(l => l.Length)
+        .Select(System.Text.RegularExpressions.Regex.Escape));
+    if (patron.Length > 0)
+        html = System.Text.RegularExpressions.Regex.Replace(html, patron, m => $"<a href=\"{m.Value}\">{m.Value}</a>");
+
+    return html.Replace("\n", "<br>");
+}
+
+// Fire-and-forget: el pedido que lo dispara ya terminó su trabajo (el turno está guardado o
+// cancelado), así que un mail lento o caído no puede demorar ni hacer fallar la respuesta.
+// Todo lo que se use acá adentro tiene que venir ya capturado en valores, no en entidades
+// del DbContext del request.
+void EnviarEmailEnSegundoPlano(IConfiguration config, ILogger logger, string destinatario, string asunto, string cuerpo,
+    string descripcion, IEnumerable<string>? links = null)
+{
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            await EnviarEmail(config, logger, destinatario, asunto, cuerpo, links: links);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "No se pudo enviar el email de {Descripcion}.", descripcion);
+        }
+    });
 }
 
 // ==========================================
@@ -529,10 +650,23 @@ app.MapGet("/api/precio-plan", (string plan, string ciclo, int profesionales, in
 // ==========================================
 app.MapPost("/api/auth/register", async (AppDbContext context, RegistroRequest req) =>
 {
-    if (await context.Comercios.AnyAsync(c => c.Email == req.Email))
+    var nombre = req.Nombre?.Trim() ?? string.Empty;
+    var email = req.Email?.Trim() ?? string.Empty;
+    var alias = req.AliasUrl?.Trim().ToLowerInvariant() ?? string.Empty;
+
+    if (nombre.Length == 0)
+        return Results.BadRequest(new { mensaje = "Ingresá el nombre del negocio." });
+    if (!EmailValido(email))
+        return Results.BadRequest(new { mensaje = "Ingresá un email válido." });
+    if ((req.Password?.Length ?? 0) < LargoMinimoPassword)
+        return Results.BadRequest(new { mensaje = $"La contraseña tiene que tener al menos {LargoMinimoPassword} caracteres." });
+    if (ErrorAlias(alias) is { } errorAlias)
+        return Results.BadRequest(new { mensaje = errorAlias });
+
+    if (await context.Comercios.AnyAsync(c => c.Email == email))
         return Results.Conflict(new { mensaje = "Ya existe una cuenta con ese email." });
 
-    if (await context.Comercios.AnyAsync(c => c.AliasUrl == req.AliasUrl))
+    if (await context.Comercios.AnyAsync(c => c.AliasUrl == alias))
         return Results.Conflict(new { mensaje = "Ese link ya está en uso por otro negocio." });
 
     var planElegido = req.PlanActual ?? "Gratuito";
@@ -552,13 +686,13 @@ app.MapPost("/api/auth/register", async (AppDbContext context, RegistroRequest r
 
     var comercio = new Comercio
     {
-        Nombre = req.Nombre,
-        AliasUrl = req.AliasUrl,
+        Nombre = nombre,
+        AliasUrl = alias,
         TipoPlantilla = req.TipoPlantilla,
         TelefonoNotificaciones = req.TelefonoNotificaciones,
         DatosBancarios = req.DatosBancarios,
-        Email = req.Email,
-        PasswordHash = HashPassword(req.Password),
+        Email = email,
+        PasswordHash = HashPassword(req.Password!),
         PlanActual = planElegido,
         CicloFacturacion = cicloElegido,
         FechaProximoPago = CalcularProximoPago(cicloElegido),
@@ -614,7 +748,8 @@ app.MapPost("/api/auth/forgot-password", async (AppDbContext context, IConfigura
             await EnviarEmail(config, logger, comercio.Email, "Restablecer tu contraseña - Reserva2",
                 $"Recibimos un pedido para restablecer la contraseña de tu panel Reserva2.\n\n" +
                 $"Hacé click en este link para elegir una nueva contraseña (válido por 1 hora):\n{link}\n\n" +
-                "Si no lo pediste vos, podés ignorar este mensaje.");
+                "Si no lo pediste vos, podés ignorar este mensaje.",
+                links: [link]);
         }
         catch (Exception ex)
         {
@@ -628,6 +763,9 @@ app.MapPost("/api/auth/forgot-password", async (AppDbContext context, IConfigura
 
 app.MapPost("/api/auth/reset-password", async (AppDbContext context, ResetPasswordRequest req) =>
 {
+    if ((req.NuevaPassword?.Length ?? 0) < LargoMinimoPassword)
+        return Results.BadRequest(new { mensaje = $"La contraseña tiene que tener al menos {LargoMinimoPassword} caracteres." });
+
     var tokenValido = await context.PasswordResetTokens.FirstOrDefaultAsync(t => t.Token == req.Token);
     if (tokenValido is null || tokenValido.Usado || tokenValido.FechaExpiracion < DateTime.UtcNow)
         return Results.BadRequest(new { mensaje = "El link para restablecer la contraseña es inválido o venció." });
@@ -636,7 +774,7 @@ app.MapPost("/api/auth/reset-password", async (AppDbContext context, ResetPasswo
     if (comercio is null)
         return Results.BadRequest(new { mensaje = "El link para restablecer la contraseña es inválido o venció." });
 
-    comercio.PasswordHash = HashPassword(req.NuevaPassword);
+    comercio.PasswordHash = HashPassword(req.NuevaPassword!);
     tokenValido.Usado = true;
     await context.SaveChangesAsync();
 
@@ -1089,28 +1227,10 @@ app.MapGet("/api/comercios/alias/{alias}", async (AppDbContext context, string a
         comercio.DatosBancarios));
 });
 
-// Autogestión de plan: el propio dueño del comercio cambia su plan y ciclo de facturación
-// desde el panel (sin proceso de pago automático todavía; el cobro se sigue gestionando a mano).
-app.MapPatch("/api/comercios/{comercioId:int}/mi-plan", async (AppDbContext context, int comercioId, MiPlanRequest req, ClaimsPrincipal user) =>
-{
-    if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
-
-    if (!PlanesValidos.Contains(req.PlanActual))
-        return Results.BadRequest(new { mensaje = "Plan inválido. Tiene que ser Gratuito, Basico o Premium." });
-
-    if (req.CicloFacturacion != "Mensual" && req.CicloFacturacion != "Anual")
-        return Results.BadRequest(new { mensaje = "El ciclo de facturación tiene que ser Mensual o Anual." });
-
-    var comercio = await context.Comercios.FindAsync(comercioId);
-    if (comercio is null) return Results.NotFound();
-
-    comercio.PlanActual = req.PlanActual;
-    comercio.CicloFacturacion = req.CicloFacturacion;
-    comercio.FechaProximoPago = CalcularProximoPago(comercio.CicloFacturacion);
-    await context.SaveChangesAsync();
-
-    return Results.Ok(new MiPlanDto(comercio.PlanActual, comercio.CicloFacturacion, comercio.FechaProximoPago));
-}).RequireAuthorization("AdminCliente");
+// El cambio de plan ya no es autogestionado: el dueño lo pide por WhatsApp desde "Mi plan"
+// y lo aplica el Super Admin (PATCH /plan y /ciclo-facturacion) una vez coordinado el pago.
+// Antes existía PATCH /mi-plan, que lo cambiaba al instante sin pagar (y de paso corría el
+// vencimiento un ciclo entero cada vez que se guardaba).
 
 // El dueño edita los datos de su propio negocio (no el alias del link público: cambiarlo
 // rompería los links que ya compartió).
@@ -1143,8 +1263,8 @@ app.MapPost("/api/comercios/{comercioId:int}/cambiar-password", async (AppDbCont
     if (!VerifyPassword(req.PasswordActual, comercio.PasswordHash))
         return Results.BadRequest(new { mensaje = "La contraseña actual no es correcta." });
 
-    if (req.PasswordNueva.Length < 6)
-        return Results.BadRequest(new { mensaje = "La contraseña nueva tiene que tener al menos 6 caracteres." });
+    if (req.PasswordNueva.Length < LargoMinimoPassword)
+        return Results.BadRequest(new { mensaje = $"La contraseña nueva tiene que tener al menos {LargoMinimoPassword} caracteres." });
 
     comercio.PasswordHash = HashPassword(req.PasswordNueva);
     await context.SaveChangesAsync();
@@ -1203,18 +1323,20 @@ app.MapPost("/api/servicios", async (AppDbContext context, Servicio servicio, Cl
 {
     if (ComercioIdDelToken(user) != servicio.ComercioId) return Results.Forbid();
 
+    if (ErrorServicio(servicio.Nombre, servicio.DuracionMinutos, servicio.Precio, servicio.MontoSeña) is { } error)
+        return Results.BadRequest(new { mensaje = error });
+
+    servicio.Nombre = servicio.Nombre.Trim();
     context.Servicios.Add(servicio);
     await context.SaveChangesAsync();
     return Results.Created($"/api/servicios/{servicio.Id}", servicio);
 }).RequireAuthorization("AdminCliente");
 
-app.MapGet("/api/servicios", async (AppDbContext context, int? comercioId) =>
+// comercioId es obligatorio: sin él, esto listaba los servicios de todos los comercios.
+app.MapGet("/api/servicios", async (AppDbContext context, int comercioId) =>
 {
-    var query = context.Servicios.Where(s => s.Activo);
-    if (comercioId is not null)
-        query = query.Where(s => s.ComercioId == comercioId);
-
-    return Results.Ok(await query.ToListAsync());
+    var servicios = await context.Servicios.Where(s => s.Activo && s.ComercioId == comercioId).ToListAsync();
+    return Results.Ok(servicios);
 });
 
 app.MapPut("/api/servicios/{id:int}", async (AppDbContext context, int id, EditarServicioRequest req, ClaimsPrincipal user) =>
@@ -1223,10 +1345,8 @@ app.MapPut("/api/servicios/{id:int}", async (AppDbContext context, int id, Edita
     if (servicio is null) return Results.NotFound();
     if (ComercioIdDelToken(user) != servicio.ComercioId) return Results.Forbid();
 
-    if (string.IsNullOrWhiteSpace(req.Nombre))
-        return Results.BadRequest(new { mensaje = "El nombre del servicio no puede estar vacío." });
-    if (req.DuracionMinutos <= 0)
-        return Results.BadRequest(new { mensaje = "La duración tiene que ser mayor a 0." });
+    if (ErrorServicio(req.Nombre, req.DuracionMinutos, req.Precio, req.MontoSeña) is { } error)
+        return Results.BadRequest(new { mensaje = error });
 
     servicio.Nombre = req.Nombre.Trim();
     servicio.DuracionMinutos = req.DuracionMinutos;
@@ -1263,11 +1383,17 @@ app.MapPost("/api/comercios/{comercioId:int}/profesionales", async (AppDbContext
     if (cantidadActual >= tope)
         return Results.Conflict(new { mensaje = $"Tu plan {comercio.PlanActual} permite hasta {tope} profesional(es). Actualizá de plan para agregar más." });
 
+    if (string.IsNullOrWhiteSpace(req.Nombre))
+        return Results.BadRequest(new { mensaje = "El nombre no puede estar vacío." });
+
     var especialidad = NormalizarEspecialidad(req.Especialidad);
     if (especialidad is { Length: > 30 })
         return Results.BadRequest(new { mensaje = "La especialidad puede tener hasta 30 caracteres." });
 
-    var profesional = new Profesional { ComercioId = comercioId, Nombre = req.Nombre, SucursalId = req.SucursalId, Especialidad = especialidad };
+    if (req.SucursalId is not null && !await context.Sucursales.AnyAsync(s => s.Id == req.SucursalId && s.ComercioId == comercioId))
+        return Results.NotFound(new { mensaje = "La sucursal no pertenece a este comercio." });
+
+    var profesional = new Profesional { ComercioId = comercioId, Nombre = req.Nombre.Trim(), SucursalId = req.SucursalId, Especialidad = especialidad };
     context.Profesionales.Add(profesional);
     await context.SaveChangesAsync();
     return Results.Created($"/api/profesionales/{profesional.Id}", profesional);
@@ -1296,6 +1422,9 @@ app.MapPut("/api/profesionales/{id:int}", async (AppDbContext context, int id, P
     var profesional = await context.Profesionales.FindAsync(id);
     if (profesional is null) return Results.NotFound();
     if (ComercioIdDelToken(user) != profesional.ComercioId) return Results.Forbid();
+
+    if (req.SucursalId is not null && !await context.Sucursales.AnyAsync(s => s.Id == req.SucursalId && s.ComercioId == profesional.ComercioId))
+        return Results.NotFound(new { mensaje = "La sucursal no pertenece a este comercio." });
 
     profesional.Nombre = req.Nombre.Trim();
     profesional.SucursalId = req.SucursalId;
@@ -1468,6 +1597,9 @@ app.MapPost("/api/comercios/{comercioId:int}/horarios", async (AppDbContext cont
 {
     if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
 
+    if (ErrorHorario(req) is { } error)
+        return Results.BadRequest(new { mensaje = error });
+
     if (req.ProfesionalId is not null && !await context.Profesionales.AnyAsync(p => p.Id == req.ProfesionalId && p.ComercioId == comercioId))
         return Results.NotFound(new { mensaje = "El profesional no pertenece a este comercio." });
 
@@ -1489,6 +1621,9 @@ app.MapPut("/api/horarios/{id:int}", async (AppDbContext context, int id, Horari
     var horario = await context.Horarios.FindAsync(id);
     if (horario is null) return Results.NotFound();
     if (ComercioIdDelToken(user) != horario.ComercioId) return Results.Forbid();
+
+    if (ErrorHorario(req) is { } error)
+        return Results.BadRequest(new { mensaje = error });
 
     if (req.ProfesionalId is not null && !await context.Profesionales.AnyAsync(p => p.Id == req.ProfesionalId && p.ComercioId == horario.ComercioId))
         return Results.NotFound(new { mensaje = "El profesional no pertenece a este comercio." });
@@ -1553,6 +1688,12 @@ app.MapGet("/api/comercios/{comercioId:int}/disponibilidad", async (AppDbContext
 
     var ocupados = turnosDelDia.Where(OcupaHorario).ToList();
     var duracion = TimeSpan.FromMinutes(servicio.DuracionMinutos);
+    // Un servicio viejo con duración 0 (de antes de validarla) dejaría el loop de abajo sin avanzar nunca.
+    if (duracion <= TimeSpan.Zero)
+        return Results.Ok(Array.Empty<SlotDisponibilidad>());
+
+    // Los horarios que ya empezaron se muestran, pero no se pueden reservar.
+    var ahora = AhoraArgentina();
 
     var slots = new List<SlotDisponibilidad>();
     foreach (var bloque in bloques)
@@ -1565,7 +1706,7 @@ app.MapGet("/api/comercios/{comercioId:int}/disponibilidad", async (AppDbContext
             var finSlot = cursor + duracion;
             var chocaConOcupado = ocupados.Any(t => t.FechaHoraInicio < finSlot && cursor < t.FechaHoraFin);
 
-            slots.Add(new SlotDisponibilidad(cursor, finSlot, !chocaConOcupado));
+            slots.Add(new SlotDisponibilidad(cursor, finSlot, !chocaConOcupado && cursor > ahora));
             cursor = finSlot;
         }
     }
@@ -1582,6 +1723,16 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
     // formulario de la página pública.
     if (string.IsNullOrWhiteSpace(req.ClienteEmail) || !EmailValido(req.ClienteEmail.Trim()))
         return Results.BadRequest(new { mensaje = "Ingresá un email válido: ahí te llega la confirmación del turno." });
+
+    if (string.IsNullOrWhiteSpace(req.ClienteNombre))
+        return Results.BadRequest(new { mensaje = "Ingresá tu nombre." });
+    var nombreCliente = req.ClienteNombre.Trim();
+    if (nombreCliente.Length > LargoMaximoNombreCliente)
+        return Results.BadRequest(new { mensaje = $"El nombre puede tener hasta {LargoMaximoNombreCliente} caracteres." });
+
+    // La página pública no ofrece horarios que ya empezaron; esto frena a quien arme el pedido a mano.
+    if (req.FechaHoraInicio <= AhoraArgentina())
+        return Results.Conflict(new { mensaje = "Ese horario ya pasó. Elegí otro." });
 
     var servicio = await context.Servicios.FindAsync(req.ServicioId);
     if (servicio is null || servicio.ComercioId != req.ComercioId)
@@ -1610,6 +1761,11 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
     var bloques = await ObtenerBloquesHorario(context, req.ComercioId, req.ProfesionalId, diaSemana);
     if (!EstaDentroDeAlgunHorario(bloques, req.FechaHoraInicio, finTurno))
         return Results.Conflict(new { mensaje = "Ese horario ya no está disponible. Elegí otro." });
+
+    // Desde acá hasta guardar, la agenda queda bloqueada: si dos personas reservan el mismo
+    // horario en el mismo segundo, la segunda espera y ve el turno de la primera al chequear.
+    await using var transaccion = await context.Database.BeginTransactionAsync();
+    await BloquearAgenda(context, req.ComercioId, req.ProfesionalId);
 
     if (comercio.PlanActual == "Gratuito")
     {
@@ -1641,7 +1797,7 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
         ProfesionalId = req.ProfesionalId,
         FechaHoraInicio = req.FechaHoraInicio,
         FechaHoraFin = finTurno,
-        ClienteNombre = req.ClienteNombre,
+        ClienteNombre = nombreCliente,
         ClienteWhatsApp = req.ClienteWhatsApp,
         ClienteEmail = req.ClienteEmail.Trim(),
         // Las reservas de la página pública entran confirmadas: ya no hay pre-reserva que el
@@ -1665,12 +1821,35 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
     try
     {
         await context.SaveChangesAsync();
+        await transaccion.CommitAsync();
     }
     catch
     {
         // Si el turno no se pudo guardar, no dejamos el comprobante huérfano en disco.
         if (rutaComprobanteGuardado is not null && File.Exists(rutaComprobanteGuardado)) File.Delete(rutaComprobanteGuardado);
         throw;
+    }
+
+    // Aviso al comercio: hasta ahora solo se enteraba entrando al panel.
+    if (EmailValido(comercio.Email))
+    {
+        var nombreProfesional = req.ProfesionalId is null
+            ? "Sin asignar"
+            : await context.Profesionales.Where(p => p.Id == req.ProfesionalId).Select(p => p.Nombre).FirstOrDefaultAsync() ?? "Sin asignar";
+        var linkPanel = $"{config["Frontend:BaseUrl"] ?? "http://localhost:4200"}/panel";
+
+        EnviarEmailEnSegundoPlano(config, logger, comercio.Email, $"Nuevo turno: {nombreCliente} - {FormatoFechaTurno(req.FechaHoraInicio)}",
+            $"Tenés un turno nuevo reservado desde tu link de Reserva2.\n\n" +
+            $"Cliente: {nombreCliente}\n" +
+            $"Servicio: {servicio.Nombre}\n" +
+            $"Fecha y hora: {FormatoFechaTurno(req.FechaHoraInicio)}\n" +
+            $"Profesional: {nombreProfesional}\n" +
+            $"WhatsApp: {(string.IsNullOrWhiteSpace(req.ClienteWhatsApp) ? "-" : req.ClienteWhatsApp.Trim())}\n" +
+            $"Email: {turno.ClienteEmail}\n\n" +
+            (pideSenia ? "Seña a verificar: revisá el comprobante en el panel.\n\n" : "") +
+            $"Ver tus turnos: {linkPanel}",
+            "aviso de turno nuevo al comercio",
+            links: [linkPanel]);
     }
 
     if (!string.IsNullOrWhiteSpace(req.ClienteEmail))
@@ -1683,7 +1862,7 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
         // la tarea de fondo porque "req"/"comercio"/"servicio" pueden no seguir vivos igual
         // de simple una vez que termina este request.
         var clienteEmail = req.ClienteEmail;
-        var clienteNombre = req.ClienteNombre;
+        var clienteNombre = nombreCliente;
         var fechaHoraInicio = req.FechaHoraInicio;
         var fechaHoraFin = finTurno;
         var nombreComercio = comercio.Nombre;
@@ -1717,7 +1896,8 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
                     $"¿Querés agregarlo a tu calendario? {linkGoogleCalendar}\n" +
                     "(También te dejamos un archivo adjunto que sirve para cualquier calendario, no solo Google.)\n\n" +
                     "Gracias por reservar con Reserva2.",
-                    ("turno.ics", icsBase64));
+                    ("turno.ics", icsBase64),
+                    [linkCancelacion, linkGoogleCalendar]);
             }
             catch (Exception ex)
             {
@@ -1809,6 +1989,11 @@ app.MapPost("/api/comercios/{comercioId:int}/turnos", async (AppDbContext contex
 
     var finTurno = req.FechaHoraInicio + TimeSpan.FromMinutes(servicio.DuracionMinutos);
 
+    // Mismo bloqueo que la reserva pública: así una carga manual y una reserva online del
+    // mismo horario no pueden pasar las dos el chequeo de choque a la vez.
+    await using var transaccion = await context.Database.BeginTransactionAsync();
+    await BloquearAgenda(context, comercioId, req.ProfesionalId);
+
     var turnosQueChocan = await context.Turnos
         .Where(t => t.ComercioId == comercioId
                  && t.ProfesionalId == req.ProfesionalId
@@ -1849,6 +2034,7 @@ app.MapPost("/api/comercios/{comercioId:int}/turnos", async (AppDbContext contex
 
     context.Turnos.Add(turno);
     await context.SaveChangesAsync();
+    await transaccion.CommitAsync();
 
     return Results.Created($"/api/turnos/{turno.Id}", turno);
 }).RequireAuthorization("AdminCliente");
@@ -2246,14 +2432,38 @@ app.MapPatch("/api/turnos/{id:int}/confirmar", async (AppDbContext context, int 
     return Results.Ok(turno);
 }).RequireAuthorization("AdminCliente");
 
-app.MapPatch("/api/turnos/{id:int}/cancelar", async (AppDbContext context, int id, ClaimsPrincipal user) =>
+app.MapPatch("/api/turnos/{id:int}/cancelar", async (AppDbContext context, IConfiguration config, ILogger<Program> logger, int id, ClaimsPrincipal user) =>
 {
     var turno = await context.Turnos.FindAsync(id);
     if (turno is null) return Results.NotFound();
     if (ComercioIdDelToken(user) != turno.ComercioId) return Results.Forbid();
 
+    var yaEstabaCancelado = turno.EstadoReserva == 3;
     turno.EstadoReserva = 3; // Cancelado
     await context.SaveChangesAsync();
+
+    // Aviso al cliente, si dejó email (la carga manual no lo pide). No se avisa si el turno
+    // ya estaba cancelado ni si ya pasó (ahí el comercio solo está ordenando su agenda).
+    if (!yaEstabaCancelado && turno.FechaHoraInicio > AhoraArgentina() && EmailValido(turno.ClienteEmail))
+    {
+        var comercio = await context.Comercios.FindAsync(turno.ComercioId);
+        var servicio = turno.ServicioId is not null ? await context.Servicios.FindAsync(turno.ServicioId) : null;
+        var nombreComercio = comercio?.Nombre ?? "El negocio";
+        var linkReservar = $"{config["Frontend:BaseUrl"] ?? "http://localhost:4200"}/{comercio?.AliasUrl}";
+        var contacto = string.IsNullOrWhiteSpace(comercio?.TelefonoNotificaciones)
+            ? ""
+            : $"Si tenés dudas, podés escribirle al {comercio.TelefonoNotificaciones}.\n\n";
+
+        EnviarEmailEnSegundoPlano(config, logger, turno.ClienteEmail, $"Tu turno en {nombreComercio} fue cancelado",
+            $"Hola {turno.ClienteNombre},\n\n" +
+            $"{nombreComercio} canceló tu turno{(servicio is null ? "" : $" para \"{servicio.Nombre}\"")} del {FormatoFechaTurno(turno.FechaHoraInicio)}.\n\n" +
+            contacto +
+            $"Si querés, podés reservar otro horario acá: {linkReservar}\n\n" +
+            "Reserva2",
+            "aviso de cancelación al cliente",
+            links: [linkReservar]);
+    }
+
     return Results.Ok(turno);
 }).RequireAuthorization("AdminCliente");
 
@@ -2303,10 +2513,11 @@ app.MapGet("/api/turnos/por-token/{token}", async (AppDbContext context, string 
 
     return Results.Ok(new TurnoPorTokenDto(
         turno.Id, comercio?.Nombre ?? "—", servicio?.Nombre ?? "—",
-        turno.FechaHoraInicio, turno.EstadoReserva));
+        turno.FechaHoraInicio, turno.EstadoReserva,
+        PuedeCancelarOnline(turno), HorasMinimasParaCancelar, comercio?.TelefonoNotificaciones));
 });
 
-app.MapPost("/api/turnos/por-token/{token}/cancelar", async (AppDbContext context, string token) =>
+app.MapPost("/api/turnos/por-token/{token}/cancelar", async (AppDbContext context, IConfiguration config, ILogger<Program> logger, string token) =>
 {
     var turno = await context.Turnos.FirstOrDefaultAsync(t => t.TokenCancelacion == token);
     if (turno is null) return Results.NotFound();
@@ -2314,8 +2525,38 @@ app.MapPost("/api/turnos/por-token/{token}/cancelar", async (AppDbContext contex
     if (turno.EstadoReserva == 3)
         return Results.BadRequest(new { mensaje = "Ese turno ya estaba cancelado." });
 
+    var comercio = await context.Comercios.FindAsync(turno.ComercioId);
+
+    if (!PuedeCancelarOnline(turno))
+    {
+        var telefono = comercio?.TelefonoNotificaciones;
+        return Results.Conflict(new
+        {
+            mensaje = "Ya no se puede cancelar online, comunicate con el comercio" +
+                (string.IsNullOrWhiteSpace(telefono) ? "." : $" al {telefono}."),
+            telefonoComercio = telefono
+        });
+    }
+
     turno.EstadoReserva = 3;
     await context.SaveChangesAsync();
+
+    // Aviso al comercio: el horario le quedó libre y conviene que lo sepa sin entrar al panel.
+    if (comercio is not null && EmailValido(comercio.Email))
+    {
+        var servicio = turno.ServicioId is not null ? await context.Servicios.FindAsync(turno.ServicioId) : null;
+        var linkPanel = $"{config["Frontend:BaseUrl"] ?? "http://localhost:4200"}/panel";
+
+        EnviarEmailEnSegundoPlano(config, logger, comercio.Email, $"Turno cancelado: {turno.ClienteNombre} - {FormatoFechaTurno(turno.FechaHoraInicio)}",
+            $"{turno.ClienteNombre} canceló su turno desde el link del mail de confirmación.\n\n" +
+            $"Servicio: {servicio?.Nombre ?? "-"}\n" +
+            $"Fecha y hora: {FormatoFechaTurno(turno.FechaHoraInicio)}\n" +
+            $"WhatsApp: {(string.IsNullOrWhiteSpace(turno.ClienteWhatsApp) ? "-" : turno.ClienteWhatsApp)}\n\n" +
+            "El horario volvió a quedar libre para otra reserva.\n\n" +
+            $"Ver tus turnos: {linkPanel}",
+            "aviso de cancelación al comercio",
+            links: [linkPanel]);
+    }
 
     return Results.Ok(new { mensaje = "Tu turno fue cancelado." });
 }).RequireRateLimiting("turnos");
@@ -2361,13 +2602,12 @@ record ComercioDetalleDto(
     DateTime? FechaActivacion, DateTime? FechaBaja,
     int CantidadServicios, decimal FacturacionDelMes, List<TurnosDiaDto> TurnosPorDia, int TopeTurnosGratuito);
 record RegistroRequest(string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string DatosBancarios, string Email, string Password, string? PlanActual = null, string? CicloFacturacion = null, int? CantidadProfesionales = null, int? CantidadSucursales = null);
-record MiPlanRequest(string PlanActual, string CicloFacturacion);
-record MiPlanDto(string PlanActual, string CicloFacturacion, DateTime? FechaProximoPago);
 record PerfilRequest(string Nombre, string TelefonoNotificaciones, string DatosBancarios);
 record PerfilDto(string Nombre, string TelefonoNotificaciones, string DatosBancarios, string? LogoUrl);
 record EditarServicioRequest(string Nombre, int DuracionMinutos, decimal Precio, decimal? MontoSeña);
 record CambiarPasswordRequest(string PasswordActual, string PasswordNueva);
-record TurnoPorTokenDto(int Id, string NombreComercio, string NombreServicio, DateTime FechaHoraInicio, int EstadoReserva);
+record TurnoPorTokenDto(int Id, string NombreComercio, string NombreServicio, DateTime FechaHoraInicio, int EstadoReserva,
+    bool PuedeCancelar, int HorasMinimasParaCancelar, string? TelefonoComercio);
 record LoginRequest(string Email, string Password);
 record ForgotPasswordRequest(string Email);
 record ResetPasswordRequest(string Token, string NuevaPassword);

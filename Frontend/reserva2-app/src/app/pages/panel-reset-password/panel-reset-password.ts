@@ -31,8 +31,8 @@ export class PanelResetPassword {
       this.error.set('El link no es válido. Pedí uno nuevo.');
       return;
     }
-    if (this.nuevaPassword.length < 6) {
-      this.error.set('La contraseña tiene que tener al menos 6 caracteres.');
+    if (this.nuevaPassword.length < 8) {
+      this.error.set('La contraseña tiene que tener al menos 8 caracteres.');
       return;
     }
     if (this.nuevaPassword !== this.confirmarPassword) {
