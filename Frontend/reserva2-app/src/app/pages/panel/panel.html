@@ -363,8 +363,10 @@
                               [style.top.px]="b.top" [style.height.px]="b.alto"
                               [style.left]="'calc(' + b.izquierda + '% + 3px)'" [style.width]="'calc(' + b.ancho + '% - 6px)'"
                               (click)="seleccionarTurno(b.turno)">
-                        <span class="cal-turno-hora">{{ b.turno.fechaHoraInicio | date:'HH:mm' }}</span>
-                        <span class="cal-turno-cliente">{{ b.turno.clienteNombre }}</span>
+                        <span class="cal-turno-linea">
+                          <span class="cal-turno-hora">{{ b.turno.fechaHoraInicio | date:'HH:mm' }}</span>
+                          <span class="cal-turno-cliente">{{ b.turno.clienteNombre }}</span>
+                        </span>
                         @if (nombreServicio(b.turno.servicioId)) {
                           <span class="cal-turno-servicio">{{ nombreServicio(b.turno.servicioId) }}</span>
                         }
@@ -440,12 +442,13 @@
                   <td>{{ t.clienteNombre }}</td>
                   <td>{{ t.clienteWhatsApp }}</td>
                   <td>{{ t.fechaHoraInicio | date:'dd/MM HH:mm' }}</td>
-                  <td>
+                  <td class="celda-estado">
                     <span class="badge" [class]="'estado-' + t.estadoReserva">{{ etiquetaEstado(t.estadoReserva) }}</span>
                     @if (t['señaVerificada'] === false && t.estadoReserva !== 3) { <span class="badge estado-1 badge-senia">Seña a verificar</span> }
                     @if (t['señaVerificada'] === true) { <span class="badge badge-senia-ok">Seña verificada</span> }
                   </td>
-                  <td class="acciones">
+                  <td class="celda-acciones">
+                    <div class="acciones">
                     @if (t.estadoReserva === 1) {
                       <button class="mini ok" (click)="confirmar(t)">Confirmar</button>
                       <button class="mini danger" (click)="cancelar(t)">Cancelar</button>
@@ -455,6 +458,7 @@
                       <button class="btn-ok btn-chico" (click)="marcarSeniaVerificada(t)">Verificada</button>
                       <button class="btn-peligro btn-chico" (click)="cancelarDesdeComprobante(t)">Cancelar</button>
                     }
+                    </div>
                   </td>
                 </tr>
               }

@@ -97,7 +97,7 @@ export class Panel {
   // cargados — no pega al backend de nuevo, ya está todo en el signal "turnos". Es por día
   // (no por semana) porque con columnas por profesional, una semana entera no entra cómoda
   // en pantalla. ---
-  readonly pxPorHora = 64;
+  readonly pxPorHora = 120;
   vistaTurnos = signal<'calendario' | 'lista'>('calendario');
   agendaDia = signal<Date>(this.soloFecha(new Date()));
   ahora = signal(new Date());
