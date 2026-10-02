@@ -60,6 +60,16 @@
   </div>
 </header>
 
+@if (verificandoPagoMp() || avisoPagoMp()) {
+  <div class="wrap">
+    @if (verificandoPagoMp()) {
+      <div class="aviso-pago-mp info">Revisando tu pago en Mercado Pago...</div>
+    } @else if (avisoPagoMp(); as aviso) {
+      <div class="aviso-pago-mp" [class]="aviso.tipo">{{ aviso.texto }}</div>
+    }
+  </div>
+}
+
 @if (reservaConfirmada() && reservaHecha(); as r) {
 
 <main>
@@ -70,7 +80,9 @@
       </div>
       <h2>¡Listo{{ r.primerNombre ? ', ' + r.primerNombre : '' }}!</h2>
       <p class="confirm-sub">Tu turno quedó reservado. {{ comercio()!.nombre }} ya lo tiene en su agenda.</p>
-      @if (r.conSenia) {
+      @if (r.seniaMercadoPago) {
+        <p class="confirm-sub">{{ r.pagoCompleto ? 'Tu turno quedó pagado con Mercado Pago.' : 'Tu seña quedó pagada con Mercado Pago.' }}</p>
+      } @else if (r.conSenia) {
         <p class="confirm-sub">Recibimos el comprobante de tu seña: el local lo va a verificar.</p>
       }
 
@@ -316,8 +328,18 @@
 
       @if (pideSenia()) {
         <div class="senia-bloque">
-          <div class="senia-titulo">Este servicio pide una seña de {{ servicioSeleccionado()!['montoSeña'] | currency:'ARS':'$':'1.0-2' }}</div>
-          @if (comercio()!.datosBancarios) {
+          <div class="senia-titulo">{{ tituloPago() }}</div>
+          @if (ofreceAmbosMedios()) {
+            <div class="senia-medios" role="radiogroup" aria-label="Cómo pagar la seña">
+              <button type="button" role="radio" [attr.aria-checked]="medioSenia() === 'MercadoPago'"
+                      [class.activo]="medioSenia() === 'MercadoPago'" (click)="elegirMedioSenia('MercadoPago')">Mercado Pago</button>
+              <button type="button" role="radio" [attr.aria-checked]="medioSenia() === 'Transferencia'"
+                      [class.activo]="medioSenia() === 'Transferencia'" (click)="elegirMedioSenia('Transferencia')">Transferencia</button>
+            </div>
+          }
+          @if (seniaPorMercadoPago()) {
+            <p class="senia-texto">{{ pagoCompletoMercadoPago() ? 'Lo pagás' : 'La pagás' }} con Mercado Pago (tarjeta, dinero en cuenta o débito) en el paso siguiente. Tenés 30 minutos para pagar; si no, el horario se libera.</p>
+          } @else if (comercio()!.datosBancarios) {
             <p class="senia-texto">Transferila a este alias o CBU y subí la captura del comprobante:</p>
             <div class="senia-alias">
               <span>{{ comercio()!.datosBancarios }}</span>
@@ -327,21 +349,23 @@
             <p class="senia-texto">Pedile el alias al local y subí la captura del comprobante.</p>
           }
 
-          @if (comprobanteVistaPrevia(); as vista) {
-            <div class="comprobante-cargado">
-              <img [src]="vista" alt="Comprobante cargado">
-              <div>
-                <div class="comprobante-nombre">{{ comprobanteNombre() }}</div>
-                <button type="button" class="comprobante-quitar" (click)="quitarComprobante()">Cambiar</button>
+          @if (!seniaPorMercadoPago()) {
+            @if (comprobanteVistaPrevia(); as vista) {
+              <div class="comprobante-cargado">
+                <img [src]="vista" alt="Comprobante cargado">
+                <div>
+                  <div class="comprobante-nombre">{{ comprobanteNombre() }}</div>
+                  <button type="button" class="comprobante-quitar" (click)="quitarComprobante()">Cambiar</button>
+                </div>
               </div>
-            </div>
-          } @else {
-            <label class="comprobante-subir">
-              <input type="file" accept="image/png,image/jpeg,image/webp" hidden (change)="elegirComprobante($event)">
-              Subir comprobante (captura)
-            </label>
+            } @else {
+              <label class="comprobante-subir">
+                <input type="file" accept="image/png,image/jpeg,image/webp" hidden (change)="elegirComprobante($event)">
+                Subir comprobante (captura)
+              </label>
+            }
+            @if (errorComprobante()) { <div class="campo-error">{{ errorComprobante() }}</div> }
           }
-          @if (errorComprobante()) { <div class="campo-error">{{ errorComprobante() }}</div> }
         </div>
       }
 
@@ -350,9 +374,9 @@
       }
 
       <button class="confirm-btn" type="button" [disabled]="!puedeReservar() || reservando()" (click)="confirmarReserva()">
-        {{ reservando() ? 'Reservando...' : textoBotonReservar() }}
+        {{ reservando() ? (seniaPorMercadoPago() ? 'Yendo a Mercado Pago...' : 'Reservando...') : textoBotonReservar() }}
       </button>
-      <p class="aviso-azul">La confirmación de tu turno te llega por email apenas reservás.</p>
+      <p class="aviso-azul">{{ seniaPorMercadoPago() ? 'La confirmación de tu turno te llega por email apenas se aprueba el pago.' : 'La confirmación de tu turno te llega por email apenas reservás.' }}</p>
     </aside>
   </div>
 </main>
