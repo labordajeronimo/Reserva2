@@ -34,8 +34,16 @@ mkdir -p "$DESTINO"
 chmod 700 "$DESTINO"
 
 # --- Datos de conexión, sacados del servicio de la API ---
-CONEXION=$(systemctl show "$SERVICIO_API" -p Environment --value | tr ' ' '\n' \
-  | sed -n 's/^ConnectionStrings__DefaultConnection=//p')
+# Primero del entorno real del proceso (/proc/PID/environ, separado por NUL: exacto aunque
+# el valor tenga espacios o ";"). Si la API no está corriendo, de la unidad systemd, que
+# devuelve entre comillas los valores con ";" (de ahí el sed que las saca).
+PID_API=$(systemctl show "$SERVICIO_API" -p MainPID --value)
+if [[ "$PID_API" =~ ^[1-9][0-9]*$ && -r "/proc/$PID_API/environ" ]]; then
+  CONEXION=$(tr '\0' '\n' < "/proc/$PID_API/environ" | sed -n 's/^ConnectionStrings__DefaultConnection=//p')
+else
+  CONEXION=$(systemctl show "$SERVICIO_API" -p Environment --value | tr ' ' '\n' \
+    | sed -n 's/^"\{0,1\}ConnectionStrings__DefaultConnection=\(.*\)$/\1/p' | sed 's/"$//')
+fi
 valor() { echo "$CONEXION" | tr ';' '\n' | sed -n "s/^[[:space:]]*\($1\)=//Ip" | head -1; }
 BASE=$(valor 'Database\|Initial Catalog')
 USUARIO=$(valor 'Uid\|User Id\|User')
@@ -62,6 +70,7 @@ docker exec -i "$CONTENEDOR" bash -c '
 docker cp "$CONTENEDOR:/var/opt/mssql/backup/$ARCHIVO_BAK" "$DESTINO/$ARCHIVO_BAK"
 docker exec "$CONTENEDOR" rm -f "/var/opt/mssql/backup/$ARCHIVO_BAK"
 gzip -f "$DESTINO/$ARCHIVO_BAK"
+chmod 600 "$DESTINO/$ARCHIVO_BAK.gz"   # docker cp conserva los permisos de adentro del contenedor
 log "OK: $DESTINO/$ARCHIVO_BAK.gz ($(du -h "$DESTINO/$ARCHIVO_BAK.gz" | cut -f1))"
 
 # --- 2. Archivos subidos ---
