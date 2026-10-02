@@ -782,8 +782,10 @@ export class Panel {
     });
   }
 
+  // Si el backend ya devolvió lo que le corresponde pagar a este comercio (incluye el extra de
+  // cobros online y el monto acordado), se muestra eso; si no, la tarifa de lista.
   precioPlanPedidoTexto(): string {
-    const precio = this.precioPlanPedido();
+    const precio = this.pagoPlanPedido()?.monto ?? this.precioPlanPedido();
     if (precio === null) return 'a confirmar';
     if (precio <= 0) return 'Gratis';
     return `$${precio.toLocaleString('es-AR')}${this.cicloSeleccionado === 'Anual' ? '/año' : '/mes'}`;
