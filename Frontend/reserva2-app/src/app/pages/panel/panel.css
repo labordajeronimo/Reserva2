@@ -942,3 +942,8 @@ button.inicio-fila:hover { border-color: rgba(232, 236, 246, 0.2); border-left-c
 .campo-etiquetado { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .campo-etiquetado span { font-size: 0.75rem; font-weight: 600; color: #A6AFC6; }
 .form-profesional { align-items: end; }
+
+/* ----- Foto del profesional ----- */
+.profesional-foto { object-fit: cover; background-image: none; background: #0C1122; padding: 0; }
+.profesional-foto-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tarjeta-form .sub-info.perfil-logo-ayuda { margin: -4px 0 0; }

@@ -465,6 +465,10 @@ export class ReservaPublica implements OnInit {
     return completos.map((p, i) => ({ nombre: p.nombre, estado: p.hecho ? 'hecho' : i === primeroPendiente ? 'actual' : 'pendiente' }));
   }
 
+  fotoDe(p: Profesional): string | null {
+    return urlArchivo(p.fotoUrl);
+  }
+
   inicialesDe(nombre: string): string {
     return nombre.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join('') || '?';
   }
