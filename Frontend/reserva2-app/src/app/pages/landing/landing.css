@@ -825,6 +825,7 @@ body {
 .footer-links a:hover { color: #FB923C; }
 .footer-bottom a { color: inherit; }
 .footer-bottom a:hover { color: #FB923C; }
+.footer-data-fiscal img { height: 56px; width: auto; display: block; }
 
 .footer-bottom {
   display: flex;
