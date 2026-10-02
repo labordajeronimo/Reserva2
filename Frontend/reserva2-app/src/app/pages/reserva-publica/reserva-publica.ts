@@ -529,7 +529,7 @@ export class ReservaPublica implements OnInit {
       error: err => {
         this.reservando.set(false);
         if (err.status === 409) {
-          this.errorReserva.set('Ese horario ya no está disponible. Elegí otro.');
+          this.errorReserva.set(err.error?.mensaje ?? 'Ese horario ya no está disponible. Elegí otro.');
           this.buscarDisponibilidad();
           this.cargarResumenDias();
           this.slotSeleccionado.set(null);

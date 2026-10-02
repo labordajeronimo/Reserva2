@@ -824,7 +824,7 @@ button.inicio-fila:hover { border-color: rgba(232, 236, 246, 0.2); border-left-c
 .plan-nombre { font-family: 'Sora', sans-serif; font-weight: 800; font-size: 1.6rem; color: #FFFFFF; margin: 4px 0 14px; }
 .plan-nombre span { font-size: 0.95rem; font-weight: 600; color: #A6AFC6; }
 .plan-resumen .renovacion-btn { margin-bottom: 0; }
-.plan-guardar { margin-top: 16px; }
+.plan-guardar { margin-top: 16px; display: inline-block; text-decoration: none; }
 .anillo { position: relative; width: 132px; height: 132px; flex-shrink: 0; }
 .anillo svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .anillo circle { fill: none; stroke-width: 10; }

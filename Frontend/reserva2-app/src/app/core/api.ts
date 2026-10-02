@@ -189,6 +189,10 @@ export interface TurnoPorToken {
   nombreServicio: string;
   fechaHoraInicio: string;
   estadoReserva: number;
+  // false si el turno ya pasó o faltan menos de horasMinimasParaCancelar para que empiece.
+  puedeCancelar: boolean;
+  horasMinimasParaCancelar: number;
+  telefonoComercio: string | null;
 }
 
 export interface LoginResponse {
@@ -203,12 +207,6 @@ export interface LoginResponse {
   logoUrl: string | null;
   fechaProximoPago: string | null;
   activo: boolean;
-}
-
-export interface MiPlan {
-  planActual: string;
-  cicloFacturacion: string;
-  fechaProximoPago: string | null;
 }
 
 export interface Perfil {
@@ -364,10 +362,6 @@ export class Api {
 
   superAdminLogin(email: string, password: string): Observable<SuperAdminSession> {
     return this.http.post<SuperAdminSession>(`${API_BASE}/auth/super-admin/login`, { email, password });
-  }
-
-  actualizarMiPlan(comercioId: number, planActual: string, cicloFacturacion: string): Observable<MiPlan> {
-    return this.http.patch<MiPlan>(`${API_BASE}/comercios/${comercioId}/mi-plan`, { planActual, cicloFacturacion });
   }
 
   subirLogo(comercioId: number, archivo: File): Observable<{ logoUrl: string }> {

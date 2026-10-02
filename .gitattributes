@@ -1,0 +1,3 @@
+# Los scripts que corren en el servidor (Linux) tienen que quedar con LF aunque se
+# clonen en Windows con core.autocrlf=true; con CRLF, bash falla al ejecutarlos.
+*.sh text eol=lf

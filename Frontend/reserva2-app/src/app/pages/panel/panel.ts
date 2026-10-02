@@ -82,11 +82,12 @@ export class Panel {
   passwordCambiadaOk = signal(false);
 
   // --- Mi Plan ---
+  // El dueño ya no cambia el plan solo: elige el que quiere y lo pide por WhatsApp; el
+  // cambio real lo hace el Super Admin una vez coordinado el pago.
   planSeleccionado = '';
   cicloSeleccionado = '';
-  guardandoPlan = signal(false);
-  errorPlan = signal<string | null>(null);
-  planGuardadoOk = signal(false);
+  precioPlanPedido = signal<number | null>(null);
+  private precioPlanRequestId = 0;
 
   // --- Turnos ---
   turnos = signal<Turno[]>([]);
@@ -687,25 +688,45 @@ export class Panel {
     this.tabActiva.set(tab);
     if (tab === 'ganancias' && !this.gananciasCargadaAlMenosUnaVez) this.cargarGanancias();
     if (tab === 'whatsapp' && !this.whatsAppCargadoAlMenosUnaVez) this.cargarWhatsAppConfig();
+    if (tab === 'plan') this.actualizarPrecioPlanPedido();
   }
 
   // ================= MI PLAN =================
-  guardarPlan(): void {
-    this.errorPlan.set(null);
-    this.planGuardadoOk.set(false);
-    this.guardandoPlan.set(true);
-    this.api.actualizarMiPlan(this.sesion.comercioId, this.planSeleccionado, this.cicloSeleccionado).subscribe({
-      next: r => {
-        this.guardandoPlan.set(false);
-        this.planGuardadoOk.set(true);
-        this.sesion = { ...this.sesion, planActual: r.planActual, cicloFacturacion: r.cicloFacturacion, fechaProximoPago: r.fechaProximoPago };
-        this.session.actualizarPlanEnSesion(r.planActual, r.cicloFacturacion, r.fechaProximoPago);
-      },
-      error: err => {
-        this.guardandoPlan.set(false);
-        this.errorPlan.set(err.error?.mensaje ?? 'No pudimos actualizar tu plan.');
-      }
+  onPlanPedidoCambio(): void {
+    this.actualizarPrecioPlanPedido();
+  }
+
+  // Precio de lista del plan pedido (misma cuenta que el registro, vía /api/precio-plan),
+  // con la cantidad real de profesionales y sucursales cargadas.
+  actualizarPrecioPlanPedido(): void {
+    const idPedido = ++this.precioPlanRequestId;
+    this.precioPlanPedido.set(null);
+    this.api.getPrecioPlan(this.planSeleccionado, this.cicloSeleccionado,
+      Math.max(1, this.profesionales().length), Math.max(1, this.sucursales().length)).subscribe({
+      next: r => { if (idPedido === this.precioPlanRequestId) this.precioPlanPedido.set(r.precio); },
+      error: () => { if (idPedido === this.precioPlanRequestId) this.precioPlanPedido.set(null); }
     });
+  }
+
+  precioPlanPedidoTexto(): string {
+    const precio = this.precioPlanPedido();
+    if (precio === null) return 'a confirmar';
+    if (precio <= 0) return 'Gratis';
+    return `$${precio.toLocaleString('es-AR')}${this.cicloSeleccionado === 'Anual' ? '/año' : '/mes'}`;
+  }
+
+  linkCambioPlanWhatsApp(): string {
+    const mensaje = [
+      'Hola! Quiero cambiar mi plan de Reserva2.',
+      `Comercio: ${this.sesion.nombre}`,
+      `Link: ${this.linkPublicoTexto()}`,
+      `Plan actual: ${this.sesion.planActual} (${this.sesion.cicloFacturacion})`,
+      `Plan pedido: ${this.planSeleccionado} (${this.cicloSeleccionado})`,
+      `Profesionales: ${this.profesionales().length}`,
+      `Sucursales: ${this.sucursales().length}`,
+      `Precio del plan pedido: ${this.precioPlanPedidoTexto()}`
+    ].join('\n');
+    return linkWhatsApp(mensaje);
   }
 
   // ================= PERFIL DEL COMERCIO =================
@@ -749,8 +770,8 @@ export class Panel {
       this.errorPassword.set('Completá tu contraseña actual y la nueva.');
       return;
     }
-    if (this.passwordNueva.length < 6) {
-      this.errorPassword.set('La contraseña nueva tiene que tener al menos 6 caracteres.');
+    if (this.passwordNueva.length < 8) {
+      this.errorPassword.set('La contraseña nueva tiene que tener al menos 8 caracteres.');
       return;
     }
     if (this.passwordNueva !== this.passwordNuevaRepetida) {

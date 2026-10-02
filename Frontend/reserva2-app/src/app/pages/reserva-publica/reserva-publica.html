@@ -293,7 +293,7 @@
 
       <div class="field">
         <label for="nombre">Nombre</label>
-        <input id="nombre" type="text" placeholder="Cómo te llamamos" autocomplete="name"
+        <input id="nombre" type="text" placeholder="Cómo te llamamos" autocomplete="name" maxlength="80"
                [(ngModel)]="clienteNombre" (blur)="marcarTocado('nombre')" [class.input-invalido]="errorNombre()">
         @if (errorNombre()) { <div class="campo-error">{{ errorNombre() }}</div> }
       </div>
@@ -305,7 +305,7 @@
       </div>
       <div class="field">
         <label for="email">Email <span class="obligatorio">obligatorio</span></label>
-        <input id="email" type="email" placeholder="tu@email.com" autocomplete="email"
+        <input id="email" type="email" placeholder="tu@email.com" autocomplete="email" maxlength="254"
                [(ngModel)]="clienteEmail" (blur)="marcarTocado('email')" [class.input-invalido]="errorEmail()">
         @if (errorEmail()) {
           <div class="campo-error">{{ errorEmail() }}</div>
