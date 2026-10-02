@@ -32,6 +32,13 @@ namespace Reserva2.Api.Migrations
                 nullable: true);
 
             migrationBuilder.AddColumn<bool>(
+                name: "AddonCobrosOnline",
+                table: "Comercios",
+                type: "bit",
+                nullable: false,
+                defaultValue: false);
+
+            migrationBuilder.AddColumn<bool>(
                 name: "CobroMercadoPagoTotal",
                 table: "Comercios",
                 type: "bit",
@@ -120,6 +127,10 @@ namespace Reserva2.Api.Migrations
             migrationBuilder.DropColumn(
                 name: "SeñaMedio",
                 table: "Turnos");
+
+            migrationBuilder.DropColumn(
+                name: "AddonCobrosOnline",
+                table: "Comercios");
 
             migrationBuilder.DropColumn(
                 name: "CobroMercadoPagoTotal",

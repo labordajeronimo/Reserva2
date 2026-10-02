@@ -61,7 +61,8 @@ no se pierde ningún dato — el panel del dueño sigue funcionando.
 
 Dos usos, cada uno con su cuenta:
 
-- **Seña de los turnos**: cada comercio conecta *su* cuenta desde Perfil
+- **Cobros automáticos (extra, $10.000/mes aparte del plan)**: el Super Admin
+  lo activa desde la ficha del comercio. Con el extra activo, cada comercio conecta *su* cuenta desde Perfil
   (OAuth) y elige si cobra por Mercado Pago la seña o el servicio completo, y
   si además acepta la seña por transferencia con comprobante. La plata va directo al comercio. El turno queda
   apartado 30 minutos y se confirma solo cuando Mercado Pago aprueba el pago.

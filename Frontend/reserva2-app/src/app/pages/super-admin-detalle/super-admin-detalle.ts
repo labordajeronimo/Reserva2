@@ -79,6 +79,21 @@ export class SuperAdminDetalle {
     });
   }
 
+  actualizandoAddon = signal(false);
+
+  toggleAddonCobros(): void {
+    const d = this.detalle();
+    if (!d) return;
+    this.actualizandoAddon.set(true);
+    this.api.actualizarAddonCobros(d.id, !d.addonCobrosOnline).subscribe({
+      next: () => {
+        this.actualizandoAddon.set(false);
+        this.cargarDetalle();
+      },
+      error: () => this.actualizandoAddon.set(false)
+    });
+  }
+
   renovar(): void {
     const d = this.detalle();
     if (!d) return;

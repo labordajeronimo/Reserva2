@@ -35,6 +35,9 @@ namespace Reserva2.Api.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(true);
 
+                    b.Property<bool>("AddonCobrosOnline")
+                        .HasColumnType("bit");
+
                     b.Property<string>("AliasUrl")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");

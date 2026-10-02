@@ -827,6 +827,10 @@ export class Panel {
     });
   }
 
+  linkAddonCobrosWhatsApp(): string {
+    return linkWhatsApp(`Hola! Quiero sumar los cobros automáticos con Mercado Pago a mi plan de Reserva2. Comercio: ${this.sesion.nombre} (${this.linkPublicoTexto()}).`);
+  }
+
   linkCambioPlanWhatsApp(): string {
     const mensaje = [
       'Hola! Quiero cambiar mi plan de Reserva2.',

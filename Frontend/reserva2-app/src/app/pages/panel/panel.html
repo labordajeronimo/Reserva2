@@ -974,7 +974,10 @@
         @if (errorMercadoPago()) { <div class="error-msg">{{ errorMercadoPago() }}</div> }
 
         @if (mercadoPago(); as mp) {
-          @if (mp.conectado) {
+          @if (!mp.addonActivo) {
+            <p class="sub-info">Es un extra que se suma a cualquier plan por {{ mp.precioAddon | currency:'ARS':'$':'1.0-0' }} por mes.</p>
+            <a class="btn-naranja" [href]="linkAddonCobrosWhatsApp()" target="_blank" rel="noopener">Quiero sumarlo</a>
+          } @else if (mp.conectado) {
             <div class="mp-estado">
               <span class="badge estado-2">Cuenta conectada</span>
               @if (mp.cuentaId) { <span class="sub-info">N.º de cuenta {{ mp.cuentaId }}</span> }

@@ -64,6 +64,10 @@ namespace Reserva2.Api.Models
         public int CantidadProfesionalesContratada { get; set; } = 1;
         public int CantidadSucursalesContratada { get; set; } = 1;
 
+        // Extra "Cobros automáticos" (no está incluido en ningún plan, se cobra aparte): sin esto
+        // el comercio no puede cobrar señas ni turnos por Mercado Pago. Lo activa el Super Admin.
+        public bool AddonCobrosOnline { get; set; }
+
         // Cuenta de Mercado Pago del comercio, conectada por OAuth desde su panel, para que
         // sus clientes paguen la seña con Mercado Pago y la plata vaya directo a esa cuenta.
         // Los tokens se guardan cifrados con DataProtection (nunca salen en ninguna respuesta).

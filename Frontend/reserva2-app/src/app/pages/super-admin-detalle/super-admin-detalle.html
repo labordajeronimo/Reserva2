@@ -79,6 +79,16 @@
             <label>Monto mensual acordado</label>
             <div class="valor-simple">{{ d.montoMensualAcordado ? (d.montoMensualAcordado | currency:'ARS':'$') : 'Sin definir' }}</div>
           </div>
+          <div class="campo-detalle">
+            <label>Cobros automáticos (extra)</label>
+            <div class="valor-simple">
+              {{ d.addonCobrosOnline ? 'Activo' : 'No' }}@if (d.addonCobrosOnline) { · {{ d.mercadoPagoConectado ? 'Mercado Pago conectado' : 'sin conectar Mercado Pago' }} }
+              <button class="mini" [class.ok]="!d.addonCobrosOnline" [class.danger]="d.addonCobrosOnline"
+                      [disabled]="actualizandoAddon()" (click)="toggleAddonCobros()">
+                {{ d.addonCobrosOnline ? 'Quitar' : 'Activar' }}
+              </button>
+            </div>
+          </div>
           <div class="campo-detalle acciones-botones">
             <button
               class="mini"

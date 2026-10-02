@@ -200,6 +200,8 @@ const int HorasLimiteParaConfirmar = 2;
 // Una reserva con seña por Mercado Pago aparta el horario este tiempo mientras el cliente
 // paga; si no llega el pago, se libera sola. El link de pago vence un poco antes.
 const int MinutosParaPagarSeniaMercadoPago = 30;
+// Precio mensual del extra "Cobros automáticos con Mercado Pago" (se suma al plan).
+const decimal PrecioAddonCobrosMensual = 10000m;
 const int TopeTurnosMensualesGratuito = 60;
 const int DuracionTokenHoras = 24;
 // El cliente puede cancelar por el link del mail hasta 2 horas antes del turno; después
@@ -848,7 +850,8 @@ async Task<string?> AccessTokenMercadoPagoComercio(AppDbContext context, IConfig
     }
 }
 
-bool CobraSeniaPorMercadoPago(Comercio comercio) => comercio.SeñaPorMercadoPago && comercio.MercadoPagoAccessToken is not null;
+bool CobraSeniaPorMercadoPago(Comercio comercio) =>
+    comercio.AddonCobrosOnline && comercio.SeñaPorMercadoPago && comercio.MercadoPagoAccessToken is not null;
 
 // Cuánto se cobra por Mercado Pago al reservar este servicio: el precio completo si el
 // comercio eligió cobrar el servicio entero, si no la seña. Null si no se cobra nada.
@@ -962,8 +965,9 @@ async Task<string> ProcesarPagoSenia(AppDbContext context, IConfiguration config
 
 // Monto que se le cobra a un comercio por un plan y ciclo. Si renueva el mismo plan y ciclo
 // que tiene y el Super Admin le acordó un monto puntual, se respeta ese monto (es mensual:
-// el anual son 12 meses de ese monto). Si no, la tarifa de lista con sus profesionales y
-// sucursales reales.
+// el anual son 12 meses de ese monto, y tiene que incluir el extra de cobros si lo tiene).
+// Si no, la tarifa de lista con sus profesionales y sucursales reales, más el extra de
+// cobros automáticos si lo tiene activo (con el mismo 25% de descuento si es anual).
 async Task<decimal> MontoPlanComercio(AppDbContext context, Comercio comercio, string plan, string ciclo)
 {
     if (plan == comercio.PlanActual && ciclo == comercio.CicloFacturacion && comercio.MontoMensualAcordado is > 0)
@@ -971,7 +975,10 @@ async Task<decimal> MontoPlanComercio(AppDbContext context, Comercio comercio, s
 
     var profesionales = await context.Profesionales.CountAsync(p => p.ComercioId == comercio.Id);
     var sucursales = await context.Sucursales.CountAsync(s => s.ComercioId == comercio.Id);
-    return CalcularPrecioPlan(plan, ciclo, Math.Max(1, profesionales), Math.Max(1, sucursales));
+    var precio = CalcularPrecioPlan(plan, ciclo, Math.Max(1, profesionales), Math.Max(1, sucursales));
+    if (comercio.AddonCobrosOnline && precio > 0)
+        precio += ciclo == "Anual" ? Math.Round(PrecioAddonCobrosMensual * 12 * 0.75m, 2) : PrecioAddonCobrosMensual;
+    return precio;
 }
 
 // Aplica un pago de plan aprobado: cambia plan/ciclo si eligió otro, corre el vencimiento un
@@ -1351,6 +1358,23 @@ app.MapPatch("/api/comercios/{id:int}/renovar", async (AppDbContext context, int
         comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.Email, comercio.Activo, comercio.PlanActual, comercio.FechaProximoPago, comercio.MontoMensualAcordado, comercio.CicloFacturacion));
 }).RequireAuthorization("SuperAdmin");
 
+// El Super Admin activa o quita el extra "Cobros automáticos con Mercado Pago" (se coordina
+// y se cobra aparte del plan). Al quitarlo, las señas vuelven a ser solo por transferencia.
+app.MapPatch("/api/comercios/{id:int}/addon-cobros", async (AppDbContext context, int id, ActualizarAddonCobrosRequest req) =>
+{
+    var comercio = await context.Comercios.FindAsync(id);
+    if (comercio is null) return Results.NotFound();
+
+    comercio.AddonCobrosOnline = req.Activo;
+    if (!req.Activo)
+    {
+        comercio.SeñaPorMercadoPago = false;
+        comercio.SeñaPorTransferencia = true;
+    }
+    await context.SaveChangesAsync();
+    return Results.Ok(new { addonCobrosOnline = comercio.AddonCobrosOnline });
+}).RequireAuthorization("SuperAdmin");
+
 // Borrado definitivo de un comercio (ej. quedó pausado y nunca más pagó). Solo se permite
 // si ya está pausado — de última salvaguarda contra un borrado accidental de un comercio
 // activo; para eso primero hay que pausarlo. No hay FKs reales en la base (por diseño, cada
@@ -1664,7 +1688,8 @@ app.MapGet("/api/admin/comercios/{id:int}/detalle", async (AppDbContext context,
         string.IsNullOrWhiteSpace(comercio.TelefonoNotificaciones) ? null : FormatearNumeroWhatsApp(comercio.TelefonoNotificaciones),
         comercio.UltimoAcceso is null ? null : DateTime.SpecifyKind(comercio.UltimoAcceso.Value, DateTimeKind.Utc),
         comercio.FechaActivacion, comercio.FechaBaja,
-        cantidadServicios, facturacionDelMes, turnosPorDia, TopeTurnosMensualesGratuito));
+        cantidadServicios, facturacionDelMes, turnosPorDia, TopeTurnosMensualesGratuito,
+        comercio.AddonCobrosOnline, comercio.MercadoPagoAccessToken is not null));
 }).RequireAuthorization("SuperAdmin");
 
 app.MapGet("/api/comercios/alias/{alias}", async (AppDbContext context, string alias) =>
@@ -2954,17 +2979,22 @@ app.MapGet("/api/comercios/{comercioId:int}/mercadopago", async (AppDbContext co
     if (comercio is null) return Results.NotFound();
 
     return Results.Ok(new MercadoPagoConfigDto(OAuthMercadoPagoConfigurado(config), comercio.MercadoPagoAccessToken is not null,
-        comercio.MercadoPagoUserId, comercio.SeñaPorMercadoPago, comercio.SeñaPorTransferencia, comercio.CobroMercadoPagoTotal));
+        comercio.MercadoPagoUserId, comercio.SeñaPorMercadoPago, comercio.SeñaPorTransferencia, comercio.CobroMercadoPagoTotal,
+        comercio.AddonCobrosOnline, PrecioAddonCobrosMensual));
 }).RequireAuthorization("AdminCliente");
 
 // Link para que el dueño autorice a Reserva2 a cobrar en su nombre. "state" va firmado y
 // vence en 15 minutos: así la vuelta de Mercado Pago sabe a qué comercio corresponde y nadie
 // puede asociar su cuenta a un comercio ajeno armando el link a mano.
-app.MapPost("/api/comercios/{comercioId:int}/mercadopago/conectar", (IConfiguration config, int comercioId, ClaimsPrincipal user) =>
+app.MapPost("/api/comercios/{comercioId:int}/mercadopago/conectar", async (AppDbContext context, IConfiguration config, int comercioId, ClaimsPrincipal user) =>
 {
     if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
     if (!OAuthMercadoPagoConfigurado(config))
         return Results.BadRequest(new { mensaje = "Mercado Pago todavía no está disponible. Escribinos y lo activamos." });
+    var comercioQueConecta = await context.Comercios.FindAsync(comercioId);
+    if (comercioQueConecta is null) return Results.NotFound();
+    if (!comercioQueConecta.AddonCobrosOnline)
+        return Results.BadRequest(new { mensaje = "Los cobros automáticos son un extra que no está incluido en tu plan. Escribinos para sumarlo." });
 
     var state = protectorEstadoOAuthMp.Protect(comercioId.ToString(), TimeSpan.FromMinutes(15));
     return Results.Ok(new { url = MercadoPagoClient.UrlAutorizacion(config["MercadoPago:ClientId"]!, RedirectUriOAuthMp(config), state) });
@@ -3009,6 +3039,8 @@ app.MapPatch("/api/comercios/{comercioId:int}/mercadopago", async (AppDbContext 
     var comercio = await context.Comercios.FindAsync(comercioId);
     if (comercio is null) return Results.NotFound();
 
+    if (req.SeñaPorMercadoPago && !comercio.AddonCobrosOnline)
+        return Results.BadRequest(new { mensaje = "Los cobros automáticos son un extra que no está incluido en tu plan. Escribinos para sumarlo." });
     if (req.SeñaPorMercadoPago && comercio.MercadoPagoAccessToken is null)
         return Results.BadRequest(new { mensaje = "Primero conectá tu cuenta de Mercado Pago." });
     if (!req.SeñaPorMercadoPago && !req.SeñaPorTransferencia)
@@ -3020,7 +3052,8 @@ app.MapPatch("/api/comercios/{comercioId:int}/mercadopago", async (AppDbContext 
     await context.SaveChangesAsync();
 
     return Results.Ok(new MercadoPagoConfigDto(OAuthMercadoPagoConfigurado(config), comercio.MercadoPagoAccessToken is not null,
-        comercio.MercadoPagoUserId, comercio.SeñaPorMercadoPago, comercio.SeñaPorTransferencia, comercio.CobroMercadoPagoTotal));
+        comercio.MercadoPagoUserId, comercio.SeñaPorMercadoPago, comercio.SeñaPorTransferencia, comercio.CobroMercadoPagoTotal,
+        comercio.AddonCobrosOnline, PrecioAddonCobrosMensual));
 }).RequireAuthorization("AdminCliente");
 
 // Desconectar: se borran los tokens y las señas vuelven a ser solo por transferencia. (El
@@ -3039,7 +3072,8 @@ app.MapDelete("/api/comercios/{comercioId:int}/mercadopago", async (AppDbContext
     comercio.SeñaPorTransferencia = true;
     await context.SaveChangesAsync();
 
-    return Results.Ok(new MercadoPagoConfigDto(OAuthMercadoPagoConfigurado(config), false, null, false, true, false));
+    return Results.Ok(new MercadoPagoConfigDto(OAuthMercadoPagoConfigurado(config), false, null, false, true, false,
+        comercio.AddonCobrosOnline, PrecioAddonCobrosMensual));
 }).RequireAuthorization("AdminCliente");
 
 // ==========================================
@@ -3279,7 +3313,8 @@ record ComercioDetalleDto(
     List<Sucursal> Sucursales, List<Profesional> Profesionales, List<TurnosPorSemanaDto> TurnosPorSemana,
     string Email, string TelefonoNotificaciones, string? WhatsAppNumero, DateTime? UltimoAcceso,
     DateTime? FechaActivacion, DateTime? FechaBaja,
-    int CantidadServicios, decimal FacturacionDelMes, List<TurnosDiaDto> TurnosPorDia, int TopeTurnosGratuito);
+    int CantidadServicios, decimal FacturacionDelMes, List<TurnosDiaDto> TurnosPorDia, int TopeTurnosGratuito,
+    bool AddonCobrosOnline, bool MercadoPagoConectado);
 record RegistroRequest(string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string DatosBancarios, string Email, string Password, string? PlanActual = null, string? CicloFacturacion = null, int? CantidadProfesionales = null, int? CantidadSucursales = null);
 record PerfilRequest(string Nombre, string TelefonoNotificaciones, string DatosBancarios);
 record PerfilDto(string Nombre, string TelefonoNotificaciones, string DatosBancarios, string? LogoUrl);
@@ -3331,7 +3366,9 @@ record ResumenDto(
     List<ReservasHoraDto> ReservasPorHoraDeCreacion, int ReservasOnline, int ReservasFueraDeHorario,
     List<OcupacionProfesionalDto> OcupacionPorProfesional);
 record WhatsAppConfigDto(bool Activado);
-record MercadoPagoConfigDto(bool Disponible, bool Conectado, long? CuentaId, bool SeñaPorMercadoPago, bool SeñaPorTransferencia, bool CobroTotal);
+record MercadoPagoConfigDto(bool Disponible, bool Conectado, long? CuentaId, bool SeñaPorMercadoPago, bool SeñaPorTransferencia, bool CobroTotal,
+    bool AddonActivo = false, decimal PrecioAddon = 0);
+record ActualizarAddonCobrosRequest(bool Activo);
 record MercadoPagoPreferenciasRequest(bool SeñaPorMercadoPago, bool SeñaPorTransferencia, bool CobroTotal = false);
 record VerificarPagoRequest(long? PagoId);
 record PagarPlanRequest(string Plan, string Ciclo);

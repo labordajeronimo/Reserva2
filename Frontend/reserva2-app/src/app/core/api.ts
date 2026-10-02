@@ -201,6 +201,9 @@ export interface MercadoPagoConfig {
   señaPorTransferencia: boolean;
   // Qué se cobra por Mercado Pago al reservar: true = el servicio completo, false = la seña.
   cobroTotal: boolean;
+  // Extra "Cobros automáticos" (se paga aparte del plan). Sin él no se puede cobrar por Mercado Pago.
+  addonActivo: boolean;
+  precioAddon: number;
 }
 
 // "confirmado" | "pendiente" | "rechazado" | "horario_ocupado" | "sin_pago" | "cancelado" | "desconocido"
@@ -301,6 +304,8 @@ export interface TurnosPorSemana {
 
 export interface ComercioDetalle {
   id: number;
+  addonCobrosOnline: boolean;      // extra "Cobros automáticos con Mercado Pago"
+  mercadoPagoConectado: boolean;
   nombre: string;
   aliasUrl: string;
   tipoPlantilla: string;
@@ -457,6 +462,10 @@ export class Api {
 
   actualizarCicloFacturacion(id: number, cicloFacturacion: string): Observable<ComercioAdmin> {
     return this.http.patch<ComercioAdmin>(`${API_BASE}/comercios/${id}/ciclo-facturacion`, { cicloFacturacion });
+  }
+
+  actualizarAddonCobros(id: number, activo: boolean): Observable<{ addonCobrosOnline: boolean }> {
+    return this.http.patch<{ addonCobrosOnline: boolean }>(`${API_BASE}/comercios/${id}/addon-cobros`, { activo });
   }
 
   renovarComercio(id: number): Observable<ComercioAdmin> {

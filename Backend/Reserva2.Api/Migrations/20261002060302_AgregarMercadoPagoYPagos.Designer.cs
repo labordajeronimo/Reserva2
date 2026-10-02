@@ -12,7 +12,7 @@ using Reserva2.Api.Data;
 namespace Reserva2.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261002055942_AgregarMercadoPagoYPagos")]
+    [Migration("20261002060302_AgregarMercadoPagoYPagos")]
     partial class AgregarMercadoPagoYPagos
     {
         /// <inheritdoc />
@@ -37,6 +37,9 @@ namespace Reserva2.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(true);
+
+                    b.Property<bool>("AddonCobrosOnline")
+                        .HasColumnType("bit");
 
                     b.Property<string>("AliasUrl")
                         .IsRequired()
