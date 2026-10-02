@@ -41,5 +41,6 @@ docker exec -i "$CONTENEDOR" bash -c '
   IFS= read -r SQLCMDPASSWORD; export SQLCMDPASSWORD
   '"$SQLCMD"' -S localhost -U "$0" -d "$1" -C -b -i "$2"
 ' "$USUARIO" "$BASE" "$DESTINO_TMP" <<< "$PASSWORD"
-docker exec "$CONTENEDOR" rm -f "$DESTINO_TMP"
+# docker cp deja el archivo como root y el usuario del contenedor (mssql) no lo puede borrar.
+docker exec -u 0 "$CONTENEDOR" rm -f "$DESTINO_TMP" || true
 echo "OK: migración aplicada a $BASE."
