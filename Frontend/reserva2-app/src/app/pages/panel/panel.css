@@ -956,3 +956,25 @@ button.inicio-fila:hover { border-color: rgba(232, 236, 246, 0.2); border-left-c
 .profesional-foto { object-fit: cover; background-image: none; background: #0C1122; padding: 0; }
 .profesional-foto-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .tarjeta-form .sub-info.perfil-logo-ayuda { margin: -4px 0 0; }
+
+/* ----- Mercado Pago (Mi Plan y Perfil) ----- */
+.plan-pago-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.plan-pago-acciones .plan-guardar { margin-top: 0; }
+.plan-resumen-texto .plan-pago-acciones .renovacion-btn { margin-bottom: 0; }
+.info-msg {
+  background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.32);
+  color: #BFDBFE;
+  font-size: 0.85rem;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+.mp-estado { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 12px; }
+.mp-opcion {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 12px 0; border-top: 1px solid rgba(232, 236, 246, 0.08);
+}
+.mp-opcion:last-of-type { margin-bottom: 14px; border-bottom: 1px solid rgba(232, 236, 246, 0.08); }
+.mp-opcion-titulo { font-weight: 700; color: #FFFFFF; font-size: 0.92rem; margin-bottom: 2px; }
+.mp-estado .sub-info, .mp-opcion .sub-info { margin: 0; }

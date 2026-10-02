@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
-import { Api, ComercioDetalle } from '../../core/api';
+import { Api, ComercioDetalle, PagoPlan } from '../../core/api';
 
 @Component({
   selector: 'app-super-admin-detalle',
@@ -17,6 +17,8 @@ export class SuperAdminDetalle {
 
   comercioId: number;
   detalle = signal<ComercioDetalle | null>(null);
+  // Historial de pagos del plan (Mercado Pago y transferencias marcadas como recibidas).
+  pagos = signal<PagoPlan[]>([]);
   cargando = signal(false);
   error = signal<string | null>(null);
 
@@ -32,6 +34,7 @@ export class SuperAdminDetalle {
   }
 
   private cargarDetalle(): void {
+    this.api.getPagosComercio(this.comercioId).subscribe({ next: p => this.pagos.set(p), error: () => this.pagos.set([]) });
     this.error.set(null);
     this.cargando.set(true);
     this.api.getComercioDetalle(this.comercioId).subscribe({

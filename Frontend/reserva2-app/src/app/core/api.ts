@@ -24,6 +24,9 @@ export interface ComercioPublico {
   logoUrl: string | null;
   whatsAppActivo: boolean;
   datosBancarios: string; // alias/CBU para transferir la seña
+  // Formas de pagar la seña que ofrece el comercio (al menos una siempre es true).
+  señaMercadoPago: boolean;
+  señaTransferencia: boolean;
 }
 
 export interface Servicio {
@@ -83,6 +86,9 @@ export interface Turno {
   montoCobrado: number | null;
   // Seña: null = el servicio no pedía seña; false = a verificar; true = verificada.
   señaVerificada: boolean | null;
+  // Cómo se paga la seña: 'Transferencia' (comprobante) o 'MercadoPago'. Un turno con seña
+  // por Mercado Pago queda en pre-reserva (estado 1) hasta que se aprueba el pago.
+  señaMedio: 'Transferencia' | 'MercadoPago' | null;
   tieneComprobante: boolean;
 }
 
@@ -181,6 +187,40 @@ export interface Ganancias {
 
 export interface WhatsAppConfig {
   activado: boolean;
+}
+
+// Cuenta de Mercado Pago del comercio para cobrar señas. "disponible" = Reserva2 ya tiene
+// configurada su aplicación de Mercado Pago (si no, no se puede conectar todavía).
+export interface MercadoPagoConfig {
+  disponible: boolean;
+  conectado: boolean;
+  cuentaId: number | null;
+  señaPorMercadoPago: boolean;
+  señaPorTransferencia: boolean;
+}
+
+// "confirmado" | "pendiente" | "rechazado" | "horario_ocupado" | "sin_pago" | "cancelado" | "desconocido"
+export interface EstadoPagoSenia {
+  estado: string;
+}
+
+export interface EstadoPagoPlan {
+  estado: 'Pendiente' | 'Aprobado' | 'Rechazado';
+  planActual: string;
+  cicloFacturacion: string;
+  fechaProximoPago: string | null;
+  activo: boolean;
+}
+
+export interface PagoPlan {
+  id: number;
+  fecha: string;
+  monto: number;
+  plan: string;
+  ciclo: string;
+  medio: 'MercadoPago' | 'Transferencia';
+  estado: string;
+  mercadoPagoPagoId: number | null;
 }
 
 export interface TurnoPorToken {
@@ -539,8 +579,19 @@ export class Api {
     clienteEmail: string;
     profesionalId?: number | null;
     comprobanteBase64?: string | null; // captura del comprobante, solo si el servicio pide seña
-  }): Observable<Turno> {
-    return this.http.post<Turno>(`${API_BASE}/turnos`, turno);
+    medioSenia?: 'MercadoPago' | 'Transferencia' | null;
+  }): Observable<{ id: number; urlPago?: string }> {
+    // Con seña por Mercado Pago la respuesta trae urlPago: el turno queda apartado hasta que
+    // el cliente pague ahí.
+    return this.http.post<{ id: number; urlPago?: string }>(`${API_BASE}/turnos`, turno);
+  }
+
+  verificarPagoSenia(tokenTurno: string, pagoId: number | null): Observable<EstadoPagoSenia> {
+    return this.http.post<EstadoPagoSenia>(`${API_BASE}/mercadopago/senias/${encodeURIComponent(tokenTurno)}/verificar`, { pagoId });
+  }
+
+  abandonarPagoSenia(tokenTurno: string): Observable<void> {
+    return this.http.post<void>(`${API_BASE}/mercadopago/senias/${encodeURIComponent(tokenTurno)}/abandonar`, {});
   }
 
   getTurnosDeComercio(comercioId: number, incluirVencidos = false): Observable<Turno[]> {
@@ -609,5 +660,39 @@ export class Api {
 
   actualizarWhatsAppConfig(comercioId: number, activado: boolean): Observable<WhatsAppConfig> {
     return this.http.post<WhatsAppConfig>(`${API_BASE}/comercios/${comercioId}/whatsapp-config`, { activado });
+  }
+
+  // --- Mercado Pago: cuenta del comercio (señas) ---
+  getMercadoPagoConfig(comercioId: number): Observable<MercadoPagoConfig> {
+    return this.http.get<MercadoPagoConfig>(`${API_BASE}/comercios/${comercioId}/mercadopago`);
+  }
+
+  conectarMercadoPago(comercioId: number): Observable<{ url: string }> {
+    return this.http.post<{ url: string }>(`${API_BASE}/comercios/${comercioId}/mercadopago/conectar`, {});
+  }
+
+  actualizarMercadoPagoConfig(comercioId: number, señaPorMercadoPago: boolean, señaPorTransferencia: boolean): Observable<MercadoPagoConfig> {
+    return this.http.patch<MercadoPagoConfig>(`${API_BASE}/comercios/${comercioId}/mercadopago`, { señaPorMercadoPago, señaPorTransferencia });
+  }
+
+  desconectarMercadoPago(comercioId: number): Observable<MercadoPagoConfig> {
+    return this.http.delete<MercadoPagoConfig>(`${API_BASE}/comercios/${comercioId}/mercadopago`);
+  }
+
+  // --- Mercado Pago: pago del plan ---
+  getMontoPagoPlan(comercioId: number, plan: string, ciclo: string): Observable<{ monto: number; disponible: boolean }> {
+    return this.http.get<{ monto: number; disponible: boolean }>(`${API_BASE}/comercios/${comercioId}/pago-plan`, { params: { plan, ciclo } });
+  }
+
+  pagarPlan(comercioId: number, plan: string, ciclo: string): Observable<{ urlPago: string; monto: number }> {
+    return this.http.post<{ urlPago: string; monto: number }>(`${API_BASE}/comercios/${comercioId}/pago-plan`, { plan, ciclo });
+  }
+
+  verificarPagoPlan(comercioId: number, pagoId: number, pagoMercadoPagoId: number | null): Observable<EstadoPagoPlan> {
+    return this.http.post<EstadoPagoPlan>(`${API_BASE}/comercios/${comercioId}/pago-plan/${pagoId}/verificar`, { pagoId: pagoMercadoPagoId });
+  }
+
+  getPagosComercio(comercioId: number): Observable<PagoPlan[]> {
+    return this.http.get<PagoPlan[]>(`${API_BASE}/admin/comercios/${comercioId}/pagos`);
   }
 }

@@ -1,7 +1,7 @@
 import { Component, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { catchError, forkJoin, of } from 'rxjs';
 
 import { Api, ComercioPublico, Servicio, SlotDisponibilidad, Sucursal, Profesional, urlArchivo } from '../../core/api';
@@ -18,8 +18,13 @@ interface ReservaHecha {
   local: string | null;
   total: number;
   conSenia: boolean;
+  seniaMercadoPago: boolean;
   linkCalendario: string;
 }
+
+// La reserva con seña por Mercado Pago se termina en el checkout de Mercado Pago (otra
+// página); lo que hace falta para mostrar la confirmación a la vuelta se guarda acá.
+const CLAVE_RESERVA_PENDIENTE_MP = 'reserva2_reserva_pendiente_mp';
 
 interface DiaGrilla {
   fecha: string; // yyyy-MM-dd, lo que le mandamos a la API
@@ -97,6 +102,13 @@ export class ReservaPublica implements OnInit {
   errorComprobante = signal<string | null>(null);
   aliasCopiado = signal(false);
 
+  // Cómo paga la seña el cliente, si el comercio ofrece las dos formas.
+  medioSenia = signal<'MercadoPago' | 'Transferencia'>('Transferencia');
+  // Resultado del pago de la seña al volver de Mercado Pago, cuando no hay pantalla de
+  // confirmación para mostrar (pago pendiente, rechazado, etc.).
+  avisoPagoMp = signal<{ tipo: 'ok' | 'info' | 'error'; texto: string } | null>(null);
+  verificandoPagoMp = signal(false);
+
   hostActual = typeof window !== 'undefined' ? window.location.host : 'reservados2.com';
 
   logoUrl = computed(() => urlArchivo(this.comercio()?.logoUrl ?? null));
@@ -154,12 +166,26 @@ export class ReservaPublica implements OnInit {
     return (this.servicioSeleccionado()?.['montoSeña'] ?? 0) > 0;
   }
 
+  seniaPorMercadoPago(): boolean {
+    return this.pideSenia() && this.medioSenia() === 'MercadoPago';
+  }
+
+  ofreceAmbosMedios(): boolean {
+    const c = this.comercio();
+    return !!c && c.señaMercadoPago && c.señaTransferencia;
+  }
+
+  elegirMedioSenia(medio: 'MercadoPago' | 'Transferencia'): void {
+    this.medioSenia.set(medio);
+    this.errorReserva.set(null);
+  }
+
   puedeReservar(): boolean {
     return !!this.servicioSeleccionado() &&
       !!this.slotSeleccionado() &&
       this.slotSeleccionado()!.disponible &&
       this.formularioValido() &&
-      (!this.pideSenia() || !!this.comprobanteBase64());
+      (!this.pideSenia() || this.seniaPorMercadoPago() || !!this.comprobanteBase64());
   }
 
   // El botón dice lo que falta, en el orden en que se completa el formulario.
@@ -170,6 +196,9 @@ export class ReservaPublica implements OnInit {
     const whatsapp = this.clienteWhatsApp.trim();
     if (!WHATSAPP_REGEX.test(whatsapp) || (whatsapp.match(/\d/g) ?? []).length < 8) return 'Completá tu WhatsApp';
     if (!EMAIL_REGEX.test(this.clienteEmail.trim())) return 'Completá tu email';
+    if (this.seniaPorMercadoPago()) {
+      return `Pagar seña con Mercado Pago · $${(this.servicioSeleccionado()!.montoSeña ?? 0).toLocaleString('es-AR')}`;
+    }
     if (this.pideSenia() && !this.comprobanteBase64()) return 'Subí el comprobante de la seña';
     const precio = this.servicioSeleccionado()!.precio;
     return precio > 0 ? `Reservar turno · $${precio.toLocaleString('es-AR')}` : 'Reservar turno';
@@ -278,12 +307,13 @@ export class ReservaPublica implements OnInit {
       local: sucursal?.nombre ?? null,
       total: servicio.precio,
       conSenia: this.pideSenia(),
+      seniaMercadoPago: this.seniaPorMercadoPago(),
       linkCalendario: this.linkGoogleCalendar(slot.inicio, slot.fin, `${servicio.nombre} en ${comercio.nombre}`, ubicacion,
         `Turno reservado con Reserva2.${profesional ? ' Te atiende ' + profesional.nombre + '.' : ''}`)
     };
   }
 
-  constructor(private route: ActivatedRoute, private api: Api) {}
+  constructor(private route: ActivatedRoute, private router: Router, private api: Api) {}
 
   ngOnInit(): void {
     const alias = this.route.snapshot.paramMap.get('alias');
@@ -295,12 +325,71 @@ export class ReservaPublica implements OnInit {
     this.api.getComercioPorAlias(alias).subscribe({
       next: comercio => {
         this.comercio.set(comercio);
+        // Si el local cobra la seña por Mercado Pago, es la opción que aparece elegida.
+        this.medioSenia.set(comercio.señaMercadoPago ? 'MercadoPago' : 'Transferencia');
         this.cargandoComercio.set(false);
         this.cargarSucursales(comercio.id);
+        this.procesarVueltaDeMercadoPago();
       },
       error: err => {
         if (err.status === 403) this.comercioInactivo.set(true);
         this.cargandoComercio.set(false);
+      }
+    });
+  }
+
+  // ================= VUELTA DE MERCADO PAGO =================
+  // Mercado Pago vuelve a /{alias}?pagoTurno={token}&payment_id=...&status=... (payment_id y
+  // status los agrega Mercado Pago; si el cliente salió sin pagar pueden venir vacíos o "null").
+  private procesarVueltaDeMercadoPago(): void {
+    const query = this.route.snapshot.queryParamMap;
+    const token = query.get('pagoTurno');
+    if (!token) return;
+
+    const pagoIdTexto = query.get('payment_id') ?? query.get('collection_id');
+    const pagoId = pagoIdTexto && /^\d+$/.test(pagoIdTexto) ? Number(pagoIdTexto) : null;
+    const statusUrl = query.get('status') ?? query.get('collection_status');
+
+    let reservaGuardada: ReservaHecha | null = null;
+    try {
+      const guardada = sessionStorage.getItem(CLAVE_RESERVA_PENDIENTE_MP);
+      reservaGuardada = guardada ? JSON.parse(guardada) : null;
+    } catch {
+      reservaGuardada = null;
+    }
+
+    // Se saca el token de la URL, así recargar la página no repite nada.
+    this.router.navigate([], { relativeTo: this.route, queryParams: {}, replaceUrl: true });
+
+    this.verificandoPagoMp.set(true);
+    this.api.verificarPagoSenia(token, pagoId).subscribe({
+      next: ({ estado }) => {
+        this.verificandoPagoMp.set(false);
+        if (estado !== 'pendiente') {
+          try { sessionStorage.removeItem(CLAVE_RESERVA_PENDIENTE_MP); } catch { /* sin storage */ }
+        }
+
+        if (estado === 'confirmado') {
+          if (reservaGuardada) {
+            this.reservaHecha.set(reservaGuardada);
+            this.reservaConfirmada.set(true);
+          } else {
+            this.avisoPagoMp.set({ tipo: 'ok', texto: '¡Listo! Tu seña quedó pagada y tu turno reservado. Te mandamos la confirmación por email.' });
+          }
+        } else if (estado === 'pendiente' || statusUrl === 'pending' || statusUrl === 'in_process') {
+          this.avisoPagoMp.set({ tipo: 'info', texto: 'Tu pago está en proceso. Cuando Mercado Pago lo apruebe, tu turno queda confirmado y te llega un email.' });
+        } else if (estado === 'horario_ocupado') {
+          this.avisoPagoMp.set({ tipo: 'info', texto: 'Recibimos tu pago, pero tu reserva se había vencido y ese horario ya lo tomó otra persona. El local te va a escribir para acordar otro horario o devolverte la seña.' });
+        } else {
+          // No pagó (volvió, cerró el checkout o se rechazó la tarjeta): se libera el horario
+          // para que lo pueda volver a elegir.
+          this.api.abandonarPagoSenia(token).subscribe({ next: () => this.buscarDisponibilidad(), error: () => {} });
+          this.avisoPagoMp.set({ tipo: 'error', texto: 'El pago de la seña no se completó, así que el turno no quedó reservado. Podés elegir el horario y probar de nuevo.' });
+        }
+      },
+      error: () => {
+        this.verificandoPagoMp.set(false);
+        this.avisoPagoMp.set({ tipo: 'info', texto: 'No pudimos revisar tu pago ahora. Si se aprobó, te llega el email de confirmación del turno.' });
       }
     });
   }
@@ -517,9 +606,16 @@ export class ReservaPublica implements OnInit {
       clienteWhatsApp: this.clienteWhatsApp.trim(),
       clienteEmail: this.clienteEmail.trim(),
       profesionalId: this.profesionalSeleccionado()?.id ?? null,
-      comprobanteBase64: this.pideSenia() ? this.comprobanteBase64() : null
+      comprobanteBase64: this.pideSenia() && !this.seniaPorMercadoPago() ? this.comprobanteBase64() : null,
+      medioSenia: this.pideSenia() ? this.medioSenia() : null
     }).subscribe({
-      next: () => {
+      next: respuesta => {
+        if (respuesta.urlPago) {
+          // El turno queda apartado mientras paga; la confirmación se muestra a la vuelta.
+          try { sessionStorage.setItem(CLAVE_RESERVA_PENDIENTE_MP, JSON.stringify(reservaHecha)); } catch { /* sin storage */ }
+          window.location.href = respuesta.urlPago;
+          return;
+        }
         this.reservando.set(false);
         this.reservaHecha.set(reservaHecha);
         this.reservaConfirmada.set(true);
@@ -551,6 +647,7 @@ export class ReservaPublica implements OnInit {
     this.clienteEmail = '';
     this.intentoEnviar.set(false);
     this.camposTocados.set(new Set());
+    this.avisoPagoMp.set(null);
     this.quitarComprobante();
     this.buscarDisponibilidad();
   }

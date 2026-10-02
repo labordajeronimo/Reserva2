@@ -108,6 +108,26 @@
         </div>
       </div>
 
+      <div class="panel-card">
+        <h2>Pagos del plan</h2>
+        @if (pagos().length === 0) {
+          <p class="empty">Todavía no hay pagos registrados.</p>
+        } @else {
+          <ul class="lista-simple">
+            @for (p of pagos(); track p.id) {
+              <li>
+                <strong>{{ p.monto | currency:'ARS':'$':'1.0-2' }}</strong>
+                · {{ p.plan }} {{ p.ciclo | lowercase }}
+                <span class="badge" [class.badge-ok]="p.estado === 'Aprobado'" [class.badge-danger]="p.estado !== 'Aprobado'">{{ p.estado }}</span>
+                <div class="sub-info">
+                  {{ p.fecha | date:'dd/MM/yyyy' }} · {{ p.medio === 'MercadoPago' ? 'Mercado Pago' + (p.mercadoPagoPagoId ? ' (pago ' + p.mercadoPagoPagoId + ')' : '') : 'Transferencia' }}
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+
       <div class="panel-card zona-peligro">
         <div>
           <h2>Eliminar comercio</h2>

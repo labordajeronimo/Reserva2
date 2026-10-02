@@ -371,7 +371,7 @@
                           <span class="cal-turno-servicio">{{ nombreServicio(b.turno.servicioId) }}</span>
                         }
                         @if (b.turno['señaVerificada'] === false && b.turno.estadoReserva !== 3) {
-                          <span class="cal-turno-senia">Seña a verificar</span>
+                          <span class="cal-turno-senia">{{ textoSenia(b.turno) }}</span>
                         }
                       </button>
                     }
@@ -408,19 +408,19 @@
                 </dl>
                 @if (t['señaVerificada'] !== null) {
                   <div class="senia-detalle" [class.verificada]="t['señaVerificada']">
-                    <span>{{ t['señaVerificada'] ? 'Seña verificada' : 'Seña a verificar' }}@if (montoSenia(t)) { · {{ montoSenia(t) | currency:'ARS':'$':'1.0-2' }} }</span>
+                    <span>{{ textoSenia(t) }}@if (montoSenia(t)) { · {{ montoSenia(t) | currency:'ARS':'$':'1.0-2' }} }</span>
                     <div class="turno-detalle-acciones">
                       @if (t.tieneComprobante) {
                         <button class="btn-sec" (click)="verComprobante(t)">Ver comprobante</button>
                       }
-                      @if (!t['señaVerificada'] && t.estadoReserva !== 3) {
+                      @if (!t['señaVerificada'] && t.estadoReserva !== 3 && t['señaMedio'] !== 'MercadoPago') {
                         <button class="btn-ok" (click)="marcarSeniaVerificada(t)">Marcar verificada</button>
                         <button class="btn-peligro" (click)="cancelarDesdeComprobante(t)">Cancelar</button>
                       }
                     </div>
                   </div>
                 }
-                @if (t.estadoReserva === 1) {
+                @if (t.estadoReserva === 1 && !esperandoPagoMercadoPago(t)) {
                   <div class="turno-detalle-acciones">
                     <button class="btn-ok" (click)="confirmar(t)">Confirmar</button>
                     <button class="btn-peligro" (click)="cancelar(t)">Cancelar</button>
@@ -444,16 +444,16 @@
                   <td>{{ t.fechaHoraInicio | date:'dd/MM HH:mm' }}</td>
                   <td class="celda-estado">
                     <span class="badge" [class]="'estado-' + t.estadoReserva">{{ etiquetaEstado(t.estadoReserva) }}</span>
-                    @if (t['señaVerificada'] === false && t.estadoReserva !== 3) { <span class="badge estado-1 badge-senia">Seña a verificar</span> }
-                    @if (t['señaVerificada'] === true) { <span class="badge badge-senia-ok">Seña verificada</span> }
+                    @if (t['señaVerificada'] === false && t.estadoReserva !== 3) { <span class="badge estado-1 badge-senia">{{ textoSenia(t) }}</span> }
+                    @if (t['señaVerificada'] === true) { <span class="badge badge-senia-ok">{{ textoSenia(t) }}</span> }
                   </td>
                   <td class="celda-acciones">
                     <div class="acciones">
-                    @if (t.estadoReserva === 1) {
+                    @if (t.estadoReserva === 1 && !esperandoPagoMercadoPago(t)) {
                       <button class="mini ok" (click)="confirmar(t)">Confirmar</button>
                       <button class="mini danger" (click)="cancelar(t)">Cancelar</button>
                     }
-                    @if (t['señaVerificada'] === false && t.estadoReserva !== 3) {
+                    @if (t['señaVerificada'] === false && t.estadoReserva !== 3 && t['señaMedio'] !== 'MercadoPago') {
                       @if (t.tieneComprobante) { <button class="btn-sec btn-chico" (click)="verComprobante(t)">Ver comprobante</button> }
                       <button class="btn-ok btn-chico" (click)="marcarSeniaVerificada(t)">Verificada</button>
                       <button class="btn-peligro btn-chico" (click)="cancelarDesdeComprobante(t)">Cancelar</button>
@@ -817,6 +817,9 @@
     }
 
     @if (tabActiva() === 'plan') {
+      @if (avisoPagoPlan(); as aviso) {
+        <div [class]="aviso.tipo === 'ok' ? 'ok-msg' : aviso.tipo === 'error' ? 'error-msg' : 'info-msg'">{{ aviso.texto }}</div>
+      }
       <div class="panel-card turnos-card plan-resumen">
         @if (diasParaRenovacion() !== null) {
           <div class="anillo" [class.alerta]="renovacionUrgente()">
@@ -849,13 +852,28 @@
             </div>
           }
 
-          <p class="monto-estimado-info">
-            Monto estimado con tu plan actual y {{ profesionales().length }} profesional{{ profesionales().length === 1 ? '' : 'es' }}:
-            <strong>{{ montoEstimadoTexto() }}</strong>
-          </p>
-          <a class="btn-outline renovacion-btn" [href]="linkPagoWhatsApp()" target="_blank" rel="noopener">
-            Pagar / renovar plan por WhatsApp
-          </a>
+          @if (pagoRenovacion(); as pago) {
+            <p class="monto-estimado-info">
+              Monto de tu plan: <strong>{{ textoMonto(pago.monto, sesion.cicloFacturacion) }}</strong>
+            </p>
+          } @else {
+            <p class="monto-estimado-info">
+              Monto estimado con tu plan actual y {{ profesionales().length }} profesional{{ profesionales().length === 1 ? '' : 'es' }}:
+              <strong>{{ montoEstimadoTexto() }}</strong>
+            </p>
+          }
+          <div class="plan-pago-acciones">
+            @if (pagoRenovacion()?.disponible) {
+              <button class="btn-naranja" [disabled]="iniciandoPagoPlan()"
+                      (click)="pagarPlanConMercadoPago(sesion.planActual, sesion.cicloFacturacion)">
+                {{ iniciandoPagoPlan() ? 'Abriendo Mercado Pago...' : 'Pagar con Mercado Pago' }}
+              </button>
+            }
+            <a class="btn-outline renovacion-btn" [href]="linkPagoWhatsApp()" target="_blank" rel="noopener">
+              {{ pagoRenovacion()?.disponible ? 'Prefiero transferencia' : 'Pagar / renovar plan por WhatsApp' }}
+            </a>
+          </div>
+          @if (errorPagoPlan()) { <div class="error-msg">{{ errorPagoPlan() }}</div> }
         </div>
       </div>
 
@@ -866,14 +884,30 @@
           [ciclo]="cicloSeleccionado" (cicloChange)="cicloSeleccionado = $event; onPlanPedidoCambio()"
           [conRadio]="true" [planActual]="sesion.planActual"></app-plan-selector>
 
-        <p class="monto-estimado-info">
-          Elegí el plan que querés y mandanos la solicitud: lo cambiamos nosotros cuando coordinemos el pago.
-          Precio del plan elegido: <strong>{{ precioPlanPedidoTexto() }}</strong>
-        </p>
+        @if (pagoPlanPedido()?.disponible && (planSeleccionado !== sesion.planActual || cicloSeleccionado !== sesion.cicloFacturacion)) {
+          <p class="monto-estimado-info">
+            Pagá el plan elegido con Mercado Pago y se activa apenas se aprueba el pago.
+            Precio: <strong>{{ textoMonto(pagoPlanPedido()!.monto, cicloSeleccionado) }}</strong>
+          </p>
+          <div class="plan-pago-acciones">
+            <button class="btn-naranja plan-guardar" [disabled]="iniciandoPagoPlan()"
+                    (click)="pagarPlanConMercadoPago(planSeleccionado, cicloSeleccionado)">
+              {{ iniciandoPagoPlan() ? 'Abriendo Mercado Pago...' : 'Pagar y cambiar con Mercado Pago' }}
+            </button>
+            <a class="btn-outline plan-guardar" [href]="linkCambioPlanWhatsApp()" target="_blank" rel="noopener">
+              Solicitar cambio por WhatsApp
+            </a>
+          </div>
+        } @else {
+          <p class="monto-estimado-info">
+            Elegí el plan que querés y mandanos la solicitud: lo cambiamos nosotros cuando coordinemos el pago.
+            Precio del plan elegido: <strong>{{ precioPlanPedidoTexto() }}</strong>
+          </p>
 
-        <a class="btn-naranja plan-guardar" [href]="linkCambioPlanWhatsApp()" target="_blank" rel="noopener">
-          Solicitar cambio por WhatsApp
-        </a>
+          <a class="btn-naranja plan-guardar" [href]="linkCambioPlanWhatsApp()" target="_blank" rel="noopener">
+            Solicitar cambio por WhatsApp
+          </a>
+        }
       </div>
     }
 
@@ -930,6 +964,53 @@
         <button class="btn-naranja" [disabled]="guardandoPerfil()" (click)="guardarPerfil()">
           {{ guardandoPerfil() ? 'Guardando...' : 'Guardar cambios' }}
         </button>
+      </div>
+
+      <div class="panel-card turnos-card turno-manual-card">
+        <h2>Cobrar señas con Mercado Pago</h2>
+        <p class="sub-info">Conectá tu cuenta y tus clientes pagan la seña con tarjeta o dinero en cuenta al reservar. La plata va directo a tu Mercado Pago y el turno se confirma solo, sin revisar comprobantes.</p>
+
+        @if (avisoMercadoPago()) { <div class="ok-msg ok-msg-form">{{ avisoMercadoPago() }}</div> }
+        @if (errorMercadoPago()) { <div class="error-msg">{{ errorMercadoPago() }}</div> }
+
+        @if (mercadoPago(); as mp) {
+          @if (mp.conectado) {
+            <div class="mp-estado">
+              <span class="badge estado-2">Cuenta conectada</span>
+              @if (mp.cuentaId) { <span class="sub-info">N.º de cuenta {{ mp.cuentaId }}</span> }
+            </div>
+
+            <div class="mp-opcion">
+              <div>
+                <div class="mp-opcion-titulo">Seña con Mercado Pago</div>
+                <div class="sub-info">El cliente paga al reservar; tiene 30 minutos o se libera el horario.</div>
+              </div>
+              <button class="switch" role="switch" [attr.aria-checked]="mp['señaPorMercadoPago']" [class.on]="mp['señaPorMercadoPago']"
+                      [disabled]="cargandoMercadoPago()" (click)="cambiarMediosSenia(!mp['señaPorMercadoPago'], mp['señaPorTransferencia'] || mp['señaPorMercadoPago'])"
+                      aria-label="Seña con Mercado Pago"><span class="switch-perilla"></span></button>
+            </div>
+            <div class="mp-opcion">
+              <div>
+                <div class="mp-opcion-titulo">Seña por transferencia</div>
+                <div class="sub-info">El cliente transfiere a tu alias y sube el comprobante, como hasta ahora.</div>
+              </div>
+              <button class="switch" role="switch" [attr.aria-checked]="mp['señaPorTransferencia']" [class.on]="mp['señaPorTransferencia']"
+                      [disabled]="cargandoMercadoPago() || (mp['señaPorTransferencia'] && !mp['señaPorMercadoPago'])"
+                      (click)="cambiarMediosSenia(mp['señaPorMercadoPago'], !mp['señaPorTransferencia'])"
+                      aria-label="Seña por transferencia"><span class="switch-perilla"></span></button>
+            </div>
+
+            <button class="btn-sec" [disabled]="cargandoMercadoPago()" (click)="desconectarMercadoPago()">Desconectar cuenta</button>
+          } @else if (mp.disponible) {
+            <button class="btn-naranja" [disabled]="cargandoMercadoPago()" (click)="conectarMercadoPago()">
+              {{ cargandoMercadoPago() ? 'Abriendo Mercado Pago...' : 'Conectar mi Mercado Pago' }}
+            </button>
+          } @else {
+            <p class="sub-info">Muy pronto vas a poder conectar tu cuenta desde acá.</p>
+          }
+        } @else if (cargandoMercadoPago()) {
+          <p class="empty">Cargando...</p>
+        }
       </div>
 
       <div class="panel-card turnos-card turno-manual-card">
