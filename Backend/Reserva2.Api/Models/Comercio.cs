@@ -63,5 +63,18 @@ namespace Reserva2.Api.Models
         // tener que volver a pedírselo cuando se conecte el cobro real (MercadoPago).
         public int CantidadProfesionalesContratada { get; set; } = 1;
         public int CantidadSucursalesContratada { get; set; } = 1;
+
+        // Cuenta de Mercado Pago del comercio, conectada por OAuth desde su panel, para que
+        // sus clientes paguen la seña con Mercado Pago y la plata vaya directo a esa cuenta.
+        // Los tokens se guardan cifrados con DataProtection (nunca salen en ninguna respuesta).
+        public long? MercadoPagoUserId { get; set; }
+        public string? MercadoPagoAccessToken { get; set; }
+        public string? MercadoPagoRefreshToken { get; set; }
+        public DateTime? MercadoPagoTokenVence { get; set; }
+
+        // Cómo pueden pagar la seña sus clientes. Transferencia = el flujo de siempre (alias +
+        // captura del comprobante); Mercado Pago solo cuenta si la cuenta está conectada.
+        public bool SeñaPorMercadoPago { get; set; }
+        public bool SeñaPorTransferencia { get; set; } = true;
     }
 }

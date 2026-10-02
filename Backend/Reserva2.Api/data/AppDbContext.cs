@@ -21,6 +21,7 @@ namespace Reserva2.Api.Data
         public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
         public DbSet<WhatsAppConfig> WhatsAppConfigs { get; set; }
         public DbSet<MrrSnapshot> MrrSnapshots { get; set; }
+        public DbSet<Pago> Pagos { get; set; }
 
         // Solo se usa en tiempo de diseño (ej. `dotnet ef migrations add`), cuando nadie
         // pasó un DbContextOptions ya configurado desde Program.cs. Lee la misma
@@ -65,6 +66,10 @@ namespace Reserva2.Api.Data
             modelBuilder.Entity<PasswordResetToken>().HasIndex(t => t.Token).IsUnique();
             modelBuilder.Entity<WhatsAppConfig>().HasIndex(w => w.ComercioId).IsUnique();
             modelBuilder.Entity<Turno>().HasIndex(t => t.TokenCancelacion).IsUnique();
+
+            modelBuilder.Entity<Comercio>().Property(c => c.SeñaPorTransferencia).HasDefaultValue(true);
+            modelBuilder.Entity<Pago>().Property(p => p.Monto).HasPrecision(18, 2);
+            modelBuilder.Entity<Pago>().HasIndex(p => p.ComercioId);
         }
     }
 }
