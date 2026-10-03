@@ -31,8 +31,9 @@
         <input type="text" [(ngModel)]="regNombre" placeholder="Peluquería Bella">
       </div>
       <div class="field">
-        <label>Link público (sin espacios)</label>
-        <input type="text" [(ngModel)]="regAliasUrl" placeholder="peluqueria-bella">
+        <label>Link público</label>
+        <input type="text" [(ngModel)]="regAliasUrl" placeholder="peluqueria-bella" maxlength="40" autocapitalize="none">
+        <p class="field-ayuda">De 3 a 40 caracteres: minúsculas, números y guiones.</p>
       </div>
       <div class="field">
         <label>Rubro</label>
@@ -84,7 +85,7 @@
       </div>
       <div class="field">
         <label>Contraseña</label>
-        <input type="password" [(ngModel)]="regPassword" placeholder="••••••••">
+        <input type="password" [(ngModel)]="regPassword" placeholder="Mínimo 8 caracteres">
       </div>
 
       @if (errorAuth()) { <div class="error-msg">{{ errorAuth() }}</div> }

@@ -233,6 +233,7 @@
 }
 .profesional-avatar-cualquiera{background-image:none; background:rgba(110,231,183,0.14); color:#6EE7B7;}
 .profesional-avatar svg{width:22px; height:22px;}
+.profesional-avatar-foto{object-fit:cover; background-image:none; background:#0C1122;}
 .profesional-nombre{font-family:'Sora',sans-serif; font-weight:600; font-size:14px; overflow-wrap:anywhere;}
 .profesional-detalle{font-size:12px; color:#9AA4BA;}
 
@@ -317,6 +318,9 @@
 .senia-bloque{margin-top:18px; padding:14px; border-radius:14px; background:rgba(249,115,22,0.08); border:1px solid rgba(249,115,22,0.35);}
 .senia-titulo{font-family:'Sora',sans-serif; font-weight:700; font-size:14px; color:#FFFFFF;}
 .senia-texto{color:#9AA4BA; font-size:12.5px; margin:6px 0 10px;}
+.senia-medios{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:10px; padding:4px; border-radius:10px; background:#0F1526; border:1px solid rgba(232,236,246,0.14);}
+.senia-medios button{border:0; background:transparent; color:#9AA4BA; font-family:inherit; font-size:13px; font-weight:600; padding:8px; border-radius:7px; cursor:pointer;}
+.senia-medios button.activo{background:#F97316; color:#FFFFFF;}
 .senia-alias{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 8px 8px 12px; border-radius:10px; background:#0F1526; border:1px solid rgba(232,236,246,0.14);}
 .senia-alias span{font-family:'Sora',sans-serif; font-weight:600; font-size:13.5px; color:#E8ECF6; overflow-wrap:anywhere;}
 .senia-alias button, .comprobante-quitar{
@@ -352,3 +356,9 @@
 .confirm-acciones{display:flex; flex-direction:column; gap:10px; margin-top:20px;}
 .confirm-btn-link{display:block; text-align:center; text-decoration:none; margin-top:0;}
 .confirm-panel .again{margin-top:0; width:100%; padding:12px 16px; font-size:14px;}
+
+/* Resultado del pago de la seña al volver de Mercado Pago */
+.aviso-pago-mp{margin-top:16px; padding:12px 14px; border-radius:12px; font-size:13.5px; line-height:1.45;}
+.aviso-pago-mp.ok{background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.35); color:#6EE7B7;}
+.aviso-pago-mp.info{background:rgba(96,165,250,0.12); border:1px solid rgba(96,165,250,0.35); color:#BFDBFE;}
+.aviso-pago-mp.error{background:rgba(248,113,113,0.14); border:1px solid rgba(248,113,113,0.3); color:#FCA5A5;}

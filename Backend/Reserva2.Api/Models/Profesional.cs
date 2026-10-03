@@ -19,5 +19,11 @@ namespace Reserva2.Api.Models
         // "Estilista"). Nulo si el comercio no la cargó.
         [MaxLength(30)]
         public string? Especialidad { get; set; }
+
+        // Ruta relativa a la foto de perfil (ej. "/uploads/profesionales/5-3f2a....jpg"). El
+        // nombre lleva un GUID para que el navegador no muestre la foto vieja cacheada al
+        // cambiarla. Null si no se subió ninguna: se muestran las iniciales.
+        [MaxLength(200)]
+        public string? FotoUrl { get; set; }
     }
 }

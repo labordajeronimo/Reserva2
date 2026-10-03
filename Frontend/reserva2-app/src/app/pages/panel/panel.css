@@ -532,24 +532,24 @@
 .cal-horas { position: sticky; left: 0; z-index: 1; background: #10172B; }
 .cal-hora { position: absolute; left: 0; right: 0; padding: 0 8px; transform: translateY(-50%); color: #7C879E; font-size: 0.7rem; text-align: right; }
 .cal-hora:first-child { transform: none; padding-top: 2px; }
-/* Una línea por hora y una punteada en la media hora (64px por hora). */
+/* Una línea por hora y una punteada en la media hora (120px por hora, ver pxPorHora). */
 .cal-col {
   position: relative;
   border-left: 1px solid rgba(232, 236, 246, 0.09);
   background-image:
     linear-gradient(to bottom, rgba(232, 236, 246, 0.09) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(232, 236, 246, 0.04) 1px, transparent 1px);
-  background-size: 100% 64px, 100% 32px;
+  background-size: 100% 120px, 100% 60px;
 }
 .cal-turno {
   position: absolute;
-  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
-  padding: 4px 8px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 5px 8px;
   overflow: hidden;
   border: none;
   border-left: 3px solid;
   border-radius: 8px;
-  font-family: inherit; font-size: 0.75rem; text-align: left;
+  font-family: inherit; font-size: 0.78rem; line-height: 1.3; text-align: left;
   cursor: pointer;
   transition: filter 0.15s ease, box-shadow 0.15s ease;
 }
@@ -557,8 +557,13 @@
 .cal-turno.seleccionado { box-shadow: 0 0 0 2px #F97316; }
 .cal-turno.estado-1 { background: rgba(251, 191, 36, 0.16); border-left-color: #FBBF24; }
 .cal-turno.estado-2 { background: rgba(52, 211, 153, 0.16); border-left-color: #34D399; }
+.cal-turno.pasado { opacity: 0.6; }
 .cal-turno.estado-3 { background: rgba(232, 236, 246, 0.06); border-left-color: #7C879E; opacity: 0.6; }
-.cal-turno span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* flex-shrink: 0 evita que las líneas se aplasten y se pisen cuando el bloque es bajo;
+   lo que no entra queda cortado por el overflow del bloque. */
+.cal-turno > span { flex-shrink: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-turno-linea { display: block; }
+.cal-turno-hora { margin-right: 6px; }
 .cal-turno-hora { font-weight: 700; color: #E8ECF6; }
 .cal-turno-cliente { color: #E8ECF6; }
 .cal-turno-servicio { color: #A6AFC6; }
@@ -585,6 +590,11 @@
 
 .tabla-turnos .mini.danger { background: rgba(248, 113, 113, 0.12); border-color: transparent; }
 .tabla-turnos .mini.ok { border-color: transparent; }
+.tabla-turnos td { vertical-align: middle; }
+.tabla-turnos .celda-estado { min-width: 150px; }
+.tabla-turnos .celda-estado .badge { margin: 2px 6px 2px 0; }
+.tabla-turnos .celda-acciones { width: 1%; white-space: nowrap; }
+.tabla-turnos .celda-acciones .acciones { justify-content: flex-end; }
 
 @media (max-width: 1100px) {
   .calendario-layout.con-detalle { grid-template-columns: minmax(0, 1fr); }
@@ -824,7 +834,7 @@ button.inicio-fila:hover { border-color: rgba(232, 236, 246, 0.2); border-left-c
 .plan-nombre { font-family: 'Sora', sans-serif; font-weight: 800; font-size: 1.6rem; color: #FFFFFF; margin: 4px 0 14px; }
 .plan-nombre span { font-size: 0.95rem; font-weight: 600; color: #A6AFC6; }
 .plan-resumen .renovacion-btn { margin-bottom: 0; }
-.plan-guardar { margin-top: 16px; }
+.plan-guardar { margin-top: 16px; display: inline-block; text-decoration: none; }
 .anillo { position: relative; width: 132px; height: 132px; flex-shrink: 0; }
 .anillo svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .anillo circle { fill: none; stroke-width: 10; }
@@ -942,3 +952,33 @@ button.inicio-fila:hover { border-color: rgba(232, 236, 246, 0.2); border-left-c
 .campo-etiquetado { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .campo-etiquetado span { font-size: 0.75rem; font-weight: 600; color: #A6AFC6; }
 .form-profesional { align-items: end; }
+
+/* ----- Foto del profesional ----- */
+.profesional-foto { object-fit: cover; background-image: none; background: #0C1122; padding: 0; }
+.profesional-foto-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tarjeta-form .sub-info.perfil-logo-ayuda { margin: -4px 0 0; }
+
+/* ----- Mercado Pago (Mi Plan y Perfil) ----- */
+.plan-pago-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.plan-pago-acciones .plan-guardar { margin-top: 0; }
+.plan-resumen-texto .plan-pago-acciones .renovacion-btn { margin-bottom: 0; }
+.info-msg {
+  background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.32);
+  color: #BFDBFE;
+  font-size: 0.85rem;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+.mp-estado { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 12px; }
+.mp-opcion {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 12px 0; border-top: 1px solid rgba(232, 236, 246, 0.08);
+}
+.mp-opcion:last-of-type { margin-bottom: 14px; border-bottom: 1px solid rgba(232, 236, 246, 0.08); }
+.mp-opcion-titulo { font-weight: 700; color: #FFFFFF; font-size: 0.92rem; margin-bottom: 2px; }
+.mp-estado .sub-info, .mp-opcion .sub-info { margin: 0; }
+.mp-cobro { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 10px; background: #10172B; border: 1px solid rgba(232, 236, 246, 0.13); flex-shrink: 0; }
+.mp-cobro button { border: 0; background: transparent; color: #A6AFC6; font: inherit; font-size: 0.82rem; font-weight: 600; padding: 7px 12px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
+.mp-cobro button.activo { background: #F97316; color: #FFFFFF; }

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Reserva2.Api.Data;
 
@@ -11,9 +12,11 @@ using Reserva2.Api.Data;
 namespace Reserva2.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261001151849_AgregarFotoAProfesional")]
+    partial class AgregarFotoAProfesional
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -35,9 +38,6 @@ namespace Reserva2.Api.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(true);
 
-                    b.Property<bool>("AddonCobrosOnline")
-                        .HasColumnType("bit");
-
                     b.Property<string>("AliasUrl")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -53,9 +53,6 @@ namespace Reserva2.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("nvarchar(max)")
                         .HasDefaultValue("Mensual");
-
-                    b.Property<bool>("CobroMercadoPagoTotal")
-                        .HasColumnType("bit");
 
                     b.Property<string>("DatosBancarios")
                         .IsRequired()
@@ -80,18 +77,6 @@ namespace Reserva2.Api.Migrations
                     b.Property<string>("LogoUrl")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("MercadoPagoAccessToken")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("MercadoPagoRefreshToken")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("MercadoPagoTokenVence")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long?>("MercadoPagoUserId")
-                        .HasColumnType("bigint");
-
                     b.Property<decimal?>("MontoMensualAcordado")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -109,14 +94,6 @@ namespace Reserva2.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("nvarchar(max)")
                         .HasDefaultValue("Gratuito");
-
-                    b.Property<bool>("SeñaPorMercadoPago")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("SeñaPorTransferencia")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(true);
 
                     b.Property<string>("TelefonoNotificaciones")
                         .IsRequired()
@@ -189,53 +166,6 @@ namespace Reserva2.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("MrrSnapshots");
-                });
-
-            modelBuilder.Entity("Reserva2.Api.Models.Pago", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Ciclo")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("ComercioId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Estado")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("Fecha")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("FechaAprobacion")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Medio")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long?>("MercadoPagoPagoId")
-                        .HasColumnType("bigint");
-
-                    b.Property<decimal>("Monto")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("Plan")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ComercioId");
-
-                    b.ToTable("Pagos");
                 });
 
             modelBuilder.Entity("Reserva2.Api.Models.PasswordResetToken", b =>
@@ -400,28 +330,15 @@ namespace Reserva2.Api.Migrations
                     b.Property<DateTime>("FechaHoraInicio")
                         .HasColumnType("datetime2");
 
-                    b.Property<long?>("MercadoPagoPagoId")
-                        .HasColumnType("bigint");
-
                     b.Property<decimal?>("MontoCobrado")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("MontoMercadoPago")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("Origen")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("ProfesionalId")
                         .HasColumnType("int");
 
                     b.Property<int?>("ServicioId")
                         .HasColumnType("int");
-
-                    b.Property<string>("SeñaMedio")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool?>("SeñaVerificada")
                         .HasColumnType("bit");

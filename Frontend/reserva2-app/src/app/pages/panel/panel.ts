@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
-import { Api, Turno, Servicio, Horario, Profesional, Sucursal, LoginResponse, Historial, Ganancias, WhatsAppConfig, Resumen, urlArchivo } from '../../core/api';
+import { Api, Turno, Servicio, Horario, Profesional, Sucursal, LoginResponse, Historial, Ganancias, WhatsAppConfig, Resumen, MercadoPagoConfig, urlArchivo } from '../../core/api';
 import { Session } from '../../core/session';
 import { linkWhatsApp } from '../../core/whatsapp';
 import { PlanSelector } from '../../shared/plan-selector/plan-selector';
@@ -82,21 +82,42 @@ export class Panel {
   passwordCambiadaOk = signal(false);
 
   // --- Mi Plan ---
+  // El dueño ya no cambia el plan solo: elige el que quiere y lo pide por WhatsApp; el
+  // cambio real lo hace el Super Admin una vez coordinado el pago.
   planSeleccionado = '';
   cicloSeleccionado = '';
-  guardandoPlan = signal(false);
-  errorPlan = signal<string | null>(null);
-  planGuardadoOk = signal(false);
+  precioPlanPedido = signal<number | null>(null);
+  private precioPlanRequestId = 0;
+
+  // Pago del plan con Mercado Pago: monto que calcula el backend (respeta el monto acordado
+  // con el Super Admin) para renovar el plan actual y para el plan elegido en "Cambiar de plan".
+  pagoRenovacion = signal<{ monto: number; disponible: boolean } | null>(null);
+  pagoPlanPedido = signal<{ monto: number; disponible: boolean } | null>(null);
+  private pagoPlanPedidoRequestId = 0;
+  iniciandoPagoPlan = signal(false);
+  errorPagoPlan = signal<string | null>(null);
+  avisoPagoPlan = signal<{ tipo: 'ok' | 'info' | 'error'; texto: string } | null>(null);
+
+  // --- Mercado Pago del comercio (cobro de señas), en Perfil ---
+  mercadoPago = signal<MercadoPagoConfig | null>(null);
+  cargandoMercadoPago = signal(false);
+  errorMercadoPago = signal<string | null>(null);
+  avisoMercadoPago = signal<string | null>(null);
+  private mercadoPagoCargadoAlMenosUnaVez = false;
 
   // --- Turnos ---
-  turnos = signal<Turno[]>([]);
+  // Activos (pre-reservas vigentes y confirmados por venir) más los confirmados que ya pasaron.
+  // El calendario usa todos, para poder mirar días anteriores; el resto del panel (lista,
+  // pendientes, señas a verificar) solo los activos, como antes.
+  todosLosTurnos = signal<Turno[]>([]);
+  turnos = computed(() => this.todosLosTurnos().filter(t => !this.esPasado(t)));
   linkCopiado = signal(false);
 
   // --- Calendario del día (una columna por profesional). Arma la grilla con los turnos ya
   // cargados — no pega al backend de nuevo, ya está todo en el signal "turnos". Es por día
   // (no por semana) porque con columnas por profesional, una semana entera no entra cómoda
   // en pantalla. ---
-  readonly pxPorHora = 64;
+  readonly pxPorHora = 120;
   vistaTurnos = signal<'calendario' | 'lista'>('calendario');
   agendaDia = signal<Date>(this.soloFecha(new Date()));
   ahora = signal(new Date());
@@ -104,7 +125,7 @@ export class Panel {
   // Se guarda el id (no el objeto) para que, al recargar los turnos después de confirmar o
   // cancelar, el detalle muestre el estado nuevo sin tener que volver a seleccionarlo.
   turnoSeleccionadoId = signal<number | null>(null);
-  turnoSeleccionado = computed(() => this.turnos().find(t => t.id === this.turnoSeleccionadoId()) ?? null);
+  turnoSeleccionado = computed(() => this.todosLosTurnos().find(t => t.id === this.turnoSeleccionadoId()) ?? null);
 
   private soloFecha(d: Date): Date {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -118,8 +139,19 @@ export class Panel {
     return this.mismoDia(this.agendaDia(), this.ahora());
   }
 
+  // Confirmado cuyo horario ya empezó: ya se hizo (o el cliente no vino).
+  esPasado(t: Turno): boolean {
+    return t.estadoReserva === 2 && new Date(t.fechaHoraInicio) <= this.ahora();
+  }
+
+  textoOrigen(t: Turno): string | null {
+    if (t.origen === 'PaginaPublica') return 'Página de reservas';
+    if (t.origen === 'Panel') return 'Cargado desde el panel';
+    return null;
+  }
+
   turnosDelDia(dia: Date): Turno[] {
-    return this.turnos()
+    return this.todosLosTurnos()
       .filter(t => this.mismoDia(new Date(t.fechaHoraInicio), dia))
       .sort((a, b) => a.fechaHoraInicio.localeCompare(b.fechaHoraInicio));
   }
@@ -373,7 +405,7 @@ export class Panel {
 
   pendientesDeConfirmar(): Turno[] {
     return this.turnos()
-      .filter(t => t.estadoReserva === 1)
+      .filter(t => t.estadoReserva === 1 && !this.esperandoPagoMercadoPago(t))
       .sort((a, b) => this.vencimientoPreReserva(a).getTime() - this.vencimientoPreReserva(b).getTime());
   }
 
@@ -473,6 +505,7 @@ export class Panel {
   editProfesionalSucursalId: number | null = null;
   editProfesionalEspecialidad = '';
   errorEditProfesional = signal<string | null>(null);
+  subiendoFotoProfesionalId = signal<number | null>(null);
 
   // --- Sucursales ---
   sucursales = signal<Sucursal[]>([]);
@@ -514,7 +547,49 @@ export class Panel {
     // Permite entrar directo a /panel?tab=ganancias, ?tab=whatsapp o ?tab=plan (ej. un link
     // guardado); si el comercio no es Premium, la pestaña igual se abre pero muestra el aviso.
     const tabPorUrl = this.route.snapshot.queryParamMap.get('tab');
-    if (tabPorUrl === 'ganancias' || tabPorUrl === 'whatsapp' || tabPorUrl === 'plan') this.abrirTab(tabPorUrl);
+    if (tabPorUrl === 'ganancias' || tabPorUrl === 'whatsapp' || tabPorUrl === 'plan' || tabPorUrl === 'perfil') this.abrirTab(tabPorUrl);
+    this.procesarVueltaDeMercadoPago();
+  }
+
+  // Vueltas de Mercado Pago al panel: de conectar la cuenta (?mercadopago=conectado|error|vencido)
+  // o de pagar el plan (?pagoPlan={id}&payment_id=...). Después se limpia la URL.
+  private procesarVueltaDeMercadoPago(): void {
+    const query = this.route.snapshot.queryParamMap;
+    const resultadoConexion = query.get('mercadopago');
+    const pagoPlanId = Number(query.get('pagoPlan'));
+    if (!resultadoConexion && !pagoPlanId) return;
+
+    if (resultadoConexion === 'conectado') this.avisoMercadoPago.set('¡Listo! Tu cuenta de Mercado Pago quedó conectada y tus clientes ya pueden pagar la seña por ahí.');
+    else if (resultadoConexion === 'vencido') this.errorMercadoPago.set('Pasó demasiado tiempo para conectar la cuenta. Probá de nuevo.');
+    else if (resultadoConexion) this.errorMercadoPago.set('No se pudo conectar tu cuenta de Mercado Pago. Probá de nuevo.');
+
+    if (pagoPlanId) {
+      const pagoMpTexto = query.get('payment_id') ?? query.get('collection_id');
+      const pagoMpId = pagoMpTexto && /^\d+$/.test(pagoMpTexto) ? Number(pagoMpTexto) : null;
+      this.avisoPagoPlan.set({ tipo: 'info', texto: 'Revisando tu pago en Mercado Pago...' });
+      this.api.verificarPagoPlan(this.sesion.comercioId, pagoPlanId, pagoMpId).subscribe({
+        next: r => {
+          if (r.estado === 'Aprobado') {
+            this.sesion = { ...this.sesion, planActual: r.planActual, cicloFacturacion: r.cicloFacturacion, fechaProximoPago: r.fechaProximoPago, activo: r.activo };
+            this.session.iniciarSesion(this.sesion);
+            this.planSeleccionado = r.planActual;
+            this.cicloSeleccionado = r.cicloFacturacion;
+            this.actualizarPrecioPlanPedido();
+            this.cargarPagoRenovacion();
+            this.avisoPagoPlan.set({ tipo: 'ok', texto: `¡Gracias! Recibimos tu pago: tu plan ${r.planActual} quedó renovado.` });
+          } else if (r.estado === 'Rechazado') {
+            this.avisoPagoPlan.set({ tipo: 'error', texto: 'Mercado Pago rechazó el pago. Probá con otro medio de pago.' });
+          } else if (pagoMpId) {
+            this.avisoPagoPlan.set({ tipo: 'info', texto: 'Tu pago está en proceso. Cuando Mercado Pago lo apruebe, tu plan se renueva solo.' });
+          } else {
+            this.avisoPagoPlan.set({ tipo: 'error', texto: 'El pago no se completó. Podés intentarlo de nuevo cuando quieras.' });
+          }
+        },
+        error: () => this.avisoPagoPlan.set({ tipo: 'info', texto: 'No pudimos revisar tu pago ahora. Si se aprobó, tu plan se renueva solo en unos minutos.' })
+      });
+    }
+
+    this.router.navigate([], { relativeTo: this.route, queryParams: { tab: this.tabActiva() }, replaceUrl: true });
   }
 
   esPremium(): boolean {
@@ -614,7 +689,7 @@ export class Panel {
 
   // Sale de los turnos ya cargados, no pega al backend.
   turnosSinConfirmar(): number {
-    return this.turnos().filter(t => t.estadoReserva === 1).length;
+    return this.turnos().filter(t => t.estadoReserva === 1 && !this.esperandoPagoMercadoPago(t)).length;
   }
 
   // Turnos que necesitan algo del comercio: pre-reservas viejas sin confirmar y señas a
@@ -626,8 +701,19 @@ export class Panel {
   // ================= SEÑA =================
   seniasAVerificar(): Turno[] {
     return this.turnos()
-      .filter(t => t.estadoReserva !== 3 && t.señaVerificada === false)
+      .filter(t => t.estadoReserva !== 3 && t.señaVerificada === false && t.señaMedio !== 'MercadoPago')
       .sort((a, b) => a.fechaHoraInicio.localeCompare(b.fechaHoraInicio));
+  }
+
+  // Reserva con seña por Mercado Pago que el cliente todavía no pagó: no hay nada que
+  // verificar ni confirmar, se confirma sola al aprobarse el pago o se libera si no paga.
+  esperandoPagoMercadoPago(t: Turno): boolean {
+    return t.señaMedio === 'MercadoPago' && t.señaVerificada === false && t.estadoReserva === 1;
+  }
+
+  textoSenia(t: Turno): string {
+    if (t.señaMedio === 'MercadoPago') return t.señaVerificada ? 'Pagado con Mercado Pago' : 'Esperando el pago';
+    return t.señaVerificada ? 'Seña verificada' : 'Seña a verificar';
   }
 
   montoSenia(t: Turno): number | null {
@@ -686,25 +772,94 @@ export class Panel {
     this.tabActiva.set(tab);
     if (tab === 'ganancias' && !this.gananciasCargadaAlMenosUnaVez) this.cargarGanancias();
     if (tab === 'whatsapp' && !this.whatsAppCargadoAlMenosUnaVez) this.cargarWhatsAppConfig();
+    if (tab === 'plan') {
+      this.actualizarPrecioPlanPedido();
+      this.cargarPagoRenovacion();
+    }
+    if (tab === 'perfil' && !this.mercadoPagoCargadoAlMenosUnaVez) this.cargarMercadoPago();
   }
 
   // ================= MI PLAN =================
-  guardarPlan(): void {
-    this.errorPlan.set(null);
-    this.planGuardadoOk.set(false);
-    this.guardandoPlan.set(true);
-    this.api.actualizarMiPlan(this.sesion.comercioId, this.planSeleccionado, this.cicloSeleccionado).subscribe({
-      next: r => {
-        this.guardandoPlan.set(false);
-        this.planGuardadoOk.set(true);
-        this.sesion = { ...this.sesion, planActual: r.planActual, cicloFacturacion: r.cicloFacturacion, fechaProximoPago: r.fechaProximoPago };
-        this.session.actualizarPlanEnSesion(r.planActual, r.cicloFacturacion, r.fechaProximoPago);
-      },
+  onPlanPedidoCambio(): void {
+    this.actualizarPrecioPlanPedido();
+  }
+
+  // Precio de lista del plan pedido (misma cuenta que el registro, vía /api/precio-plan),
+  // con la cantidad real de profesionales y sucursales cargadas.
+  actualizarPrecioPlanPedido(): void {
+    this.cargarPagoPlanPedido();
+    const idPedido = ++this.precioPlanRequestId;
+    this.precioPlanPedido.set(null);
+    this.api.getPrecioPlan(this.planSeleccionado, this.cicloSeleccionado,
+      Math.max(1, this.profesionales().length), Math.max(1, this.sucursales().length)).subscribe({
+      next: r => { if (idPedido === this.precioPlanRequestId) this.precioPlanPedido.set(r.precio); },
+      error: () => { if (idPedido === this.precioPlanRequestId) this.precioPlanPedido.set(null); }
+    });
+  }
+
+  // Si el backend ya devolvió lo que le corresponde pagar a este comercio (incluye el extra de
+  // cobros online y el monto acordado), se muestra eso; si no, la tarifa de lista.
+  precioPlanPedidoTexto(): string {
+    const precio = this.pagoPlanPedido()?.monto ?? this.precioPlanPedido();
+    if (precio === null) return 'a confirmar';
+    if (precio <= 0) return 'Gratis';
+    return `$${precio.toLocaleString('es-AR')}${this.cicloSeleccionado === 'Anual' ? '/año' : '/mes'}`;
+  }
+
+  cargarPagoRenovacion(): void {
+    if (this.sesion.planActual === 'Gratuito') {
+      this.pagoRenovacion.set(null);
+      return;
+    }
+    this.api.getMontoPagoPlan(this.sesion.comercioId, this.sesion.planActual, this.sesion.cicloFacturacion).subscribe({
+      next: r => this.pagoRenovacion.set(r),
+      error: () => this.pagoRenovacion.set(null)
+    });
+  }
+
+  private cargarPagoPlanPedido(): void {
+    const idPedido = ++this.pagoPlanPedidoRequestId;
+    this.pagoPlanPedido.set(null);
+    if (!this.planSeleccionado || this.planSeleccionado === 'Gratuito') return;
+    this.api.getMontoPagoPlan(this.sesion.comercioId, this.planSeleccionado, this.cicloSeleccionado).subscribe({
+      next: r => { if (idPedido === this.pagoPlanPedidoRequestId) this.pagoPlanPedido.set(r); },
+      error: () => { if (idPedido === this.pagoPlanPedidoRequestId) this.pagoPlanPedido.set(null); }
+    });
+  }
+
+  textoMonto(monto: number, ciclo: string): string {
+    return `$${monto.toLocaleString('es-AR')}${ciclo === 'Anual' ? '/año' : '/mes'}`;
+  }
+
+  // Lleva al checkout de Mercado Pago; el plan se renueva (o cambia) cuando se aprueba el pago.
+  pagarPlanConMercadoPago(plan: string, ciclo: string): void {
+    this.errorPagoPlan.set(null);
+    this.iniciandoPagoPlan.set(true);
+    this.api.pagarPlan(this.sesion.comercioId, plan, ciclo).subscribe({
+      next: r => { window.location.href = r.urlPago; },
       error: err => {
-        this.guardandoPlan.set(false);
-        this.errorPlan.set(err.error?.mensaje ?? 'No pudimos actualizar tu plan.');
+        this.iniciandoPagoPlan.set(false);
+        this.errorPagoPlan.set(err.error?.mensaje ?? 'No pudimos iniciar el pago. Probá de nuevo.');
       }
     });
+  }
+
+  linkAddonCobrosWhatsApp(): string {
+    return linkWhatsApp(`Hola! Quiero sumar los cobros automáticos con Mercado Pago a mi plan de Reserva2. Comercio: ${this.sesion.nombre} (${this.linkPublicoTexto()}).`);
+  }
+
+  linkCambioPlanWhatsApp(): string {
+    const mensaje = [
+      'Hola! Quiero cambiar mi plan de Reserva2.',
+      `Comercio: ${this.sesion.nombre}`,
+      `Link: ${this.linkPublicoTexto()}`,
+      `Plan actual: ${this.sesion.planActual} (${this.sesion.cicloFacturacion})`,
+      `Plan pedido: ${this.planSeleccionado} (${this.cicloSeleccionado})`,
+      `Profesionales: ${this.profesionales().length}`,
+      `Sucursales: ${this.sucursales().length}`,
+      `Precio del plan pedido: ${this.precioPlanPedidoTexto()}`
+    ].join('\n');
+    return linkWhatsApp(mensaje);
   }
 
   // ================= PERFIL DEL COMERCIO =================
@@ -748,8 +903,8 @@ export class Panel {
       this.errorPassword.set('Completá tu contraseña actual y la nueva.');
       return;
     }
-    if (this.passwordNueva.length < 6) {
-      this.errorPassword.set('La contraseña nueva tiene que tener al menos 6 caracteres.');
+    if (this.passwordNueva.length < 8) {
+      this.errorPassword.set('La contraseña nueva tiene que tener al menos 8 caracteres.');
       return;
     }
     if (this.passwordNueva !== this.passwordNuevaRepetida) {
@@ -815,7 +970,7 @@ export class Panel {
 
   // ================= TURNOS =================
   cargarTurnos(): void {
-    this.api.getTurnosDeComercio(this.sesion.comercioId).subscribe(turnos => this.turnos.set(turnos));
+    this.api.getTurnosDeComercio(this.sesion.comercioId, false, true).subscribe(turnos => this.todosLosTurnos.set(turnos));
   }
 
   confirmar(t: Turno): void {
@@ -924,6 +1079,67 @@ export class Panel {
   }
 
   // ================= WHATSAPP (placeholder, exclusivo Premium) =================
+  // ================= MERCADO PAGO (señas) =================
+  cargarMercadoPago(): void {
+    this.mercadoPagoCargadoAlMenosUnaVez = true;
+    this.cargandoMercadoPago.set(true);
+    this.api.getMercadoPagoConfig(this.sesion.comercioId).subscribe({
+      next: c => {
+        this.mercadoPago.set(c);
+        this.cargandoMercadoPago.set(false);
+      },
+      error: err => {
+        this.cargandoMercadoPago.set(false);
+        this.errorMercadoPago.set(err.error?.mensaje ?? 'No pudimos cargar tu configuración de Mercado Pago.');
+      }
+    });
+  }
+
+  conectarMercadoPago(): void {
+    this.errorMercadoPago.set(null);
+    this.cargandoMercadoPago.set(true);
+    this.api.conectarMercadoPago(this.sesion.comercioId).subscribe({
+      next: r => { window.location.href = r.url; },
+      error: err => {
+        this.cargandoMercadoPago.set(false);
+        this.errorMercadoPago.set(err.error?.mensaje ?? 'No pudimos conectar con Mercado Pago. Probá de nuevo.');
+      }
+    });
+  }
+
+  cambiarMediosSenia(señaPorMercadoPago: boolean, señaPorTransferencia: boolean, cobroTotal = this.mercadoPago()?.cobroTotal ?? false): void {
+    this.errorMercadoPago.set(null);
+    this.avisoMercadoPago.set(null);
+    this.cargandoMercadoPago.set(true);
+    this.api.actualizarMercadoPagoConfig(this.sesion.comercioId, señaPorMercadoPago, señaPorTransferencia, cobroTotal).subscribe({
+      next: c => {
+        this.mercadoPago.set(c);
+        this.cargandoMercadoPago.set(false);
+      },
+      error: err => {
+        this.cargandoMercadoPago.set(false);
+        this.errorMercadoPago.set(err.error?.mensaje ?? 'No pudimos guardar el cambio.');
+      }
+    });
+  }
+
+  desconectarMercadoPago(): void {
+    if (!confirm('¿Desconectar tu cuenta de Mercado Pago? Tus clientes van a pagar la seña solo por transferencia.')) return;
+    this.errorMercadoPago.set(null);
+    this.avisoMercadoPago.set(null);
+    this.cargandoMercadoPago.set(true);
+    this.api.desconectarMercadoPago(this.sesion.comercioId).subscribe({
+      next: c => {
+        this.mercadoPago.set(c);
+        this.cargandoMercadoPago.set(false);
+      },
+      error: err => {
+        this.cargandoMercadoPago.set(false);
+        this.errorMercadoPago.set(err.error?.mensaje ?? 'No pudimos desconectar la cuenta.');
+      }
+    });
+  }
+
   cargarWhatsAppConfig(): void {
     this.whatsAppCargadoAlMenosUnaVez = true;
     this.errorWhatsApp.set(null);
@@ -1227,6 +1443,39 @@ export class Panel {
         this.cargarProfesionales();
       },
       error: err => this.errorEditProfesional.set(err.error?.mensaje ?? 'No pudimos guardar los cambios.')
+    });
+  }
+
+  fotoProfesional(p: Profesional): string | null {
+    return urlArchivo(p.fotoUrl);
+  }
+
+  // La foto se guarda apenas se elige (igual que el logo), sin esperar al botón Guardar.
+  subirFotoProfesional(p: Profesional, evento: Event): void {
+    const input = evento.target as HTMLInputElement;
+    const archivo = input.files?.[0];
+    input.value = '';
+    if (!archivo) return;
+
+    this.errorEditProfesional.set(null);
+    this.subiendoFotoProfesionalId.set(p.id);
+    this.api.subirFotoProfesional(p.id, archivo).subscribe({
+      next: r => {
+        this.subiendoFotoProfesionalId.set(null);
+        this.profesionales.update(lista => lista.map(x => x.id === p.id ? { ...x, fotoUrl: r.fotoUrl } : x));
+      },
+      error: err => {
+        this.subiendoFotoProfesionalId.set(null);
+        this.errorEditProfesional.set(err.error?.mensaje ?? 'No pudimos subir la foto.');
+      }
+    });
+  }
+
+  quitarFotoProfesional(p: Profesional): void {
+    this.errorEditProfesional.set(null);
+    this.api.quitarFotoProfesional(p.id).subscribe({
+      next: () => this.profesionales.update(lista => lista.map(x => x.id === p.id ? { ...x, fotoUrl: null } : x)),
+      error: err => this.errorEditProfesional.set(err.error?.mensaje ?? 'No pudimos quitar la foto.')
     });
   }
 

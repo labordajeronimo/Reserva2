@@ -57,6 +57,31 @@ no se pierde ningún dato — el panel del dueño sigue funcionando.
 `GET /api/comercios/{id}/disponibilidad` · `POST /api/turnos`
 
 
+## 💸 Mercado Pago
+
+Dos usos, cada uno con su cuenta:
+
+- **Cobros automáticos (extra, $10.000/mes aparte del plan)**: el Super Admin
+  lo activa desde la ficha del comercio. Con el extra activo, cada comercio conecta *su* cuenta desde Perfil
+  (OAuth) y elige si cobra por Mercado Pago la seña o el servicio completo, y
+  si además acepta la seña por transferencia con comprobante. La plata va directo al comercio. El turno queda
+  apartado 30 minutos y se confirma solo cuando Mercado Pago aprueba el pago.
+- **Plan del comercio**: desde Mi plan, el comercio le paga a Reserva2 con
+  Checkout Pro. Al aprobarse se renueva (o cambia) el plan, se reactiva el
+  comercio, queda en el historial de pagos y llega un mail al Super Admin para
+  emitir la Factura C.
+
+Variables de entorno del servicio `reserva2-api` (nunca en el repo):
+
+| Variable | Qué es |
+|---|---|
+| `MercadoPago__ClientId` / `MercadoPago__ClientSecret` | De la aplicación de Reserva2 en Mercado Pago Developers (para conectar las cuentas de los comercios). Redirect URL de la app: `https://reservados2.com/api/mercadopago/oauth/callback` |
+| `MercadoPago__AccessToken` | Access token de producción de la cuenta de Reserva2 (cobro de planes) |
+| `DataProtection__Ruta` | Carpeta persistente para las claves que cifran los tokens de los comercios, ej. `/var/lib/reserva2/claves`. Si se pierde, cada comercio tiene que volver a conectar su cuenta |
+
+Webhooks (los arma la API sola en cada pago, no hace falta configurarlos):
+`POST /api/mercadopago/webhook/senias` y `POST /api/mercadopago/webhook/planes`.
+
 ## 📌 Estado actual y roadmap
 
 Ver [`spec-pendiente.md`](./spec-pendiente.md) para el detalle completo de lo

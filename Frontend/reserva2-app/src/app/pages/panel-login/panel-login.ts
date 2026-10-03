@@ -7,6 +7,9 @@ import { Api } from '../../core/api';
 import { Session } from '../../core/session';
 import { PlanSelector } from '../../shared/plan-selector/plan-selector';
 
+// Chocan con rutas del frontend o con /api y /uploads del servidor.
+const ALIAS_RESERVADOS = ['panel', 'super-admin', 'terminos', 'privacidad', 'cancelar-turno', 'api', 'uploads'];
+
 @Component({
   selector: 'app-panel-login',
   standalone: true,
@@ -86,12 +89,27 @@ export class PanelLogin {
     });
   }
 
+  // Mismas reglas que valida el backend al registrar.
+  private errorRegistro(alias: string): string | null {
+    if (!this.regNombre.trim()) return 'Ingresá el nombre del negocio.';
+    if (!/^[a-z0-9-]{3,40}$/.test(alias)) return 'El link tiene que tener entre 3 y 40 caracteres: solo minúsculas, números y guiones.';
+    if (ALIAS_RESERVADOS.includes(alias)) return 'Ese link está reservado. Elegí otro.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.regEmail.trim())) return 'Ingresá un email válido.';
+    if (this.regPassword.length < 8) return 'La contraseña tiene que tener al menos 8 caracteres.';
+    return null;
+  }
+
   registrar(): void {
-    this.errorAuth.set(null);
+    const alias = this.regAliasUrl.trim().toLowerCase();
+    this.regAliasUrl = alias;
+    const error = this.errorRegistro(alias);
+    this.errorAuth.set(error);
+    if (error) return;
+
     this.cargandoAuth.set(true);
     this.api.registrar({
       nombre: this.regNombre.trim(),
-      aliasUrl: this.regAliasUrl.trim(),
+      aliasUrl: alias,
       tipoPlantilla: this.regTipoPlantilla,
       telefonoNotificaciones: this.regTelefono.trim(),
       datosBancarios: this.regDatosBancarios.trim(),
@@ -109,7 +127,10 @@ export class PanelLogin {
       },
       error: err => {
         this.cargandoAuth.set(false);
-        this.errorAuth.set(err.status === 409 ? err.error?.mensaje ?? 'Ya existe una cuenta con esos datos.' : 'No pudimos crear la cuenta.');
+        this.errorAuth.set(
+          err.status === 409 ? err.error?.mensaje ?? 'Ya existe una cuenta con esos datos.'
+          : err.status === 400 && err.error?.mensaje ? err.error.mensaje
+          : 'No pudimos crear la cuenta.');
       }
     });
   }

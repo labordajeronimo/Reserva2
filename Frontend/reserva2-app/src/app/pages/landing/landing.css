@@ -721,6 +721,8 @@ body {
 
 .cta-texto h2 { font-size: 2.9rem; font-weight: 800; line-height: 1.08; margin-bottom: 1.4rem; }
 .cta-texto p { font-size: 1.1rem; color: #C5B3A6; margin-bottom: 2.2rem; line-height: 1.7; }
+.cta-precio { margin: -1rem 0 2rem; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.cta-precio .price-periodo { color: #C5B3A6; }
 .cta-botones { display: flex; gap: 1rem; flex-wrap: wrap; }
 
 .cta-imagen {
@@ -823,6 +825,9 @@ body {
 .footer-links li { margin-bottom: 0.8rem; }
 .footer-links a { color: #A6AFC6; text-decoration: none; transition: color 0.2s ease; font-size: 0.95rem; }
 .footer-links a:hover { color: #FB923C; }
+.footer-bottom a { color: inherit; }
+.footer-bottom a:hover { color: #FB923C; }
+.footer-data-fiscal img { height: 56px; width: auto; display: block; }
 
 .footer-bottom {
   display: flex;

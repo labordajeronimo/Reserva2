@@ -79,6 +79,16 @@
             <label>Monto mensual acordado</label>
             <div class="valor-simple">{{ d.montoMensualAcordado ? (d.montoMensualAcordado | currency:'ARS':'$') : 'Sin definir' }}</div>
           </div>
+          <div class="campo-detalle">
+            <label>Cobros automáticos (extra)</label>
+            <div class="valor-simple">
+              {{ d.addonCobrosOnline ? 'Activo' : 'No' }}@if (d.addonCobrosOnline) { · {{ d.mercadoPagoConectado ? 'Mercado Pago conectado' : 'sin conectar Mercado Pago' }} }
+              <button class="mini" [class.ok]="!d.addonCobrosOnline" [class.danger]="d.addonCobrosOnline"
+                      [disabled]="actualizandoAddon()" (click)="toggleAddonCobros()">
+                {{ d.addonCobrosOnline ? 'Quitar' : 'Activar' }}
+              </button>
+            </div>
+          </div>
           <div class="campo-detalle acciones-botones">
             <button
               class="mini"
@@ -106,6 +116,26 @@
             </div>
           }
         </div>
+      </div>
+
+      <div class="panel-card">
+        <h2>Pagos del plan</h2>
+        @if (pagos().length === 0) {
+          <p class="empty">Todavía no hay pagos registrados.</p>
+        } @else {
+          <ul class="lista-simple">
+            @for (p of pagos(); track p.id) {
+              <li>
+                <strong>{{ p.monto | currency:'ARS':'$':'1.0-2' }}</strong>
+                · {{ p.plan }} {{ p.ciclo | lowercase }}
+                <span class="badge" [class.badge-ok]="p.estado === 'Aprobado'" [class.badge-danger]="p.estado !== 'Aprobado'">{{ p.estado }}</span>
+                <div class="sub-info">
+                  {{ p.fecha | date:'dd/MM/yyyy' }} · {{ p.medio === 'MercadoPago' ? 'Mercado Pago' + (p.mercadoPagoPagoId ? ' (pago ' + p.mercadoPagoPagoId + ')' : '') : 'Transferencia' }}
+                </div>
+              </li>
+            }
+          </ul>
+        }
       </div>
 
       <div class="panel-card zona-peligro">

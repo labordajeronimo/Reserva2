@@ -20,3 +20,5 @@ id_ed25519.pub
 *.pem
 # Archivos subidos en desarrollo (logos, comprobantes de seña)
 Backend/Reserva2.Api/uploads/
+# Claves de DataProtection en desarrollo (cifran los tokens de Mercado Pago)
+Backend/Reserva2.Api/claves/
