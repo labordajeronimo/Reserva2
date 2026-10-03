@@ -58,6 +58,11 @@ namespace Reserva2.Api.Models
         // completo del servicio, según lo que eligió el comercio al momento de reservar.
         public decimal? MontoMercadoPago { get; set; }
 
+        // De dónde vino la reserva: "PaginaPublica" (la reservó el cliente desde el link del
+        // comercio) o "Panel" (la cargó el comercio a mano). Null en los turnos creados antes
+        // de que se guardara este dato.
+        public string? Origen { get; set; }
+
         [NotMapped]
         public bool TieneComprobante => ComprobanteArchivo is not null;
     }

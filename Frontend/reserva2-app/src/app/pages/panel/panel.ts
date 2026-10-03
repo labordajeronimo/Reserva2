@@ -106,7 +106,11 @@ export class Panel {
   private mercadoPagoCargadoAlMenosUnaVez = false;
 
   // --- Turnos ---
-  turnos = signal<Turno[]>([]);
+  // Activos (pre-reservas vigentes y confirmados por venir) más los confirmados que ya pasaron.
+  // El calendario usa todos, para poder mirar días anteriores; el resto del panel (lista,
+  // pendientes, señas a verificar) solo los activos, como antes.
+  todosLosTurnos = signal<Turno[]>([]);
+  turnos = computed(() => this.todosLosTurnos().filter(t => !this.esPasado(t)));
   linkCopiado = signal(false);
 
   // --- Calendario del día (una columna por profesional). Arma la grilla con los turnos ya
@@ -121,7 +125,7 @@ export class Panel {
   // Se guarda el id (no el objeto) para que, al recargar los turnos después de confirmar o
   // cancelar, el detalle muestre el estado nuevo sin tener que volver a seleccionarlo.
   turnoSeleccionadoId = signal<number | null>(null);
-  turnoSeleccionado = computed(() => this.turnos().find(t => t.id === this.turnoSeleccionadoId()) ?? null);
+  turnoSeleccionado = computed(() => this.todosLosTurnos().find(t => t.id === this.turnoSeleccionadoId()) ?? null);
 
   private soloFecha(d: Date): Date {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -135,8 +139,19 @@ export class Panel {
     return this.mismoDia(this.agendaDia(), this.ahora());
   }
 
+  // Confirmado cuyo horario ya empezó: ya se hizo (o el cliente no vino).
+  esPasado(t: Turno): boolean {
+    return t.estadoReserva === 2 && new Date(t.fechaHoraInicio) <= this.ahora();
+  }
+
+  textoOrigen(t: Turno): string | null {
+    if (t.origen === 'PaginaPublica') return 'Página de reservas';
+    if (t.origen === 'Panel') return 'Cargado desde el panel';
+    return null;
+  }
+
   turnosDelDia(dia: Date): Turno[] {
-    return this.turnos()
+    return this.todosLosTurnos()
       .filter(t => this.mismoDia(new Date(t.fechaHoraInicio), dia))
       .sort((a, b) => a.fechaHoraInicio.localeCompare(b.fechaHoraInicio));
   }
@@ -955,7 +970,7 @@ export class Panel {
 
   // ================= TURNOS =================
   cargarTurnos(): void {
-    this.api.getTurnosDeComercio(this.sesion.comercioId).subscribe(turnos => this.turnos.set(turnos));
+    this.api.getTurnosDeComercio(this.sesion.comercioId, false, true).subscribe(turnos => this.todosLosTurnos.set(turnos));
   }
 
   confirmar(t: Turno): void {

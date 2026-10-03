@@ -92,6 +92,8 @@ export interface Turno {
   // por Mercado Pago queda en pre-reserva (estado 1) hasta que se aprueba el pago.
   señaMedio: 'Transferencia' | 'MercadoPago' | null;
   tieneComprobante: boolean;
+  // De dónde vino la reserva. Null en los turnos anteriores a que se guardara el dato.
+  origen: 'PaginaPublica' | 'Panel' | null;
 }
 
 export interface HistorialItem {
@@ -607,9 +609,10 @@ export class Api {
     return this.http.post<void>(`${API_BASE}/mercadopago/senias/${encodeURIComponent(tokenTurno)}/abandonar`, {});
   }
 
-  getTurnosDeComercio(comercioId: number, incluirVencidos = false): Observable<Turno[]> {
+  // incluirPasados: además de los activos, trae los confirmados que ya pasaron (para el calendario).
+  getTurnosDeComercio(comercioId: number, incluirVencidos = false, incluirPasados = false): Observable<Turno[]> {
     return this.http.get<Turno[]>(`${API_BASE}/comercios/${comercioId}/turnos`, {
-      params: { incluirVencidos }
+      params: { incluirVencidos, incluirPasados }
     });
   }
 
