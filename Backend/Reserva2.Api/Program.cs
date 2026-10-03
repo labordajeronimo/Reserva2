@@ -209,6 +209,9 @@ const int DuracionTokenHoras = 24;
 const int HorasMinimasParaCancelar = 2;
 const int LargoMinimoPassword = 8;
 const int LargoMaximoNombreCliente = 80;
+// Valores de Turno.Origen.
+const string OrigenPaginaPublica = "PaginaPublica";
+const string OrigenPanel = "Panel";
 
 var PlanesValidos = new[] { "Gratuito", "Basico", "Premium" };
 
@@ -2315,7 +2318,8 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
         SeñaMedio = !pideSenia ? null : seniaPorMercadoPago ? "MercadoPago" : "Transferencia",
         MontoMercadoPago = seniaPorMercadoPago ? montoMercadoPago : null,
         FechaCreacion = DateTime.UtcNow,
-        MontoCobrado = servicio.Precio
+        MontoCobrado = servicio.Precio,
+        Origen = OrigenPaginaPublica
     };
 
     string? rutaComprobanteGuardado = null;
@@ -2435,7 +2439,8 @@ app.MapPost("/api/comercios/{comercioId:int}/turnos", async (AppDbContext contex
         ClienteEmail = req.ClienteEmail?.Trim() ?? string.Empty,
         EstadoReserva = 2,
         FechaCreacion = DateTime.UtcNow,
-        MontoCobrado = servicio.Precio
+        MontoCobrado = servicio.Precio,
+        Origen = OrigenPanel
     };
 
     context.Turnos.Add(turno);
@@ -2797,7 +2802,10 @@ app.MapPost("/api/comercios/{comercioId:int}/whatsapp-config", async (AppDbConte
     return Results.Ok(new WhatsAppConfigDto(config.Activado));
 }).RequireAuthorization("AdminCliente");
 
-app.MapGet("/api/comercios/{comercioId:int}/turnos", async (AppDbContext context, int comercioId, bool incluirVencidos, ClaimsPrincipal user) =>
+// incluirVencidos: todos los turnos (también cancelados y pre-reservas vencidas).
+// incluirPasados: además de los activos, los confirmados cuya fecha ya pasó, para que el
+// calendario del panel muestre los días anteriores.
+app.MapGet("/api/comercios/{comercioId:int}/turnos", async (AppDbContext context, int comercioId, bool incluirVencidos, bool? incluirPasados, ClaimsPrincipal user) =>
 {
     if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
 
@@ -2814,7 +2822,7 @@ app.MapGet("/api/comercios/{comercioId:int}/turnos", async (AppDbContext context
         var ahora = AhoraArgentina();
         turnos = turnos.Where(t =>
             (t.EstadoReserva == 1 && EsPreReservaVigente(t)) ||
-            (t.EstadoReserva == 2 && t.FechaHoraInicio > ahora)
+            (t.EstadoReserva == 2 && (incluirPasados == true || t.FechaHoraInicio > ahora))
         ).ToList();
     }
 

@@ -359,7 +359,7 @@
                   <div class="cal-col" [style.height.px]="alturaAgendaPx()">
                     @for (b of bloquesColumnaAgenda(col.id); track b.turno.id) {
                       <button class="cal-turno" [class]="'estado-' + b.turno.estadoReserva"
-                              [class.seleccionado]="turnoSeleccionadoId() === b.turno.id"
+                              [class.seleccionado]="turnoSeleccionadoId() === b.turno.id" [class.pasado]="esPasado(b.turno)"
                               [style.top.px]="b.top" [style.height.px]="b.alto"
                               [style.left]="'calc(' + b.izquierda + '% + 3px)'" [style.width]="'calc(' + b.ancho + '% - 6px)'"
                               (click)="seleccionarTurno(b.turno)">
@@ -404,6 +404,10 @@
                   @if (t.clienteWhatsApp) {
                     <dt>WhatsApp</dt>
                     <dd>{{ t.clienteWhatsApp }}</dd>
+                  }
+                  @if (textoOrigen(t); as origen) {
+                    <dt>Origen</dt>
+                    <dd>{{ origen }}</dd>
                   }
                 </dl>
                 @if (t['señaVerificada'] !== null) {

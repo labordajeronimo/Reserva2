@@ -557,6 +557,7 @@
 .cal-turno.seleccionado { box-shadow: 0 0 0 2px #F97316; }
 .cal-turno.estado-1 { background: rgba(251, 191, 36, 0.16); border-left-color: #FBBF24; }
 .cal-turno.estado-2 { background: rgba(52, 211, 153, 0.16); border-left-color: #34D399; }
+.cal-turno.pasado { opacity: 0.6; }
 .cal-turno.estado-3 { background: rgba(232, 236, 246, 0.06); border-left-color: #7C879E; opacity: 0.6; }
 /* flex-shrink: 0 evita que las líneas se aplasten y se pisen cuando el bloque es bajo;
    lo que no entra queda cortado por el overflow del bloque. */
