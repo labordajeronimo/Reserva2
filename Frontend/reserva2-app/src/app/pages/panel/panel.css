@@ -624,6 +624,7 @@
 
 /* ----- Historial ----- */
 .historial-cantidad { color: #7C879E; font-size: 0.82rem; margin-top: 4px; }
+.wa-enviados { margin-left: 8px; }
 .historial-mes { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 0.95rem; color: #E8ECF6; min-width: 140px; text-align: center; }
 .sub-info.historial-ayuda { margin: 0 0 16px; }
 

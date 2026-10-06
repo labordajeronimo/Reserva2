@@ -312,6 +312,10 @@ export class SuperAdmin {
     return this.estadisticas().get(c.id)?.turnosDelMes ?? 0;
   }
 
+  whatsAppDelMes(c: ComercioAdmin): number {
+    return this.estadisticas().get(c.id)?.whatsAppDelMes ?? 0;
+  }
+
   private compararPorOrden(a: ComercioAdmin, b: ComercioAdmin): number {
     switch (this.orden()) {
       case 'turnos':

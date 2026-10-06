@@ -601,8 +601,9 @@ static string LimpiarParametroWhatsApp(string? valor)
 
 // Si falta configuración (ej. en desarrollo sin credenciales todavía), no falla: simplemente
 // no se envía nada y queda logueado el motivo. "parametros" van en el mismo orden que las
-// variables numeradas de la plantilla en WhatsApp Business.
-async Task EnviarPlantillaWhatsApp(IConfiguration config, ILogger logger, string numeroDestino, string nombrePlantilla, IEnumerable<string> parametros)
+// variables numeradas de la plantilla en WhatsApp Business. Cada envío que Meta acepta queda
+// registrado en MensajesWhatsApp para el contador mensual por comercio.
+async Task EnviarPlantillaWhatsApp(IConfiguration config, ILogger logger, int comercioId, int? turnoId, string numeroDestino, string nombrePlantilla, IEnumerable<string> parametros)
 {
     var token = config["WhatsApp:Token"];
     var phoneNumberId = config["WhatsApp:PhoneNumberId"];
@@ -644,7 +645,46 @@ async Task EnviarPlantillaWhatsApp(IConfiguration config, ILogger logger, string
         var detalle = await respuesta.Content.ReadAsStringAsync();
         logger.LogError("WhatsApp Cloud API devolvió {StatusCode} al enviar la plantilla {Plantilla} a {Numero}: {Detalle}",
             respuesta.StatusCode, nombrePlantilla, numeroFormateado, detalle);
+        return;
     }
+
+    // Meta responde { "messages": [ { "id": "wamid..." } ] }. Si no se puede leer el id igual
+    // se cuenta el envío: lo que importa para el contador es que Meta lo aceptó.
+    string? metaMensajeId = null;
+    try
+    {
+        using var json = System.Text.Json.JsonDocument.Parse(await respuesta.Content.ReadAsStringAsync());
+        if (json.RootElement.TryGetProperty("messages", out var mensajes) && mensajes.GetArrayLength() > 0
+            && mensajes[0].TryGetProperty("id", out var id))
+            metaMensajeId = id.GetString();
+    }
+    catch (System.Text.Json.JsonException) { }
+
+    // Se corre en una tarea de fondo, cuando el DbContext del request ya puede estar
+    // descartado: se usa uno propio.
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.MensajesWhatsApp.Add(new MensajeWhatsApp
+    {
+        ComercioId = comercioId,
+        TurnoId = turnoId,
+        Plantilla = nombrePlantilla,
+        MetaMensajeId = metaMensajeId
+    });
+    await db.SaveChangesAsync();
+}
+
+// Cantidad de WhatsApp enviados por cada comercio en el mes calendario (hora argentina) que
+// empieza en inicioMesArgentina. Las fechas se guardan en UTC, así que se corre el rango.
+async Task<Dictionary<int, int>> WhatsAppEnviadosPorComercio(AppDbContext context, DateTime inicioMesArgentina, int? comercioId = null)
+{
+    var desdeUtc = inicioMesArgentina.AddHours(3);
+    var hastaUtc = inicioMesArgentina.AddMonths(1).AddHours(3);
+    return await context.MensajesWhatsApp
+        .Where(m => m.FechaEnvio >= desdeUtc && m.FechaEnvio < hastaUtc && (comercioId == null || m.ComercioId == comercioId))
+        .GroupBy(m => m.ComercioId)
+        .Select(g => new { ComercioId = g.Key, Cantidad = g.Count() })
+        .ToDictionaryAsync(x => x.ComercioId, x => x.Cantidad);
 }
 
 // ==========================================
@@ -752,6 +792,8 @@ async Task NotificarTurnoReservado(AppDbContext context, IConfiguration config, 
             // tarea de fondo, y el envío es fire-and-forget con su propio try/catch — un
             // error de la API de WhatsApp (ej. plantilla todavía no aprobada) no puede
             // demorar ni hacer fallar la respuesta al cliente, que ya tiene su turno guardado.
+            var comercioId = comercio.Id;
+            var turnoId = turno.Id;
             var clienteWhatsApp = turno.ClienteWhatsApp;
             var clienteNombre = turno.ClienteNombre;
             var fechaHoraInicio = turno.FechaHoraInicio;
@@ -770,7 +812,7 @@ async Task NotificarTurnoReservado(AppDbContext context, IConfiguration config, 
 
                     if (senia is not null)
                     {
-                        await EnviarPlantillaWhatsApp(config, logger, clienteWhatsApp, "confirmacion_turno_sena", new[]
+                        await EnviarPlantillaWhatsApp(config, logger, comercioId, turnoId, clienteWhatsApp, "confirmacion_turno_sena", new[]
                         {
                             clienteNombre,
                             nombreComercio,
@@ -782,7 +824,7 @@ async Task NotificarTurnoReservado(AppDbContext context, IConfiguration config, 
                     }
                     else
                     {
-                        await EnviarPlantillaWhatsApp(config, logger, clienteWhatsApp, "confirmacion_turno", new[]
+                        await EnviarPlantillaWhatsApp(config, logger, comercioId, turnoId, clienteWhatsApp, "confirmacion_turno", new[]
                         {
                             clienteNombre,
                             nombreComercio,
@@ -1415,6 +1457,7 @@ app.MapDelete("/api/comercios/{id:int}", async (AppDbContext context, int id) =>
     context.Profesionales.RemoveRange(context.Profesionales.Where(p => p.ComercioId == id));
     context.Sucursales.RemoveRange(context.Sucursales.Where(s => s.ComercioId == id));
     context.WhatsAppConfigs.RemoveRange(context.WhatsAppConfigs.Where(w => w.ComercioId == id));
+    context.MensajesWhatsApp.RemoveRange(context.MensajesWhatsApp.Where(m => m.ComercioId == id));
     context.PasswordResetTokens.RemoveRange(context.PasswordResetTokens.Where(t => t.ComercioId == id));
     context.Pagos.RemoveRange(context.Pagos.Where(p => p.ComercioId == id));
     context.Comercios.Remove(comercio);
@@ -1513,6 +1556,8 @@ app.MapGet("/api/admin/comercios/estadisticas", async (AppDbContext context) =>
         })
         .ToDictionaryAsync(x => x.ComercioId);
 
+    var whatsAppDelMes = await WhatsAppEnviadosPorComercio(context, inicioMes);
+
     var comercios = await context.Comercios
         .Select(c => new { c.Id, c.FechaAlta, c.FechaActivacion, c.Activo, c.UltimoAcceso })
         .ToListAsync();
@@ -1523,7 +1568,8 @@ app.MapGet("/api/admin/comercios/estadisticas", async (AppDbContext context) =>
         return new ComercioEstadisticaDto(
             c.Id, c.FechaAlta, !c.Activo && c.FechaActivacion is null,
             t?.DelMes ?? 0, t?.DelMesAnterior ?? 0,
-            c.UltimoAcceso is null ? null : DateTime.SpecifyKind(c.UltimoAcceso.Value, DateTimeKind.Utc));
+            c.UltimoAcceso is null ? null : DateTime.SpecifyKind(c.UltimoAcceso.Value, DateTimeKind.Utc),
+            whatsAppDelMes.GetValueOrDefault(c.Id));
     }).ToList();
 
     return Results.Ok(resultado);
@@ -1690,6 +1736,9 @@ app.MapGet("/api/admin/comercios/{id:int}/detalle", async (AppDbContext context,
     for (var d = desde30; d <= hoy; d = d.AddDays(1))
         turnosPorDia.Add(new TurnosDiaDto(d, porFecha30.GetValueOrDefault(d)));
 
+    var whatsAppDelMes = (await WhatsAppEnviadosPorComercio(context, inicioMes, id)).GetValueOrDefault(id);
+    var whatsAppMesAnterior = (await WhatsAppEnviadosPorComercio(context, inicioMes.AddMonths(-1), id)).GetValueOrDefault(id);
+
     return Results.Ok(new ComercioDetalleDto(
         comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla, comercio.PlanActual, comercio.CicloFacturacion,
         comercio.MontoMensualAcordado, comercio.FechaAlta, comercio.FechaProximoPago, comercio.Activo,
@@ -1701,7 +1750,8 @@ app.MapGet("/api/admin/comercios/{id:int}/detalle", async (AppDbContext context,
         comercio.UltimoAcceso is null ? null : DateTime.SpecifyKind(comercio.UltimoAcceso.Value, DateTimeKind.Utc),
         comercio.FechaActivacion, comercio.FechaBaja,
         cantidadServicios, facturacionDelMes, turnosPorDia, TopeTurnosMensualesGratuito,
-        comercio.AddonCobrosOnline, comercio.MercadoPagoAccessToken is not null));
+        comercio.AddonCobrosOnline, comercio.MercadoPagoAccessToken is not null,
+        whatsAppDelMes, whatsAppMesAnterior));
 }).RequireAuthorization("SuperAdmin");
 
 app.MapGet("/api/comercios/alias/{alias}", async (AppDbContext context, string alias) =>
@@ -2783,7 +2833,9 @@ app.MapGet("/api/comercios/{comercioId:int}/whatsapp-config", async (AppDbContex
         return Results.Json(new { mensaje = "El bot de WhatsApp es exclusivo del plan Premium." }, statusCode: StatusCodes.Status403Forbidden);
 
     var config = await context.WhatsAppConfigs.FirstOrDefaultAsync(w => w.ComercioId == comercioId);
-    return Results.Ok(new WhatsAppConfigDto(config?.Activado ?? false));
+    var ahora = AhoraArgentina();
+    var enviadosDelMes = (await WhatsAppEnviadosPorComercio(context, new DateTime(ahora.Year, ahora.Month, 1), comercioId)).GetValueOrDefault(comercioId);
+    return Results.Ok(new WhatsAppConfigDto(config?.Activado ?? false, enviadosDelMes));
 }).RequireAuthorization("AdminCliente");
 
 app.MapPost("/api/comercios/{comercioId:int}/whatsapp-config", async (AppDbContext context, int comercioId, WhatsAppConfigDto req, ClaimsPrincipal user) =>
@@ -2808,7 +2860,9 @@ app.MapPost("/api/comercios/{comercioId:int}/whatsapp-config", async (AppDbConte
     }
     await context.SaveChangesAsync();
 
-    return Results.Ok(new WhatsAppConfigDto(config.Activado));
+    var ahora = AhoraArgentina();
+    var enviadosDelMes = (await WhatsAppEnviadosPorComercio(context, new DateTime(ahora.Year, ahora.Month, 1), comercioId)).GetValueOrDefault(comercioId);
+    return Results.Ok(new WhatsAppConfigDto(config.Activado, enviadosDelMes));
 }).RequireAuthorization("AdminCliente");
 
 // incluirVencidos: todos los turnos (también cancelados y pre-reservas vencidas).
@@ -3313,7 +3367,7 @@ record DashboardDto(
     int TotalComercios, int ComerciosActivos, int ComerciosInactivos, int ComerciosPendientes,
     List<PlanCantidadDto> PorPlan, decimal IngresoMensualEstimado, int TurnosDelMes, List<AltaMesDto> AltasPorMes);
 record TurnosPorSemanaDto(DateOnly Desde, DateOnly Hasta, int Cantidad);
-record ComercioEstadisticaDto(int Id, DateTime FechaAlta, bool Pendiente, int TurnosDelMes, int TurnosMesAnterior, DateTime? UltimoAcceso);
+record ComercioEstadisticaDto(int Id, DateTime FechaAlta, bool Pendiente, int TurnosDelMes, int TurnosMesAnterior, DateTime? UltimoAcceso, int WhatsAppDelMes);
 record MrrMesDto(int Anio, int Mes, decimal Monto);
 record AltasBajasMesDto(int Anio, int Mes, int Altas, int Bajas);
 record RubroCantidadDto(string Rubro, int Cantidad);
@@ -3331,7 +3385,8 @@ record ComercioDetalleDto(
     string Email, string TelefonoNotificaciones, string? WhatsAppNumero, DateTime? UltimoAcceso,
     DateTime? FechaActivacion, DateTime? FechaBaja,
     int CantidadServicios, decimal FacturacionDelMes, List<TurnosDiaDto> TurnosPorDia, int TopeTurnosGratuito,
-    bool AddonCobrosOnline, bool MercadoPagoConectado);
+    bool AddonCobrosOnline, bool MercadoPagoConectado,
+    int WhatsAppDelMes, int WhatsAppMesAnterior);
 record RegistroRequest(string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string DatosBancarios, string Email, string Password, string? PlanActual = null, string? CicloFacturacion = null, int? CantidadProfesionales = null, int? CantidadSucursales = null);
 record PerfilRequest(string Nombre, string TelefonoNotificaciones, string DatosBancarios);
 record PerfilDto(string Nombre, string TelefonoNotificaciones, string DatosBancarios, string? LogoUrl);
@@ -3382,7 +3437,8 @@ record ResumenDto(
     List<TurnosDiaDto> TurnosPorDia, List<CeldaHeatmapDto> HorariosMasPedidos, List<ServicioResumenDto> ServiciosMasReservados,
     List<ReservasHoraDto> ReservasPorHoraDeCreacion, int ReservasOnline, int ReservasFueraDeHorario,
     List<OcupacionProfesionalDto> OcupacionPorProfesional);
-record WhatsAppConfigDto(bool Activado);
+// EnviadosDelMes solo va en las respuestas (en el POST el comercio manda solo Activado).
+record WhatsAppConfigDto(bool Activado, int EnviadosDelMes = 0);
 record MercadoPagoConfigDto(bool Disponible, bool Conectado, long? CuentaId, bool SeñaPorMercadoPago, bool SeñaPorTransferencia, bool CobroTotal,
     bool AddonActivo = false, decimal PrecioAddon = 0);
 record ActualizarAddonCobrosRequest(bool Activo);

@@ -296,7 +296,12 @@
                     </div>
                   </td>
                   <td><span class="pastilla" [class]="'venc-' + claseVencimiento(c)">{{ textoVencimiento(c) }}</span></td>
-                  <td class="celda-numero">{{ turnosDelMes(c) }}</td>
+                  <td class="celda-numero">
+                    {{ turnosDelMes(c) }}
+                    @if (whatsAppDelMes(c) > 0) {
+                      <div class="sub-celda" title="WhatsApp enviados este mes">{{ whatsAppDelMes(c) }} WhatsApp</div>
+                    }
+                  </td>
                   <td><span class="pastilla" [class]="'estado-' + estadoComercio(c)">{{ estadoComercio(c) }}</span></td>
                   <td>
                     <span class="pastilla" [class]="'salud-' + claseSalud(c)" [title]="'Último acceso: ' + textoUltimoAcceso(c)">{{ salud(c) ?? '—' }}</span>

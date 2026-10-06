@@ -137,6 +137,7 @@
 .tabla tbody tr { transition: background-color 0.15s ease; }
 .tabla tbody tr:hover { background-color: rgba(232, 236, 246, 0.03); }
 .celda-numero { font-family: 'Sora', sans-serif; font-weight: 600; text-align: center; }
+.celda-numero .sub-celda { font-family: inherit; font-size: 0.72rem; font-weight: 500; color: #A6AFC6; white-space: nowrap; }
 
 .comercio-celda { display: flex; align-items: center; gap: 10px; min-width: 200px; }
 .comercio-iniciales {
