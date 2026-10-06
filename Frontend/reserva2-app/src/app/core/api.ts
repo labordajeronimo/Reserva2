@@ -191,6 +191,7 @@ export interface Ganancias {
 
 export interface WhatsAppConfig {
   activado: boolean;
+  enviadosDelMes: number;
 }
 
 // Cuenta de Mercado Pago del comercio para cobrar señas. "disponible" = Reserva2 ya tiene
@@ -308,6 +309,8 @@ export interface ComercioDetalle {
   id: number;
   addonCobrosOnline: boolean;      // extra "Cobros automáticos con Mercado Pago"
   mercadoPagoConectado: boolean;
+  whatsAppDelMes: number;
+  whatsAppMesAnterior: number;
   nombre: string;
   aliasUrl: string;
   tipoPlantilla: string;
@@ -365,6 +368,8 @@ export interface ComercioEstadistica {
   turnosMesAnterior: number;
   // Último login del dueño al panel (UTC); null si no entró desde que se registra.
   ultimoAcceso: string | null;
+  // WhatsApp que Meta aceptó enviar este mes (hora argentina) para el comercio.
+  whatsAppDelMes: number;
 }
 
 // Resumen del Super Admin (GET /admin/resumen).

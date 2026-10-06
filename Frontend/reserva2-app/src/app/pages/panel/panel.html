@@ -783,6 +783,7 @@
                 <h2>Aviso automático por WhatsApp</h2>
                 <div class="historial-cantidad">
                   <span class="badge" [class.estado-2]="w.activado" [class.estado-3]="!w.activado">{{ w.activado ? 'Activado' : 'Desactivado' }}</span>
+                  <span class="wa-enviados">{{ w.enviadosDelMes }} {{ w.enviadosDelMes === 1 ? 'aviso enviado' : 'avisos enviados' }} este mes</span>
                 </div>
               </div>
               <button class="switch" role="switch" [attr.aria-checked]="w.activado" [class.on]="w.activado"

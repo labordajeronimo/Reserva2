@@ -22,6 +22,7 @@ namespace Reserva2.Api.Data
         public DbSet<WhatsAppConfig> WhatsAppConfigs { get; set; }
         public DbSet<MrrSnapshot> MrrSnapshots { get; set; }
         public DbSet<Pago> Pagos { get; set; }
+        public DbSet<MensajeWhatsApp> MensajesWhatsApp { get; set; }
 
         // Solo se usa en tiempo de diseño (ej. `dotnet ef migrations add`), cuando nadie
         // pasó un DbContextOptions ya configurado desde Program.cs. Lee la misma
@@ -71,6 +72,7 @@ namespace Reserva2.Api.Data
             modelBuilder.Entity<Pago>().Property(p => p.Monto).HasPrecision(18, 2);
             modelBuilder.Entity<Turno>().Property(t => t.MontoMercadoPago).HasPrecision(18, 2);
             modelBuilder.Entity<Pago>().HasIndex(p => p.ComercioId);
+            modelBuilder.Entity<MensajeWhatsApp>().HasIndex(m => new { m.ComercioId, m.FechaEnvio });
         }
     }
 }
