@@ -598,12 +598,13 @@ export class Api {
     clienteWhatsApp: string;
     clienteEmail: string;
     profesionalId?: number | null;
+    sucursalId?: number | null; // para asignar un profesional de esa sucursal si el cliente no eligió
     comprobanteBase64?: string | null; // captura del comprobante, solo si el servicio pide seña
     medioSenia?: 'MercadoPago' | 'Transferencia' | null;
-  }): Observable<{ id: number; urlPago?: string }> {
+  }): Observable<{ id: number; urlPago?: string; profesionalId?: number | null }> {
     // Con seña por Mercado Pago la respuesta trae urlPago: el turno queda apartado hasta que
-    // el cliente pague ahí.
-    return this.http.post<{ id: number; urlPago?: string }>(`${API_BASE}/turnos`, turno);
+    // el cliente pague ahí. Sin urlPago trae el turno, con el profesional que se le asignó.
+    return this.http.post<{ id: number; urlPago?: string; profesionalId?: number | null }>(`${API_BASE}/turnos`, turno);
   }
 
   verificarPagoSenia(tokenTurno: string, pagoId: number | null): Observable<EstadoPagoSenia> {

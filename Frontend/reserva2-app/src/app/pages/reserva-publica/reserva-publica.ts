@@ -639,6 +639,7 @@ export class ReservaPublica implements OnInit {
       clienteWhatsApp: this.clienteWhatsApp.trim(),
       clienteEmail: this.clienteEmail.trim(),
       profesionalId: this.profesionalSeleccionado()?.id ?? null,
+      sucursalId: this.sucursalSeleccionada()?.id ?? null,
       comprobanteBase64: this.pideSenia() && !this.seniaPorMercadoPago() ? this.comprobanteBase64() : null,
       medioSenia: this.pideSenia() ? (this.seniaPorMercadoPago() ? 'MercadoPago' : 'Transferencia') : null
     }).subscribe({
@@ -650,7 +651,11 @@ export class ReservaPublica implements OnInit {
           return;
         }
         this.reservando.set(false);
-        this.reservaHecha.set(reservaHecha);
+        // Con "cualquiera disponible" el turno se asigna a un profesional: se muestra quién atiende.
+        const asignado = this.profesionales().find(p => p.id === respuesta.profesionalId);
+        this.reservaHecha.set(reservaHecha && asignado && !this.profesionalSeleccionado()
+          ? { ...reservaHecha, profesional: asignado.nombre }
+          : reservaHecha);
         this.reservaConfirmada.set(true);
         if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
         this.cargarResumenDias();

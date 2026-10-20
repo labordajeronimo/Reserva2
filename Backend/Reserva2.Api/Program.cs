@@ -283,6 +283,66 @@ async Task<List<Horario>> ObtenerBloquesHorario(AppDbContext context, int comerc
         .Where(h => h.ComercioId == comercioId && h.ProfesionalId == profesionalId && h.DiaSemana == diaSemana)
         .ToListAsync();
 
+// Cuando el cliente reserva con "cualquiera disponible", el turno se le asigna a uno de estos
+// profesionales (los del comercio, o de la sucursal elegida, que tienen horarios cargados) para
+// que figure en su agenda y en las estadísticas. Lista vacía (plan Gratuito, o ningún profesional
+// con horarios) = se sigue usando el horario general, con el turno sin profesional.
+async Task<List<int>> ProfesionalesParaAsignar(AppDbContext context, int comercioId, int? sucursalId) =>
+    await context.Profesionales
+        .Where(p => p.ComercioId == comercioId
+                 && (sucursalId == null || p.SucursalId == sucursalId)
+                 && context.Horarios.Any(h => h.ComercioId == comercioId && h.ProfesionalId == p.Id))
+        .OrderBy(p => p.Id)
+        .Select(p => p.Id)
+        .ToListAsync();
+
+// De los candidatos, el que tiene libre ese horario dentro de sus bloques; si hay varios, el que
+// tiene menos turnos ese día (así se reparte el trabajo). Null si ninguno está libre.
+async Task<int?> ElegirProfesionalLibre(AppDbContext context, int comercioId, List<int> candidatos, DateTime inicio, DateTime fin)
+{
+    var diaSemana = (int)inicio.DayOfWeek;
+    var bloques = await context.Horarios
+        .Where(h => h.ComercioId == comercioId && h.DiaSemana == diaSemana && h.ProfesionalId != null && candidatos.Contains(h.ProfesionalId.Value))
+        .ToListAsync();
+
+    var inicioDia = inicio.Date;
+    var finDia = inicioDia.AddDays(1);
+    var turnosDelDia = (await context.Turnos
+        .Where(t => t.ComercioId == comercioId && t.ProfesionalId != null && candidatos.Contains(t.ProfesionalId.Value)
+                 && t.FechaHoraInicio < finDia && t.FechaHoraFin > inicioDia)
+        .ToListAsync()).Where(OcupaHorario).ToList();
+
+    return candidatos
+        .Where(id => EstaDentroDeAlgunHorario(bloques.Where(b => b.ProfesionalId == id), inicio, fin)
+                  && !turnosDelDia.Any(t => t.ProfesionalId == id && t.FechaHoraInicio < fin && inicio < t.FechaHoraFin))
+        .OrderBy(id => turnosDelDia.Count(t => t.ProfesionalId == id))
+        .ThenBy(id => id)
+        .Select(id => (int?)id)
+        .FirstOrDefault();
+}
+
+// Arma la grilla de una agenda para un día: horarios que ya empezaron o que chocan con un turno
+// ocupado se muestran, pero no se pueden reservar.
+static List<SlotDisponibilidad> ArmarSlots(IEnumerable<Horario> bloques, IReadOnlyCollection<Turno> ocupados, DateOnly fecha, TimeSpan duracion, DateTime ahora)
+{
+    var slots = new List<SlotDisponibilidad>();
+    foreach (var bloque in bloques)
+    {
+        var cursor = fecha.ToDateTime(TimeOnly.FromTimeSpan(bloque.HoraInicio));
+        var finBloque = fecha.ToDateTime(TimeOnly.FromTimeSpan(bloque.HoraFin));
+
+        while (cursor + duracion <= finBloque)
+        {
+            var finSlot = cursor + duracion;
+            var chocaConOcupado = ocupados.Any(t => t.FechaHoraInicio < finSlot && cursor < t.FechaHoraFin);
+
+            slots.Add(new SlotDisponibilidad(cursor, finSlot, !chocaConOcupado && cursor > ahora));
+            cursor = finSlot;
+        }
+    }
+    return slots;
+}
+
 // El turno completo (inicio a fin) tiene que caer dentro de un único bloque horario, no a caballo de dos.
 static bool EstaDentroDeAlgunHorario(IEnumerable<Horario> bloques, DateTime inicio, DateTime fin)
 {
@@ -2223,44 +2283,52 @@ app.MapGet("/api/comercios/{comercioId:int}/disponibilidad", async (AppDbContext
     }
 
     var diaSemana = (int)fecha.DayOfWeek;
-    var bloques = await ObtenerBloquesHorario(context, comercioId, profesionalId, diaSemana);
-
-    if (bloques.Count == 0)
-        return Results.Ok(Array.Empty<SlotDisponibilidad>());
-
     var inicioDia = fecha.ToDateTime(TimeOnly.MinValue);
     var finDia = fecha.ToDateTime(TimeOnly.MaxValue);
-
-    var turnosDelDia = await context.Turnos
-        .Where(t => t.ComercioId == comercioId && t.ProfesionalId == profesionalId && t.FechaHoraInicio < finDia && t.FechaHoraFin > inicioDia)
-        .ToListAsync();
-
-    var ocupados = turnosDelDia.Where(OcupaHorario).ToList();
     var duracion = TimeSpan.FromMinutes(servicio.DuracionMinutos);
-    // Un servicio viejo con duración 0 (de antes de validarla) dejaría el loop de abajo sin avanzar nunca.
+    // Un servicio viejo con duración 0 (de antes de validarla) dejaría el armado de la grilla sin avanzar nunca.
     if (duracion <= TimeSpan.Zero)
         return Results.Ok(Array.Empty<SlotDisponibilidad>());
 
     // Los horarios que ya empezaron se muestran, pero no se pueden reservar.
     var ahora = AhoraArgentina();
 
-    var slots = new List<SlotDisponibilidad>();
-    foreach (var bloque in bloques)
+    // "Cualquiera disponible": un horario se puede reservar si al menos un profesional lo tiene
+    // libre (al reservar se le asigna a uno de ellos).
+    var candidatos = profesionalId is null ? await ProfesionalesParaAsignar(context, comercioId, sucursalId) : [];
+    if (candidatos.Count > 0)
     {
-        var cursor = fecha.ToDateTime(TimeOnly.FromTimeSpan(bloque.HoraInicio));
-        var finBloque = fecha.ToDateTime(TimeOnly.FromTimeSpan(bloque.HoraFin));
+        var bloquesProfesionales = await context.Horarios
+            .Where(h => h.ComercioId == comercioId && h.DiaSemana == diaSemana && h.ProfesionalId != null && candidatos.Contains(h.ProfesionalId.Value))
+            .ToListAsync();
+        var turnosProfesionales = (await context.Turnos
+            .Where(t => t.ComercioId == comercioId && t.ProfesionalId != null && candidatos.Contains(t.ProfesionalId.Value)
+                     && t.FechaHoraInicio < finDia && t.FechaHoraFin > inicioDia)
+            .ToListAsync()).Where(OcupaHorario).ToList();
 
-        while (cursor + duracion <= finBloque)
-        {
-            var finSlot = cursor + duracion;
-            var chocaConOcupado = ocupados.Any(t => t.FechaHoraInicio < finSlot && cursor < t.FechaHoraFin);
-
-            slots.Add(new SlotDisponibilidad(cursor, finSlot, !chocaConOcupado && cursor > ahora));
-            cursor = finSlot;
-        }
+        var union = candidatos
+            .SelectMany(id => ArmarSlots(
+                bloquesProfesionales.Where(b => b.ProfesionalId == id),
+                turnosProfesionales.Where(t => t.ProfesionalId == id).ToList(),
+                fecha, duracion, ahora))
+            .GroupBy(s => (s.Inicio, s.Fin))
+            .Select(g => new SlotDisponibilidad(g.Key.Inicio, g.Key.Fin, g.Any(s => s.Disponible)))
+            .OrderBy(s => s.Inicio).ThenBy(s => s.Fin)
+            .ToList();
+        return Results.Ok(union);
     }
 
-    return Results.Ok(slots);
+    var bloques = await ObtenerBloquesHorario(context, comercioId, profesionalId, diaSemana);
+
+    if (bloques.Count == 0)
+        return Results.Ok(Array.Empty<SlotDisponibilidad>());
+
+    var turnosDelDia = await context.Turnos
+        .Where(t => t.ComercioId == comercioId && t.ProfesionalId == profesionalId && t.FechaHoraInicio < finDia && t.FechaHoraFin > inicioDia)
+        .ToListAsync();
+
+    var ocupados = turnosDelDia.Where(OcupaHorario).ToList();
+    return Results.Ok(ArmarSlots(bloques, ocupados, fecha, duracion, ahora));
 });
 
 // ==========================================
@@ -2325,15 +2393,34 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
 
     var finTurno = req.FechaHoraInicio + TimeSpan.FromMinutes(servicio.DuracionMinutos);
 
-    var diaSemana = (int)req.FechaHoraInicio.DayOfWeek;
-    var bloques = await ObtenerBloquesHorario(context, req.ComercioId, req.ProfesionalId, diaSemana);
-    if (!EstaDentroDeAlgunHorario(bloques, req.FechaHoraInicio, finTurno))
-        return Results.Conflict(new { mensaje = "Ese horario ya no está disponible. Elegí otro." });
+    // Sin profesional elegido ("cualquiera disponible"), el turno se le asigna a un profesional
+    // libre en ese horario, así queda en su agenda y en las estadísticas.
+    var profesionalId = req.ProfesionalId;
+    var candidatos = profesionalId is null ? await ProfesionalesParaAsignar(context, req.ComercioId, req.SucursalId) : [];
+    if (candidatos.Count == 0)
+    {
+        var diaSemana = (int)req.FechaHoraInicio.DayOfWeek;
+        var bloques = await ObtenerBloquesHorario(context, req.ComercioId, profesionalId, diaSemana);
+        if (!EstaDentroDeAlgunHorario(bloques, req.FechaHoraInicio, finTurno))
+            return Results.Conflict(new { mensaje = "Ese horario ya no está disponible. Elegí otro." });
+    }
 
     // Desde acá hasta guardar, la agenda queda bloqueada: si dos personas reservan el mismo
     // horario en el mismo segundo, la segunda espera y ve el turno de la primera al chequear.
+    // Al asignar profesional se bloquean las agendas de todos los candidatos, siempre en el
+    // mismo orden (por Id) para que dos reservas simultáneas no se traben entre sí.
     await using var transaccion = await context.Database.BeginTransactionAsync();
-    await BloquearAgenda(context, req.ComercioId, req.ProfesionalId);
+    if (candidatos.Count > 0)
+    {
+        foreach (var candidato in candidatos) await BloquearAgenda(context, req.ComercioId, candidato);
+        profesionalId = await ElegirProfesionalLibre(context, req.ComercioId, candidatos, req.FechaHoraInicio, finTurno);
+        if (profesionalId is null)
+            return Results.Conflict(new { mensaje = "Ese horario ya no está disponible. Elegí otro." });
+    }
+    else
+    {
+        await BloquearAgenda(context, req.ComercioId, profesionalId);
+    }
 
     if (comercio.PlanActual == "Gratuito")
     {
@@ -2350,7 +2437,7 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
 
     var turnosQueChocan = await context.Turnos
         .Where(t => t.ComercioId == req.ComercioId
-                 && t.ProfesionalId == req.ProfesionalId
+                 && t.ProfesionalId == profesionalId
                  && t.FechaHoraInicio < finTurno
                  && t.FechaHoraFin > req.FechaHoraInicio)
         .ToListAsync();
@@ -2362,7 +2449,7 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
     {
         ComercioId = req.ComercioId,
         ServicioId = req.ServicioId,
-        ProfesionalId = req.ProfesionalId,
+        ProfesionalId = profesionalId,
         FechaHoraInicio = req.FechaHoraInicio,
         FechaHoraFin = finTurno,
         ClienteNombre = nombreCliente,
@@ -2656,11 +2743,13 @@ app.MapGet("/api/comercios/{comercioId:int}/ganancias", async (AppDbContext cont
         .Select(x => new ClienteReactivarDto(x.Nombre, x.CantidadTurnos, DateOnly.FromDateTime(x.UltimaVisita)))
         .ToList();
 
+    // Turnos sin profesional (de antes de asignarlos solos, o cargados así a mano) y de
+    // profesionales ya borrados van todos a una única fila "Sin asignar", como en la agenda.
     var porProfesional = turnosDelPeriodo
-        .GroupBy(t => t.ProfesionalId)
+        .GroupBy(t => t.ProfesionalId is not null && nombresPorId.ContainsKey(t.ProfesionalId.Value) ? t.ProfesionalId : null)
         .Select(g => new GananciaPorProfesionalDto(
             g.Key,
-            g.Key is not null && nombresPorId.TryGetValue(g.Key.Value, out var nombre) ? nombre : "Sin profesional asignado",
+            g.Key is not null ? nombresPorId[g.Key.Value] : "Sin asignar",
             g.Count(),
             g.Sum(t => t.MontoCobrado ?? 0)))
         .OrderByDescending(x => x.Ingresos)
@@ -3408,7 +3497,7 @@ record SlotDisponibilidad(DateTime Inicio, DateTime Fin, bool Disponible);
 // ComprobanteBase64: captura del comprobante de la seña (PNG, JPG o WEBP, hasta 5MB), en
 // base64 con o sin el prefijo "data:image/...;base64,". Obligatorio solo si el servicio
 // tiene seña; se ignora si no la tiene.
-record CrearTurnoRequest(int ComercioId, int ServicioId, DateTime FechaHoraInicio, string ClienteNombre, string ClienteWhatsApp, string ClienteEmail, int? ProfesionalId = null, string? ComprobanteBase64 = null, string? MedioSenia = null);
+record CrearTurnoRequest(int ComercioId, int ServicioId, DateTime FechaHoraInicio, string ClienteNombre, string ClienteWhatsApp, string ClienteEmail, int? ProfesionalId = null, string? ComprobanteBase64 = null, string? MedioSenia = null, int? SucursalId = null);
 record AdminCrearTurnoRequest(int ServicioId, DateTime FechaHoraInicio, string ClienteNombre, string? ClienteWhatsApp, string? ClienteEmail, int? ProfesionalId = null);
 record HistorialItemDto(int Id, DateTime FechaHoraInicio, string ClienteNombre, string ServicioNombre, decimal Monto);
 record HistorialDto(List<HistorialItemDto> Items, decimal TotalHoy, decimal TotalSemana, decimal TotalMes);
