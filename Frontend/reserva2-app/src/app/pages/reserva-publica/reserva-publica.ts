@@ -21,6 +21,9 @@ interface ReservaHecha {
   seniaMercadoPago: boolean;
   pagoCompleto: boolean; // por Mercado Pago se pagó el servicio entero, no solo la seña
   linkCalendario: string;
+  // wa.me al WhatsApp del comercio con el turno ya escrito, para que el cliente se lo mande
+  // (le queda el registro en el chat a los dos). Null si el comercio no cargó teléfono.
+  linkWhatsApp: string | null;
 }
 
 // La reserva con seña por Mercado Pago se termina en el checkout de Mercado Pago (otra
@@ -342,7 +345,8 @@ export class ReservaPublica implements OnInit {
       seniaMercadoPago: this.seniaPorMercadoPago(),
       pagoCompleto: this.seniaPorMercadoPago() && this.pagoCompletoMercadoPago(),
       linkCalendario: this.linkGoogleCalendar(slot.inicio, slot.fin, `${servicio.nombre} en ${comercio.nombre}`, ubicacion,
-        `Turno reservado con Reserva2.${profesional ? ' Te atiende ' + profesional.nombre + '.' : ''}`)
+        `Turno reservado con Reserva2.${profesional ? ' Te atiende ' + profesional.nombre + '.' : ''}`),
+      linkWhatsApp: this.linkWhatsAppComercio(this.mensajeWhatsAppReserva(comercio, servicio, profesional, sucursal))
     };
   }
 
@@ -610,13 +614,33 @@ export class ReservaPublica implements OnInit {
 
   // Link wa.me al WhatsApp del comercio. Mismo formato que usa el backend para enviar
   // WhatsApp (FormatearNumeroWhatsApp): solo dígitos, con 54 y el 9 de celular adelante.
-  linkWhatsAppComercio(): string | null {
+  linkWhatsAppComercio(mensaje?: string): string | null {
     const telefono = this.comercio()?.telefonoNotificaciones ?? '';
     let numero = telefono.replace(/\D/g, '');
     if (!numero) return null;
     if (!numero.startsWith('54')) numero = '54' + numero;
     if (numero[2] !== '9') numero = numero.slice(0, 2) + '9' + numero.slice(2);
-    return `https://wa.me/${numero}`;
+    return mensaje ? `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}` : `https://wa.me/${numero}`;
+  }
+
+  // Texto del aviso de reserva que el cliente le manda al comercio por WhatsApp.
+  private mensajeWhatsAppReserva(comercio: ComercioPublico, servicio: Servicio, profesional: Profesional | null, sucursal: Sucursal | null): string {
+    const formato = (n: number) => `$${n.toLocaleString('es-AR')}`;
+    const lineas = [
+      `¡Hola! Reservé un turno en *${comercio.nombre}*`,
+      `📅 ${this.diaLargoSeleccionado()}, ${this.textoHorarioSeleccionado()}`,
+      `✂️ ${servicio.nombre}${profesional ? ' con ' + profesional.nombre : ''}`
+    ];
+    if (sucursal) lineas.push(`📍 ${sucursal.nombre}${sucursal.direccion ? ' (' + sucursal.direccion + ')' : ''}`);
+    lineas.push(`👤 ${this.clienteNombre.trim()} · ${this.clienteWhatsApp.trim()}`);
+    if (this.seniaPorMercadoPago()) {
+      const monto = this.montoMercadoPago() ?? 0;
+      lineas.push(`💳 ${this.pagoCompletoMercadoPago() ? 'Turno pagado' : 'Seña pagada'} por Mercado Pago: ${formato(monto)}`);
+    } else if (this.pideSenia()) {
+      lineas.push(`💳 Seña de ${formato(servicio.montoSeña ?? 0)} por transferencia, ya subí el comprobante.`);
+    }
+    lineas.push('', 'Reservado en reservados2.com');
+    return lineas.join('\n');
   }
 
   confirmarReserva(): void {
