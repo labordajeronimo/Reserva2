@@ -23,7 +23,8 @@ interface ReservaHecha {
   pagoCompleto: boolean; // por Mercado Pago se pagó el servicio entero, no solo la seña
   linkCalendario: string;
   // wa.me al WhatsApp del comercio con el turno ya escrito, para que el cliente se lo mande
-  // (le queda el registro en el chat a los dos). Null si el comercio no cargó teléfono.
+  // (le queda el registro en el chat a los dos). Null si el comercio no es Premium o no
+  // cargó teléfono.
   linkWhatsApp: string | null;
 }
 
@@ -347,7 +348,7 @@ export class ReservaPublica implements OnInit {
       pagoCompleto: this.seniaPorMercadoPago() && this.pagoCompletoMercadoPago(),
       linkCalendario: this.linkGoogleCalendar(slot.inicio, slot.fin, `${servicio.nombre} en ${comercio.nombre}`, ubicacion,
         `Turno reservado con Reserva2.${profesional ? ' Te atiende ' + profesional.nombre + '.' : ''}`),
-      linkWhatsApp: this.linkWhatsAppComercio(this.mensajeWhatsAppReserva(comercio, servicio, profesional, sucursal))
+      linkWhatsApp: comercio.avisoWhatsAppReserva ? this.linkWhatsAppComercio(this.mensajeWhatsAppReserva(comercio, servicio, profesional, sucursal)) : null
     };
   }
 

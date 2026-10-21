@@ -29,7 +29,9 @@ export interface ComercioPublico {
   señaTransferencia: boolean;
   // true = por Mercado Pago se cobra el servicio completo (no la seña).
   cobroMercadoPagoTotal: boolean;
-  // Mensaje del botón de WhatsApp de la confirmación; null = el texto por defecto.
+  // Botón "Avisar al comercio por WhatsApp" en la confirmación (solo Premium) y su mensaje;
+  // null = el texto por defecto.
+  avisoWhatsAppReserva: boolean;
   mensajeWhatsAppReserva: string | null;
 }
 
