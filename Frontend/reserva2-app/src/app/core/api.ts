@@ -29,6 +29,8 @@ export interface ComercioPublico {
   señaTransferencia: boolean;
   // true = por Mercado Pago se cobra el servicio completo (no la seña).
   cobroMercadoPagoTotal: boolean;
+  // Mensaje del botón de WhatsApp de la confirmación; null = el texto por defecto.
+  mensajeWhatsAppReserva: string | null;
 }
 
 export interface Servicio {
@@ -428,6 +430,14 @@ export class Api {
 
   actualizarPerfil(comercioId: number, datos: { nombre: string; telefonoNotificaciones: string; datosBancarios: string }): Observable<Perfil> {
     return this.http.patch<Perfil>(`${API_BASE}/comercios/${comercioId}/perfil`, datos);
+  }
+
+  getMensajeWhatsAppReserva(comercioId: number): Observable<{ mensaje: string | null }> {
+    return this.http.get<{ mensaje: string | null }>(`${API_BASE}/comercios/${comercioId}/mensaje-whatsapp`);
+  }
+
+  guardarMensajeWhatsAppReserva(comercioId: number, mensaje: string | null): Observable<{ mensaje: string | null }> {
+    return this.http.put<{ mensaje: string | null }>(`${API_BASE}/comercios/${comercioId}/mensaje-whatsapp`, { mensaje });
   }
 
   cambiarPassword(comercioId: number, passwordActual: string, passwordNueva: string): Observable<{ mensaje: string }> {
