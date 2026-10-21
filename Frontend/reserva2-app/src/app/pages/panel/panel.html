@@ -972,6 +972,42 @@
       </div>
 
       <div class="panel-card turnos-card turno-manual-card">
+        <h2>Mensaje de WhatsApp al reservar</h2>
+        <p class="sub-info">Cuando un cliente reserva, le aparece un botón para avisarte por WhatsApp con este mensaje ya escrito. Si lo dejás vacío, usamos el mensaje por defecto.</p>
+
+        <div class="field">
+          <label for="mensaje-reserva">Tu mensaje</label>
+          <textarea id="mensaje-reserva" #textareaMensaje rows="6" class="mensaje-reserva-textarea"
+                    [maxlength]="largoMaximoMensajeReserva"
+                    placeholder="Ej: Hola! Soy {cliente}, reservé {servicio} para el {fecha} a las {hora}."
+                    [ngModel]="mensajeReserva()" (ngModelChange)="mensajeReserva.set($event); mensajeReservaGuardadoOk.set(false)"></textarea>
+        </div>
+        <p class="sub-info">Tocá un dato para sumarlo al mensaje:</p>
+        <div class="fila-chips mensaje-reserva-variables">
+          @for (v of variablesMensajeReserva; track v.clave) {
+            <button type="button" class="chip chip-variable" [title]="v.descripcion" (click)="insertarVariableMensaje(textareaMensaje, v.clave)">{{ v.descripcion }}</button>
+          }
+        </div>
+
+        <div class="mensaje-reserva-preview">
+          <div class="mensaje-reserva-preview-titulo">Así lo recibís (con datos de ejemplo)</div>
+          <div class="mensaje-reserva-burbuja">{{ vistaPreviaMensajeReserva() }}</div>
+        </div>
+
+        @if (errorMensajeReserva()) { <div class="error-msg">{{ errorMensajeReserva() }}</div> }
+        @if (mensajeReservaGuardadoOk()) { <div class="ok-msg ok-msg-form">¡Listo! Guardamos tu mensaje.</div> }
+
+        <div class="mensaje-reserva-acciones">
+          <button class="btn-naranja" [disabled]="guardandoMensajeReserva()" (click)="guardarMensajeReserva()">
+            {{ guardandoMensajeReserva() ? 'Guardando...' : 'Guardar mensaje' }}
+          </button>
+          @if (mensajeReserva()) {
+            <button class="btn-sec" type="button" [disabled]="guardandoMensajeReserva()" (click)="guardarMensajeReserva(true)">Usar el mensaje por defecto</button>
+          }
+        </div>
+      </div>
+
+      <div class="panel-card turnos-card turno-manual-card">
         <h2>Cobrar con Mercado Pago</h2>
         <p class="sub-info">Conectá tu cuenta y tus clientes pagan la seña o el turno completo (vos elegís) con tarjeta o dinero en cuenta al reservar. La plata va directo a tu Mercado Pago y el turno se confirma solo, sin revisar comprobantes.</p>
 

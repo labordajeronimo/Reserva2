@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { catchError, forkJoin, of } from 'rxjs';
 
 import { Api, ComercioPublico, Servicio, SlotDisponibilidad, Sucursal, Profesional, urlArchivo } from '../../core/api';
+import { armarMensajeReserva } from '../../core/whatsapp';
 
 // Foto de la reserva recién hecha para la pantalla de confirmación (el formulario se puede
 // resetear con "Reservar otro turno" sin perder lo que se muestra).
@@ -623,24 +624,28 @@ export class ReservaPublica implements OnInit {
     return mensaje ? `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}` : `https://wa.me/${numero}`;
   }
 
-  // Texto del aviso de reserva que el cliente le manda al comercio por WhatsApp.
+  // Texto del aviso de reserva que el cliente le manda al comercio por WhatsApp: el que
+  // escribió el comercio en su perfil, o el armado por defecto.
   private mensajeWhatsAppReserva(comercio: ComercioPublico, servicio: Servicio, profesional: Profesional | null, sucursal: Sucursal | null): string {
     const formato = (n: number) => `$${n.toLocaleString('es-AR')}`;
-    const lineas = [
-      `¡Hola! Reservé un turno en *${comercio.nombre}*`,
-      `📅 ${this.diaLargoSeleccionado()}, ${this.textoHorarioSeleccionado()}`,
-      `✂️ ${servicio.nombre}${profesional ? ' con ' + profesional.nombre : ''}`
-    ];
-    if (sucursal) lineas.push(`📍 ${sucursal.nombre}${sucursal.direccion ? ' (' + sucursal.direccion + ')' : ''}`);
-    lineas.push(`👤 ${this.clienteNombre.trim()} · ${this.clienteWhatsApp.trim()}`);
+    const slot = this.slotSeleccionado();
+    let sena = '';
     if (this.seniaPorMercadoPago()) {
-      const monto = this.montoMercadoPago() ?? 0;
-      lineas.push(`💳 ${this.pagoCompletoMercadoPago() ? 'Turno pagado' : 'Seña pagada'} por Mercado Pago: ${formato(monto)}`);
+      sena = `${this.pagoCompletoMercadoPago() ? 'Turno pagado' : 'Seña pagada'} por Mercado Pago: ${formato(this.montoMercadoPago() ?? 0)}`;
     } else if (this.pideSenia()) {
-      lineas.push(`💳 Seña de ${formato(servicio.montoSeña ?? 0)} por transferencia, ya subí el comprobante.`);
+      sena = `Seña de ${formato(servicio.montoSeña ?? 0)} por transferencia (ya subí el comprobante)`;
     }
-    lineas.push('', 'Reservado en reservados2.com');
-    return lineas.join('\n');
+    return armarMensajeReserva(comercio.mensajeWhatsAppReserva, {
+      comercio: comercio.nombre,
+      cliente: this.clienteNombre.trim(),
+      whatsapp: this.clienteWhatsApp.trim(),
+      fecha: this.diaLargoSeleccionado(),
+      hora: slot ? this.formatearHora(slot.inicio) : '',
+      servicio: servicio.nombre,
+      profesional: profesional?.nombre ?? '',
+      local: sucursal ? `${sucursal.nombre}${sucursal.direccion ? ' (' + sucursal.direccion + ')' : ''}` : '',
+      sena
+    });
   }
 
   confirmarReserva(): void {
