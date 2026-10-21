@@ -770,17 +770,53 @@
         <div class="panel-card turnos-card upsell-premium">
           <span class="chip chip-premium">Premium</span>
           <h2>Aviso por WhatsApp</h2>
-          <p class="sub-info">Esto es parte del plan Premium. Si actualizás tu plan, tus clientes reciben un aviso automático por WhatsApp con los datos de su turno.</p>
+          <p class="sub-info">Esto es parte del plan Premium. Si actualizás tu plan, cada cliente que reserva te avisa por WhatsApp con los datos de su turno, con un mensaje que escribís vos.</p>
           <button class="btn-naranja" (click)="abrirTab('plan')">Actualizar mi plan</button>
         </div>
       } @else {
+        <div class="panel-card turnos-card turno-manual-card">
+          <h2>Mensaje de WhatsApp al reservar</h2>
+          <p class="sub-info">Cuando un cliente reserva desde tu página, le aparece un botón para mandarte este mensaje a tu WhatsApp ({{ sesion.telefonoNotificaciones || 'cargalo en Perfil' }}). Así les queda el turno en el chat a los dos. Si lo dejás vacío, usamos el mensaje por defecto.</p>
+
+          <div class="field">
+            <label for="mensaje-reserva">Tu mensaje</label>
+            <textarea id="mensaje-reserva" #textareaMensaje rows="6" class="mensaje-reserva-textarea"
+                      [maxlength]="largoMaximoMensajeReserva"
+                      placeholder="Ej: Hola! Soy {cliente}, reservé {servicio} para el {fecha} a las {hora}."
+                      [ngModel]="mensajeReserva()" (ngModelChange)="mensajeReserva.set($event); mensajeReservaGuardadoOk.set(false)"></textarea>
+          </div>
+          <p class="sub-info">Tocá un dato para sumarlo al mensaje:</p>
+          <div class="fila-chips mensaje-reserva-variables">
+            @for (v of variablesMensajeReserva; track v.clave) {
+              <button type="button" class="chip chip-variable" [title]="v.descripcion" (click)="insertarVariableMensaje(textareaMensaje, v.clave)">{{ v.descripcion }}</button>
+            }
+          </div>
+
+          <div class="mensaje-reserva-preview">
+            <div class="mensaje-reserva-preview-titulo">Así lo recibís (con datos de ejemplo)</div>
+            <div class="mensaje-reserva-burbuja">{{ vistaPreviaMensajeReserva() }}</div>
+          </div>
+
+          @if (errorMensajeReserva()) { <div class="error-msg">{{ errorMensajeReserva() }}</div> }
+          @if (mensajeReservaGuardadoOk()) { <div class="ok-msg ok-msg-form">¡Listo! Guardamos tu mensaje.</div> }
+
+          <div class="mensaje-reserva-acciones">
+            <button class="btn-naranja" [disabled]="guardandoMensajeReserva()" (click)="guardarMensajeReserva()">
+              {{ guardandoMensajeReserva() ? 'Guardando...' : 'Guardar mensaje' }}
+            </button>
+            @if (mensajeReserva()) {
+              <button class="btn-sec" type="button" [disabled]="guardandoMensajeReserva()" (click)="guardarMensajeReserva(true)">Usar el mensaje por defecto</button>
+            }
+          </div>
+        </div>
+
         <div class="panel-card turnos-card">
           @if (errorWhatsApp()) { <div class="error-msg">{{ errorWhatsApp() }}</div> }
 
           @if (whatsappConfig(); as w) {
             <div class="wa-cabecera">
               <div>
-                <h2>Aviso automático por WhatsApp</h2>
+                <h2>Aviso automático por WhatsApp <span class="chip">Próximamente</span></h2>
                 <div class="historial-cantidad">
                   <span class="badge" [class.estado-2]="w.activado" [class.estado-3]="!w.activado">{{ w.activado ? 'Activado' : 'Desactivado' }}</span>
                   <span class="wa-enviados">{{ w.enviadosDelMes }} {{ w.enviadosDelMes === 1 ? 'aviso enviado' : 'avisos enviados' }} este mes</span>
@@ -969,42 +1005,6 @@
         <button class="btn-naranja" [disabled]="guardandoPerfil()" (click)="guardarPerfil()">
           {{ guardandoPerfil() ? 'Guardando...' : 'Guardar cambios' }}
         </button>
-      </div>
-
-      <div class="panel-card turnos-card turno-manual-card">
-        <h2>Mensaje de WhatsApp al reservar</h2>
-        <p class="sub-info">Cuando un cliente reserva, le aparece un botón para avisarte por WhatsApp con este mensaje ya escrito. Si lo dejás vacío, usamos el mensaje por defecto.</p>
-
-        <div class="field">
-          <label for="mensaje-reserva">Tu mensaje</label>
-          <textarea id="mensaje-reserva" #textareaMensaje rows="6" class="mensaje-reserva-textarea"
-                    [maxlength]="largoMaximoMensajeReserva"
-                    placeholder="Ej: Hola! Soy {cliente}, reservé {servicio} para el {fecha} a las {hora}."
-                    [ngModel]="mensajeReserva()" (ngModelChange)="mensajeReserva.set($event); mensajeReservaGuardadoOk.set(false)"></textarea>
-        </div>
-        <p class="sub-info">Tocá un dato para sumarlo al mensaje:</p>
-        <div class="fila-chips mensaje-reserva-variables">
-          @for (v of variablesMensajeReserva; track v.clave) {
-            <button type="button" class="chip chip-variable" [title]="v.descripcion" (click)="insertarVariableMensaje(textareaMensaje, v.clave)">{{ v.descripcion }}</button>
-          }
-        </div>
-
-        <div class="mensaje-reserva-preview">
-          <div class="mensaje-reserva-preview-titulo">Así lo recibís (con datos de ejemplo)</div>
-          <div class="mensaje-reserva-burbuja">{{ vistaPreviaMensajeReserva() }}</div>
-        </div>
-
-        @if (errorMensajeReserva()) { <div class="error-msg">{{ errorMensajeReserva() }}</div> }
-        @if (mensajeReservaGuardadoOk()) { <div class="ok-msg ok-msg-form">¡Listo! Guardamos tu mensaje.</div> }
-
-        <div class="mensaje-reserva-acciones">
-          <button class="btn-naranja" [disabled]="guardandoMensajeReserva()" (click)="guardarMensajeReserva()">
-            {{ guardandoMensajeReserva() ? 'Guardando...' : 'Guardar mensaje' }}
-          </button>
-          @if (mensajeReserva()) {
-            <button class="btn-sec" type="button" [disabled]="guardandoMensajeReserva()" (click)="guardarMensajeReserva(true)">Usar el mensaje por defecto</button>
-          }
-        </div>
       </div>
 
       <div class="panel-card turnos-card turno-manual-card">

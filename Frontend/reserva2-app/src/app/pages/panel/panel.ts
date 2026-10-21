@@ -105,7 +105,7 @@ export class Panel {
   avisoMercadoPago = signal<string | null>(null);
   private mercadoPagoCargadoAlMenosUnaVez = false;
 
-  // --- Mensaje del botón de WhatsApp de la confirmación de reserva, en Perfil ---
+  // --- Mensaje del botón de WhatsApp de la confirmación de reserva, en la pestaña WhatsApp ---
   readonly variablesMensajeReserva = VARIABLES_MENSAJE_RESERVA;
   readonly largoMaximoMensajeReserva = 1000;
   mensajeReserva = signal('');
@@ -788,7 +788,7 @@ export class Panel {
       this.cargarPagoRenovacion();
     }
     if (tab === 'perfil' && !this.mercadoPagoCargadoAlMenosUnaVez) this.cargarMercadoPago();
-    if (tab === 'perfil' && !this.mensajeReservaCargado) this.cargarMensajeReserva();
+    if (tab === 'whatsapp' && this.esPremium() && !this.mensajeReservaCargado) this.cargarMensajeReserva();
   }
 
   // ================= MI PLAN =================
