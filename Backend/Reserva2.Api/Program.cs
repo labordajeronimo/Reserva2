@@ -209,7 +209,6 @@ const int DuracionTokenHoras = 24;
 const int HorasMinimasParaCancelar = 2;
 const int LargoMinimoPassword = 8;
 const int LargoMaximoNombreCliente = 80;
-const int LargoMaximoMensajeWhatsAppReserva = 1000;
 // Valores de Turno.Origen.
 const string OrigenPaginaPublica = "PaginaPublica";
 const string OrigenPanel = "Panel";
@@ -1835,7 +1834,7 @@ app.MapGet("/api/comercios/alias/{alias}", async (AppDbContext context, string a
         comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.TipoPlantilla, comercio.TelefonoNotificaciones, comercio.LogoUrl, whatsAppActivo,
         comercio.DatosBancarios, CobraSeniaPorMercadoPago(comercio), comercio.SeñaPorTransferencia || !CobraSeniaPorMercadoPago(comercio),
         CobraSeniaPorMercadoPago(comercio) && comercio.CobroMercadoPagoTotal,
-        comercio.PlanActual == "Premium", comercio.PlanActual == "Premium" ? comercio.MensajeWhatsAppReserva : null));
+        comercio.PlanActual == "Premium"));
 });
 
 // El cambio de plan ya no es autogestionado: el dueño lo pide por WhatsApp desde "Mi plan"
@@ -1861,33 +1860,6 @@ app.MapPatch("/api/comercios/{comercioId:int}/perfil", async (AppDbContext conte
     await context.SaveChangesAsync();
 
     return Results.Ok(new PerfilDto(comercio.Nombre, comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.LogoUrl));
-}).RequireAuthorization("AdminCliente");
-
-// Mensaje del botón "Avisar al comercio por WhatsApp" de la confirmación de reserva (solo
-// Premium). Lo escribe el dueño desde la pestaña WhatsApp; vacío vuelve al texto por defecto.
-app.MapGet("/api/comercios/{comercioId:int}/mensaje-whatsapp", async (AppDbContext context, int comercioId, ClaimsPrincipal user) =>
-{
-    if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
-    var comercio = await context.Comercios.FindAsync(comercioId);
-    if (comercio is null) return Results.NotFound();
-    return Results.Ok(new MensajeWhatsAppReservaDto(comercio.MensajeWhatsAppReserva));
-}).RequireAuthorization("AdminCliente");
-
-app.MapPut("/api/comercios/{comercioId:int}/mensaje-whatsapp", async (AppDbContext context, int comercioId, MensajeWhatsAppReservaDto req, ClaimsPrincipal user) =>
-{
-    if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
-    var mensaje = req.Mensaje?.Trim();
-    if (mensaje?.Length > LargoMaximoMensajeWhatsAppReserva)
-        return Results.BadRequest(new { mensaje = $"El mensaje puede tener hasta {LargoMaximoMensajeWhatsAppReserva} caracteres." });
-
-    var comercio = await context.Comercios.FindAsync(comercioId);
-    if (comercio is null) return Results.NotFound();
-    if (comercio.PlanActual != "Premium")
-        return Results.BadRequest(new { mensaje = "El aviso por WhatsApp al reservar es parte del plan Premium." });
-
-    comercio.MensajeWhatsAppReserva = string.IsNullOrEmpty(mensaje) ? null : mensaje;
-    await context.SaveChangesAsync();
-    return Results.Ok(new MensajeWhatsAppReservaDto(comercio.MensajeWhatsAppReserva));
 }).RequireAuthorization("AdminCliente");
 
 // Cambiar contraseña estando logueado (distinto del flujo de "olvidé mi contraseña").
@@ -3471,7 +3443,7 @@ app.Run();
 // (Acá es donde tienen que ir los 'record' y 'class' para que C# 9+ no tire error CS8803)
 // ==========================================
 record ComercioPublicoDto(int Id, string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string? LogoUrl, bool WhatsAppActivo, string DatosBancarios,
-    bool SeñaMercadoPago, bool SeñaTransferencia, bool CobroMercadoPagoTotal, bool AvisoWhatsAppReserva, string? MensajeWhatsAppReserva);
+    bool SeñaMercadoPago, bool SeñaTransferencia, bool CobroMercadoPagoTotal, bool AvisoWhatsAppReserva);
 record ComercioDto(int Id, string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones,
     string DatosBancarios, string Email, bool Activo, string PlanActual, DateTime? FechaProximoPago, decimal? MontoMensualAcordado, string CicloFacturacion);
 record ActualizarEstadoRequest(bool Activo);
@@ -3508,7 +3480,6 @@ record ComercioDetalleDto(
 record RegistroRequest(string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string DatosBancarios, string Email, string Password, string? PlanActual = null, string? CicloFacturacion = null, int? CantidadProfesionales = null, int? CantidadSucursales = null);
 record PerfilRequest(string Nombre, string TelefonoNotificaciones, string DatosBancarios);
 record PerfilDto(string Nombre, string TelefonoNotificaciones, string DatosBancarios, string? LogoUrl);
-record MensajeWhatsAppReservaDto(string? Mensaje);
 record EditarServicioRequest(string Nombre, int DuracionMinutos, decimal Precio, decimal? MontoSeña);
 record CambiarPasswordRequest(string PasswordActual, string PasswordNueva);
 record TurnoPorTokenDto(int Id, string NombreComercio, string NombreServicio, DateTime FechaHoraInicio, int EstadoReserva,

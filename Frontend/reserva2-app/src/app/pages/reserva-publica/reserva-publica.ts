@@ -5,7 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { catchError, forkJoin, of } from 'rxjs';
 
 import { Api, ComercioPublico, Servicio, SlotDisponibilidad, Sucursal, Profesional, urlArchivo } from '../../core/api';
-import { armarMensajeReserva } from '../../core/whatsapp';
+import { mensajeReserva } from '../../core/whatsapp';
 
 // Foto de la reserva recién hecha para la pantalla de confirmación (el formulario se puede
 // resetear con "Reservar otro turno" sin perder lo que se muestra).
@@ -625,8 +625,7 @@ export class ReservaPublica implements OnInit {
     return mensaje ? `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}` : `https://wa.me/${numero}`;
   }
 
-  // Texto del aviso de reserva que el cliente le manda al comercio por WhatsApp: el que
-  // escribió el comercio en su perfil, o el armado por defecto.
+  // Texto del aviso de reserva que el cliente le manda al comercio por WhatsApp.
   private mensajeWhatsAppReserva(comercio: ComercioPublico, servicio: Servicio, profesional: Profesional | null, sucursal: Sucursal | null): string {
     const formato = (n: number) => `$${n.toLocaleString('es-AR')}`;
     const slot = this.slotSeleccionado();
@@ -636,7 +635,7 @@ export class ReservaPublica implements OnInit {
     } else if (this.pideSenia()) {
       sena = `Seña de ${formato(servicio.montoSeña ?? 0)} por transferencia (ya subí el comprobante)`;
     }
-    return armarMensajeReserva(comercio.mensajeWhatsAppReserva, {
+    return mensajeReserva({
       comercio: comercio.nombre,
       cliente: this.clienteNombre.trim(),
       whatsapp: this.clienteWhatsApp.trim(),

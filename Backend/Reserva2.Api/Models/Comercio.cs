@@ -13,10 +13,6 @@ namespace Reserva2.Api.Models
         public string TelefonoNotificaciones { get; set; } = string.Empty;
         public string DatosBancarios { get; set; } = string.Empty;
 
-        // Mensaje que el cliente le manda al comercio por WhatsApp desde la confirmación de la
-        // reserva, con variables tipo {cliente} o {fecha}. Null = el texto armado por defecto.
-        public string? MensajeWhatsAppReserva { get; set; }
-
         // Ruta relativa al logo subido (ej. "/uploads/logos/12.png"). Null si no cargó uno,
         // en cuyo caso la página pública sigue mostrando las iniciales del negocio.
         public string? LogoUrl { get; set; }

@@ -984,20 +984,10 @@ button.inicio-fila:hover { border-color: rgba(232, 236, 246, 0.2); border-left-c
 .mp-cobro button { border: 0; background: transparent; color: #A6AFC6; font: inherit; font-size: 0.82rem; font-weight: 600; padding: 7px 12px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
 .mp-cobro button.activo { background: #F97316; color: #FFFFFF; }
 
-/* Mensaje de WhatsApp al reservar (Perfil) */
-.mensaje-reserva-textarea {
-  width: 100%; padding: 11px 13px; border-radius: 10px; border: 1px solid rgba(232, 236, 246, 0.14);
-  font-size: 0.9rem; background: #10172B; color: #E8ECF6; font-family: inherit; resize: vertical; line-height: 1.45;
-}
-.mensaje-reserva-textarea::placeholder { color: #6B748A; }
-.mensaje-reserva-textarea:focus { outline: 2px solid #FB923C; outline-offset: 1px; border-color: rgba(249, 115, 22, 0.6); }
-.mensaje-reserva-variables { margin: 0 0 16px; }
-.chip-variable { cursor: pointer; font-family: inherit; }
-.chip-variable:hover { border-color: rgba(52, 211, 153, 0.45); color: #6EE7B7; }
-.mensaje-reserva-preview { margin-bottom: 16px; }
+/* Aviso por WhatsApp al reservar (pestaña WhatsApp) */
+.mensaje-reserva-preview { margin-top: 4px; }
 .mensaje-reserva-preview-titulo { font-family: 'Sora', sans-serif; font-size: 0.8rem; font-weight: 600; color: #A6AFC6; margin-bottom: 6px; }
 .mensaje-reserva-burbuja {
   white-space: pre-wrap; word-break: break-word; max-width: 420px; padding: 10px 12px; border-radius: 12px 12px 12px 4px;
   background: #134D37; color: #E8ECF6; font-size: 0.88rem; line-height: 1.45;
 }
-.mensaje-reserva-acciones { display: flex; gap: 10px; flex-wrap: wrap; }

@@ -5,7 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { Api, Turno, Servicio, Horario, Profesional, Sucursal, LoginResponse, Historial, Ganancias, WhatsAppConfig, Resumen, MercadoPagoConfig, urlArchivo } from '../../core/api';
 import { Session } from '../../core/session';
-import { linkWhatsApp, armarMensajeReserva, VARIABLES_MENSAJE_RESERVA, EJEMPLO_DATOS_MENSAJE_RESERVA } from '../../core/whatsapp';
+import { linkWhatsApp, mensajeReserva, EJEMPLO_DATOS_MENSAJE_RESERVA } from '../../core/whatsapp';
 import { PlanSelector } from '../../shared/plan-selector/plan-selector';
 
 type TabPanel = 'inicio' | 'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'sucursales' | 'historial' | 'ganancias' | 'whatsapp' | 'plan' | 'perfil';
@@ -105,16 +105,10 @@ export class Panel {
   avisoMercadoPago = signal<string | null>(null);
   private mercadoPagoCargadoAlMenosUnaVez = false;
 
-  // --- Mensaje del botón de WhatsApp de la confirmación de reserva, en la pestaña WhatsApp ---
-  readonly variablesMensajeReserva = VARIABLES_MENSAJE_RESERVA;
-  readonly largoMaximoMensajeReserva = 1000;
-  mensajeReserva = signal('');
-  guardandoMensajeReserva = signal(false);
-  errorMensajeReserva = signal<string | null>(null);
-  mensajeReservaGuardadoOk = signal(false);
-  private mensajeReservaCargado = false;
-  vistaPreviaMensajeReserva = computed(() =>
-    armarMensajeReserva(this.mensajeReserva(), { ...EJEMPLO_DATOS_MENSAJE_RESERVA, comercio: this.sesion.nombre }));
+  // Vista previa (con datos de ejemplo) del mensaje que el cliente manda desde la confirmación.
+  vistaPreviaMensajeReserva(): string {
+    return mensajeReserva({ ...EJEMPLO_DATOS_MENSAJE_RESERVA, comercio: this.sesion.nombre });
+  }
 
   // --- Turnos ---
   // Activos (pre-reservas vigentes y confirmados por venir) más los confirmados que ya pasaron.
@@ -788,7 +782,6 @@ export class Panel {
       this.cargarPagoRenovacion();
     }
     if (tab === 'perfil' && !this.mercadoPagoCargadoAlMenosUnaVez) this.cargarMercadoPago();
-    if (tab === 'whatsapp' && this.esPremium() && !this.mensajeReservaCargado) this.cargarMensajeReserva();
   }
 
   // ================= MI PLAN =================
@@ -903,52 +896,6 @@ export class Panel {
       error: err => {
         this.guardandoPerfil.set(false);
         this.errorPerfil.set(err.error?.mensaje ?? 'No pudimos actualizar tu perfil.');
-      }
-    });
-  }
-
-  // ================= MENSAJE DE WHATSAPP AL RESERVAR =================
-  cargarMensajeReserva(): void {
-    this.mensajeReservaCargado = true;
-    this.api.getMensajeWhatsAppReserva(this.sesion.comercioId).subscribe({
-      next: r => this.mensajeReserva.set(r.mensaje ?? ''),
-      error: () => { this.mensajeReservaCargado = false; }
-    });
-  }
-
-  // Mete la variable donde está el cursor (o al final si el cuadro no tiene foco).
-  insertarVariableMensaje(textarea: HTMLTextAreaElement, clave: string): void {
-    const texto = this.mensajeReserva();
-    const variable = `{${clave}}`;
-    const desde = textarea.selectionStart ?? texto.length;
-    const hasta = textarea.selectionEnd ?? texto.length;
-    this.mensajeReserva.set(texto.slice(0, desde) + variable + texto.slice(hasta));
-    this.mensajeReservaGuardadoOk.set(false);
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(desde + variable.length, desde + variable.length);
-    });
-  }
-
-  guardarMensajeReserva(restaurar = false): void {
-    this.errorMensajeReserva.set(null);
-    this.mensajeReservaGuardadoOk.set(false);
-    const mensaje = restaurar ? '' : this.mensajeReserva().trim();
-    if (mensaje.length > this.largoMaximoMensajeReserva) {
-      this.errorMensajeReserva.set(`El mensaje puede tener hasta ${this.largoMaximoMensajeReserva} caracteres.`);
-      return;
-    }
-
-    this.guardandoMensajeReserva.set(true);
-    this.api.guardarMensajeWhatsAppReserva(this.sesion.comercioId, mensaje || null).subscribe({
-      next: r => {
-        this.guardandoMensajeReserva.set(false);
-        this.mensajeReserva.set(r.mensaje ?? '');
-        this.mensajeReservaGuardadoOk.set(true);
-      },
-      error: err => {
-        this.guardandoMensajeReserva.set(false);
-        this.errorMensajeReserva.set(err.error?.mensaje ?? 'No pudimos guardar el mensaje.');
       }
     });
   }

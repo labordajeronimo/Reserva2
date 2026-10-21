@@ -80,9 +80,6 @@ namespace Reserva2.Api.Migrations
                     b.Property<string>("LogoUrl")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("MensajeWhatsAppReserva")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("MercadoPagoAccessToken")
                         .HasColumnType("nvarchar(max)");
 
