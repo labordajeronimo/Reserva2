@@ -45,3 +45,83 @@ html, body {
 ::selection {
   background: rgba(249, 115, 22, 0.3);
 }
+
+/* ==========================================================================
+   Táctil (celulares y tablets)
+   - Respuesta al TOCAR, no al levantar el dedo: :active se pinta apenas el dedo
+     apoya (en iOS hace falta el listener de touchstart que se registra en main.ts).
+     La acción en sí se dispara al soltar, igual que en las apps nativas, así un
+     toque que en realidad era scroll no ejecuta nada.
+   - touch-action: manipulation saca la demora de ~300ms del doble toque para zoom.
+   - Áreas táctiles de al menos 44×44 px (pauta de Apple; Android pide 48dp).
+   - El scroll y cualquier cosa que se arrastre usan el scroll nativo del sistema,
+     así siguen al dedo sin código propio.
+   ========================================================================== */
+button,
+a,
+select,
+summary,
+label,
+[role='button'],
+[role='tab'],
+input[type='checkbox'],
+input[type='radio'],
+input[type='submit'],
+input[type='button'] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled),
+[role='button'],
+a[href] {
+  transition-property: transform, opacity, background-color, border-color, color, box-shadow;
+  transition-duration: 0.12s;
+}
+
+button:not(:disabled):active,
+[role='button']:active,
+a[href]:active {
+  /* Al apoyar el dedo la respuesta es instantánea (sin transición); al soltar vuelve suave. */
+  transition-duration: 0s;
+  transform: scale(0.97);
+  opacity: 0.85;
+}
+
+@media (pointer: coarse) {
+  button,
+  select,
+  [role='button'],
+  [role='tab'],
+  input[type='submit'],
+  input[type='button'] {
+    min-height: 44px;
+  }
+
+  /* Botones de solo ícono (flechas, cerrar, etc.): también 44 de ancho. */
+  button:empty,
+  button[aria-label] {
+    min-width: 44px;
+  }
+
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  textarea {
+    min-height: 44px;
+    /* 16px evita que iOS haga zoom automático al enfocar el campo. */
+    font-size: max(16px, 1em);
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    min-width: 24px;
+    min-height: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active,
+  [role='button']:active,
+  a[href]:active {
+    transform: none;
+  }
+}

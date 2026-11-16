@@ -7,6 +7,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Reserva2.Api.Data;
 using Reserva2.Api.Models;
+using Reserva2.Api.Seguridad;
 using Reserva2.Api.Utils;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
@@ -19,7 +20,7 @@ using System.Threading.RateLimiting;
 
 // ==========================================
 // MODO CONSOLA: dotnet run -- hash-password "clave"
-// Genera el hash PBKDF2 de una contraseña sin levantar el servidor web.
+// Genera el hash Argon2id de una contraseña sin levantar el servidor web.
 // Útil para cargar SuperAdmin:PasswordHash sin scripts sueltos.
 // ==========================================
 if (args.Length > 0 && args[0] == "hash-password")
@@ -30,7 +31,7 @@ if (args.Length > 0 && args[0] == "hash-password")
         return;
     }
 
-    Console.WriteLine(HashPassword(args[1]));
+    Console.WriteLine(Contrasenias.Hashear(args[1]));
     return;
 }
 
@@ -57,24 +58,79 @@ Directory.CreateDirectory(rutaComprobantes);
 Directory.CreateDirectory(rutaFotosProfesionales);
 
 // Configuración de la base de datos SQL Server
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Cada request tiene su ContextoComercio; el interceptor se lo pasa a SQL Server al abrir la
+// conexión para que la seguridad por filas filtre por comercio (ver Seguridad/SeguridadPorFilas.cs).
+builder.Services.AddScoped<ContextoComercio>();
+builder.Services.AddDbContext<AppDbContext>((servicios, options) =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))
+        .AddInterceptors(new InterceptorSeguridadPorFilas(servicios.GetRequiredService<ContextoComercio>())));
+builder.Services.AddSingleton<IntentosLogin>();
+builder.Services.AddHsts(o => o.MaxAge = TimeSpan.FromDays(365));
+
+// Ningún pedido legítimo pasa de ~7MB (el comprobante de seña es de hasta 5MB en base64).
+builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = 10 * 1024 * 1024);
+
+// Errores: el usuario nunca ve detalles internos (stack trace, SQL, rutas). Se loguean
+// completos en el servidor y al navegador le llega un mensaje genérico.
+builder.Services.AddProblemDetails();
 
 // === JWT: Admin (dueño de un comercio) y Super Admin (vos, gestionás todos los comercios) ===
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Falta configurar Jwt:Key (dotnet user-secrets set \"Jwt:Key\" \"...\").");
+// HMAC-SHA256 necesita una clave de al menos 256 bits; una corta se puede adivinar por fuerza bruta.
+if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
+    throw new InvalidOperationException("Jwt:Key tiene que tener al menos 32 caracteres.");
 var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+const string EmisorJwt = "reserva2";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
         {
-            ValidateIssuer = false,
-            ValidateAudience = false,
+            ValidateIssuer = true,
+            ValidIssuer = EmisorJwt,
+            ValidateAudience = true,
+            ValidAudience = EmisorJwt,
             ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromMinutes(1),
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = signingKey
+            IssuerSigningKey = signingKey,
+            ValidAlgorithms = [SecurityAlgorithms.HmacSha256]
+        };
+        options.Events = new JwtBearerEvents
+        {
+            // El token viene en la cookie HttpOnly (ver Seguridad/CookiesSesion.cs). Se sigue
+            // aceptando también el header Authorization: Bearer (no es atacable por CSRF).
+            OnMessageReceived = ctx =>
+            {
+                if (string.IsNullOrEmpty(ctx.Request.Headers.Authorization))
+                    ctx.Token = CookiesSesion.TokenDelPedido(ctx.Request);
+                return Task.CompletedTask;
+            },
+            // Se revisa en cada pedido que la sesión siga valiendo: que el comercio exista y que
+            // la contraseña no haya cambiado desde que se emitió el token ("sv" = huella del
+            // hash). Cambiar o resetear la contraseña cierra todas las sesiones abiertas.
+            OnTokenValidated = async ctx =>
+            {
+                var principal = ctx.Principal!;
+                var rol = principal.FindFirst(ClaimTypes.Role)?.Value;
+                var huella = principal.FindFirst("sv")?.Value;
+                if (rol == "SuperAdmin")
+                {
+                    var hash = ctx.HttpContext.RequestServices.GetRequiredService<IConfiguration>()["SuperAdmin:PasswordHash"];
+                    if (hash is null || huella != Contrasenias.Huella(hash)) ctx.Fail("Sesión vencida.");
+                    return;
+                }
+                if (rol == "AdminCliente" && int.TryParse(principal.FindFirst("comercioId")?.Value, out var comercioId))
+                {
+                    var db = ctx.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+                    var hash = await db.Comercios.Where(c => c.Id == comercioId).Select(c => c.PasswordHash).FirstOrDefaultAsync();
+                    if (hash is null || huella != Contrasenias.Huella(hash)) ctx.Fail("Sesión vencida.");
+                    return;
+                }
+                ctx.Fail("Token inválido.");
+            }
         };
     });
 
@@ -98,9 +154,13 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngular", policy =>
     {
+        // AllowCredentials: en desarrollo el front (localhost:4200) y la API (localhost:5267)
+        // son orígenes distintos y la cookie de sesión tiene que viajar igual. En producción
+        // van por el mismo dominio y CORS ni entra en juego.
         policy.WithOrigins(origenesPermitidos)
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+              .WithHeaders("Content-Type", "Authorization", CookiesSesion.Header)
+              .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE")
+              .AllowCredentials();
     });
 });
 
@@ -166,6 +226,56 @@ var protectorEstadoOAuthMp = app.Services.GetRequiredService<IDataProtectionProv
 // Primero que todo: el resto del pipeline (rate limiting incluido) ya ve la IP real.
 app.UseForwardedHeaders();
 
+// Cualquier excepción no controlada: se loguea entera y al usuario le llega un JSON genérico,
+// sin stack trace ni mensajes internos (también en desarrollo, salvo que se pida explícito).
+app.UseExceptionHandler(errores => errores.Run(async http =>
+{
+    var excepcion = http.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+    var esPedidoInvalido = excepcion is BadHttpRequestException;
+    if (!esPedidoInvalido)
+        http.RequestServices.GetRequiredService<ILogger<Program>>()
+            .LogError(excepcion, "Error no controlado en {Metodo} {Ruta}", http.Request.Method, http.Request.Path);
+
+    http.Response.StatusCode = esPedidoInvalido ? StatusCodes.Status400BadRequest : StatusCodes.Status500InternalServerError;
+    await http.Response.WriteAsJsonAsync(new
+    {
+        mensaje = esPedidoInvalido
+            ? "Los datos enviados no son válidos. Revisalos y probá de nuevo."
+            : "Ocurrió un error inesperado. Probá de nuevo en un rato."
+    });
+}));
+// Respuestas de error sin cuerpo (404 de ruta inexistente, 405, 415...) también salen con
+// un mensaje genérico en vez de la página de error por defecto.
+app.UseStatusCodePages(async ctx =>
+{
+    var http = ctx.HttpContext;
+    if (http.Response.HasStarted || http.Response.ContentLength > 0 || http.Response.ContentType is not null) return;
+    await http.Response.WriteAsJsonAsync(new { mensaje = http.Response.StatusCode switch
+    {
+        StatusCodes.Status401Unauthorized => "Tu sesión venció. Volvé a ingresar.",
+        StatusCodes.Status403Forbidden => "No tenés permiso para hacer esto.",
+        StatusCodes.Status404NotFound => "No encontramos lo que buscabas.",
+        StatusCodes.Status429TooManyRequests => "Demasiados intentos. Esperá un minuto y probá de nuevo.",
+        _ => "No pudimos procesar el pedido."
+    }});
+});
+
+// Cabeceras de seguridad en todas las respuestas de la API. (Las del frontend las pone nginx.)
+app.Use(async (http, next) =>
+{
+    var h = http.Response.Headers;
+    h.XContentTypeOptions = "nosniff";
+    h.XFrameOptions = "DENY";
+    h["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    h["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+    h["Cross-Origin-Resource-Policy"] = "same-site";
+    // La API solo devuelve JSON e imágenes: no tiene por qué ejecutar nada ni ser embebida.
+    h.ContentSecurityPolicy = "default-src 'none'; img-src 'self'; frame-ancestors 'none'";
+    // Lo que tenga datos de un comercio o de un cliente no se guarda en cachés intermedias.
+    if (http.Request.Path.StartsWithSegments("/api")) h.CacheControl = "no-store";
+    await next();
+});
+
 // Configuración para poder probar la API visualmente
 if (app.Environment.IsDevelopment())
 {
@@ -173,6 +283,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+if (!app.Environment.IsDevelopment())
+{
+    // HSTS: el navegador recuerda por un año que reservados2.com va siempre por HTTPS.
+    app.UseHsts();
+}
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 // Solo los logos y las fotos de los profesionales son públicos (/uploads/logos/... y
@@ -192,6 +307,7 @@ app.UseCors("AllowAngular");
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseSeguridadPorFilas();
 
 // ==========================================
 // CONSTANTES DE NEGOCIO
@@ -203,11 +319,14 @@ const int MinutosParaPagarSeniaMercadoPago = 30;
 // Precio mensual del extra "Cobros automáticos con Mercado Pago" (se suma al plan).
 const decimal PrecioAddonCobrosMensual = 10000m;
 const int TopeTurnosMensualesGratuito = 60;
-const int DuracionTokenHoras = 24;
+// Duración de las sesiones: la del Super Admin es más corta porque puede tocar todos los comercios.
+var DuracionSesionComercio = TimeSpan.FromHours(24);
+var DuracionSesionSuperAdmin = TimeSpan.FromHours(8);
 // El cliente puede cancelar por el link del mail hasta 2 horas antes del turno; después
 // tiene que hablar con el comercio (que ya no llega a ofrecer ese horario a otro).
 const int HorasMinimasParaCancelar = 2;
 const int LargoMinimoPassword = 8;
+const int LargoMaximoPassword = 128;
 const int LargoMaximoNombreCliente = 80;
 // Valores de Turno.Origen.
 const string OrigenPaginaPublica = "PaginaPublica";
@@ -363,6 +482,46 @@ void BorrarFotoProfesional(string? fotoUrl)
     if (File.Exists(ruta)) File.Delete(ruta);
 }
 
+// ==========================================
+// VALIDACIÓN DE LO QUE ESCRIBE EL USUARIO (siempre en el servidor: el frontend se puede saltear)
+// ==========================================
+const int LargoMaximoNombre = 80;
+const int LargoMaximoDatosBancarios = 300;
+const int LargoMaximoTelefono = 30;
+const int LargoMaximoDireccion = 150;
+
+// Texto libre: largo máximo y sin caracteres de control (saltos de línea solo si es multilínea).
+static string? ErrorTexto(string? valor, string campo, int largoMaximo, bool multilinea = false)
+{
+    if (valor is null) return null;
+    if (valor.Length > largoMaximo) return $"{campo} puede tener hasta {largoMaximo} caracteres.";
+    if (valor.Any(c => char.IsControl(c) && !(multilinea && c is '\n' or '\r' or '\t')))
+        return $"{campo} tiene caracteres no permitidos.";
+    return null;
+}
+
+// Teléfono / WhatsApp: opcional; si viene, solo dígitos, espacios, +, -, paréntesis.
+static string? ErrorTelefono(string? valor, string campo = "El teléfono")
+{
+    if (string.IsNullOrWhiteSpace(valor)) return null;
+    if (valor.Length > LargoMaximoTelefono || !System.Text.RegularExpressions.Regex.IsMatch(valor, @"^[0-9+()\-\s]+$"))
+        return $"{campo} solo puede tener números, espacios, +, - y paréntesis (hasta {LargoMaximoTelefono} caracteres).";
+    return null;
+}
+
+static string? ErrorPassword(string? password)
+{
+    if ((password?.Length ?? 0) < LargoMinimoPassword)
+        return $"La contraseña tiene que tener al menos {LargoMinimoPassword} caracteres.";
+    if (password!.Length > LargoMaximoPassword)
+        return $"La contraseña puede tener hasta {LargoMaximoPassword} caracteres.";
+    return null;
+}
+
+// Hash de una contraseña que nadie tiene: se verifica contra él cuando el email no existe,
+// para que el login tarde lo mismo exista o no la cuenta.
+var HashDeRelleno = Contrasenias.Hashear(Convert.ToHexString(RandomNumberGenerator.GetBytes(16)));
+
 static bool EmailValido(string email) =>
     System.Text.RegularExpressions.Regex.IsMatch(email, @"^[^\s@]+@[^\s@]+\.[^\s@]+$") && email.Length <= 254;
 
@@ -384,12 +543,19 @@ string? ErrorAlias(string alias)
 static string? ErrorServicio(string? nombre, int duracionMinutos, decimal precio, decimal? montoSenia)
 {
     if (string.IsNullOrWhiteSpace(nombre)) return "El nombre del servicio no puede estar vacío.";
+    if (ErrorTexto(nombre.Trim(), "El nombre del servicio", LargoMaximoNombre) is { } errorNombre) return errorNombre;
+    if (precio > 100_000_000m || montoSenia > 100_000_000m) return "El precio es demasiado alto.";
     if (duracionMinutos < 5 || duracionMinutos > 600) return "La duración tiene que estar entre 5 y 600 minutos.";
     if (precio < 0) return "El precio no puede ser negativo.";
     if (montoSenia < 0) return "La seña no puede ser negativa.";
     if (montoSenia > precio) return "La seña no puede ser mayor que el precio.";
     return null;
 }
+
+static string? ErrorSucursal(SucursalRequest req) =>
+    ErrorTexto(req.Nombre?.Trim(), "El nombre de la sucursal", LargoMaximoNombre)
+    ?? ErrorTexto(req.Direccion?.Trim(), "La dirección", LargoMaximoDireccion)
+    ?? ErrorTelefono(req.Telefono);
 
 // DiaSemana como DayOfWeek (0 = domingo ... 6 = sábado); el bloque tiene que terminar después
 // de empezar y dentro del mismo día.
@@ -459,24 +625,8 @@ static IResult ResultadoComercioInactivo() =>
     Results.Json(new { mensaje = "Esta agenda no está disponible temporalmente." }, statusCode: StatusCodes.Status403Forbidden);
 
 // ==========================================
-// HASHING DE CONTRASEÑAS (PBKDF2)
+// HASHING DE CONTRASEÑAS: Argon2id (ver Seguridad/Contrasenias.cs)
 // ==========================================
-static string HashPassword(string password)
-{
-    var salt = RandomNumberGenerator.GetBytes(16);
-    var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, 100_000, HashAlgorithmName.SHA256, 32);
-    return $"{Convert.ToBase64String(salt)}.{Convert.ToBase64String(hash)}";
-}
-
-static bool VerifyPassword(string password, string stored)
-{
-    var partes = stored.Split('.');
-    if (partes.Length != 2) return false;
-    var salt = Convert.FromBase64String(partes[0]);
-    var hashEsperado = Convert.FromBase64String(partes[1]);
-    var hashIngresado = Rfc2898DeriveBytes.Pbkdf2(password, salt, 100_000, HashAlgorithmName.SHA256, 32);
-    return CryptographicOperations.FixedTimeEquals(hashEsperado, hashIngresado);
-}
 
 // ==========================================
 // EMAIL (recuperación de contraseña, confirmación de turno)
@@ -1182,19 +1332,43 @@ async Task<Pago?> ProcesarPagoPlan(AppDbContext context, IConfiguration config, 
 // ==========================================
 // JWT: emisión y lectura de claims
 // ==========================================
-string GenerarToken(string rol, int? comercioId = null)
+// "sv" = huella del hash de la contraseña con la que se inició sesión (ver OnTokenValidated).
+string GenerarToken(string rol, string passwordHash, int? comercioId, TimeSpan duracion)
 {
-    var claims = new List<Claim> { new(ClaimTypes.Role, rol) };
+    var claims = new List<Claim>
+    {
+        new(ClaimTypes.Role, rol),
+        new("sv", Contrasenias.Huella(passwordHash)),
+        new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N"))
+    };
     if (comercioId is not null)
         claims.Add(new Claim("comercioId", comercioId.Value.ToString()));
 
     var credenciales = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
     var token = new JwtSecurityToken(
+        issuer: EmisorJwt,
+        audience: EmisorJwt,
         claims: claims,
-        expires: DateTime.UtcNow.AddHours(DuracionTokenHoras),
+        expires: DateTime.UtcNow.Add(duracion),
         signingCredentials: credenciales);
     return new JwtSecurityTokenHandler().WriteToken(token);
 }
+
+// Inicia la sesión del panel: el token va solo en la cookie HttpOnly, nunca en el cuerpo.
+void IniciarSesionComercio(HttpResponse response, Comercio comercio) =>
+    CookiesSesion.Guardar(response, CookiesSesion.CookieComercio,
+        GenerarToken("AdminCliente", comercio.PasswordHash, comercio.Id, DuracionSesionComercio), DuracionSesionComercio);
+
+LoginResponse RespuestaLogin(Comercio comercio) =>
+    new(comercio.Id, comercio.Nombre, comercio.AliasUrl, comercio.PlanActual, comercio.CicloFacturacion,
+        comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.LogoUrl, comercio.FechaProximoPago, comercio.Activo);
+
+static IResult DemasiadosIntentos(int minutos) =>
+    Results.Json(new { mensaje = $"Demasiados intentos fallidos. Por seguridad, esperá {minutos} minuto{(minutos == 1 ? "" : "s")} y probá de nuevo." },
+        statusCode: StatusCodes.Status429TooManyRequests);
+
+static IResult CredencialesInvalidas() =>
+    Results.Json(new { mensaje = "Email o contraseña incorrectos." }, statusCode: StatusCodes.Status401Unauthorized);
 
 // El comercio dueño de la sesión actual (null si el token no trae claim, ej. Super Admin)
 static int? ComercioIdDelToken(ClaimsPrincipal user) =>
@@ -1210,27 +1384,37 @@ app.MapGet("/api/precio-plan", (string plan, string ciclo, int profesionales, in
     if (ciclo != "Mensual" && ciclo != "Anual")
         return Results.BadRequest(new { mensaje = "El ciclo de facturación tiene que ser Mensual o Anual." });
 
-    var precio = CalcularPrecioPlan(plan, ciclo, Math.Max(1, profesionales), Math.Max(1, sucursales));
+    var precio = CalcularPrecioPlan(plan, ciclo, Math.Clamp(profesionales, 1, 200), Math.Clamp(sucursales, 1, 50));
     return Results.Ok(new { precio });
 });
 
 // ==========================================
 // ENDPOINTS DE AUTENTICACIÓN (panel de admin)
 // ==========================================
-app.MapPost("/api/auth/register", async (AppDbContext context, RegistroRequest req) =>
+app.MapPost("/api/auth/register", async (AppDbContext context, HttpResponse response, RegistroRequest req) =>
 {
     var nombre = req.Nombre?.Trim() ?? string.Empty;
     var email = req.Email?.Trim() ?? string.Empty;
     var alias = req.AliasUrl?.Trim().ToLowerInvariant() ?? string.Empty;
+    var telefono = req.TelefonoNotificaciones?.Trim() ?? string.Empty;
+    var datosBancarios = req.DatosBancarios?.Trim() ?? string.Empty;
 
     if (nombre.Length == 0)
         return Results.BadRequest(new { mensaje = "Ingresá el nombre del negocio." });
+    if (ErrorTexto(nombre, "El nombre del negocio", LargoMaximoNombre) is { } errorNombre)
+        return Results.BadRequest(new { mensaje = errorNombre });
     if (!EmailValido(email))
         return Results.BadRequest(new { mensaje = "Ingresá un email válido." });
-    if ((req.Password?.Length ?? 0) < LargoMinimoPassword)
-        return Results.BadRequest(new { mensaje = $"La contraseña tiene que tener al menos {LargoMinimoPassword} caracteres." });
+    if (ErrorPassword(req.Password) is { } errorPassword)
+        return Results.BadRequest(new { mensaje = errorPassword });
     if (ErrorAlias(alias) is { } errorAlias)
         return Results.BadRequest(new { mensaje = errorAlias });
+    if (ErrorTelefono(telefono) is { } errorTelefono)
+        return Results.BadRequest(new { mensaje = errorTelefono });
+    if (ErrorTexto(datosBancarios, "Los datos bancarios", LargoMaximoDatosBancarios, multilinea: true) is { } errorDatos)
+        return Results.BadRequest(new { mensaje = errorDatos });
+    if (ErrorTexto(req.TipoPlantilla ?? "Servicio", "El rubro", 40) is { } errorRubro)
+        return Results.BadRequest(new { mensaje = errorRubro });
 
     if (await context.Comercios.AnyAsync(c => c.Email == email))
         return Results.Conflict(new { mensaje = "Ya existe una cuenta con ese email." });
@@ -1246,8 +1430,8 @@ app.MapPost("/api/auth/register", async (AppDbContext context, RegistroRequest r
     if (cicloElegido != "Mensual" && cicloElegido != "Anual")
         return Results.BadRequest(new { mensaje = "El ciclo de facturación tiene que ser Mensual o Anual." });
 
-    var cantidadProfesionales = Math.Max(1, req.CantidadProfesionales ?? 1);
-    var cantidadSucursales = Math.Max(1, req.CantidadSucursales ?? 1);
+    var cantidadProfesionales = Math.Clamp(req.CantidadProfesionales ?? 1, 1, 200);
+    var cantidadSucursales = Math.Clamp(req.CantidadSucursales ?? 1, 1, 50);
 
     var topeSucursalesRegistro = TopeSucursales(planElegido);
     if (cantidadSucursales > topeSucursalesRegistro)
@@ -1257,11 +1441,11 @@ app.MapPost("/api/auth/register", async (AppDbContext context, RegistroRequest r
     {
         Nombre = nombre,
         AliasUrl = alias,
-        TipoPlantilla = req.TipoPlantilla,
-        TelefonoNotificaciones = req.TelefonoNotificaciones,
-        DatosBancarios = req.DatosBancarios,
+        TipoPlantilla = req.TipoPlantilla ?? "Servicio",
+        TelefonoNotificaciones = telefono,
+        DatosBancarios = datosBancarios,
         Email = email,
-        PasswordHash = HashPassword(req.Password!),
+        PasswordHash = Contrasenias.Hashear(req.Password!),
         PlanActual = planElegido,
         CicloFacturacion = cicloElegido,
         FechaProximoPago = CalcularProximoPago(cicloElegido),
@@ -1276,27 +1460,53 @@ app.MapPost("/api/auth/register", async (AppDbContext context, RegistroRequest r
     context.Comercios.Add(comercio);
     await context.SaveChangesAsync();
 
-    return Results.Created($"/api/comercios/{comercio.Id}",
-        new LoginResponse(comercio.Id, comercio.Nombre, comercio.AliasUrl, GenerarToken("AdminCliente", comercio.Id), comercio.PlanActual, comercio.CicloFacturacion,
-            comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.LogoUrl, comercio.FechaProximoPago, comercio.Activo));
+    IniciarSesionComercio(response, comercio);
+    return Results.Created($"/api/comercios/{comercio.Id}", RespuestaLogin(comercio));
 }).RequireRateLimiting("login");
 
-app.MapPost("/api/auth/login", async (AppDbContext context, LoginRequest req) =>
+app.MapPost("/api/auth/login", async (AppDbContext context, HttpResponse response, IntentosLogin intentos, LoginRequest req) =>
 {
-    var comercio = await context.Comercios.FirstOrDefaultAsync(c => c.Email == req.Email);
-    if (comercio is null || !VerifyPassword(req.Password, comercio.PasswordHash))
-        return Results.Unauthorized();
+    var email = req.Email?.Trim() ?? string.Empty;
+    if (email.Length is 0 or > 254 || string.IsNullOrEmpty(req.Password) || req.Password.Length > LargoMaximoPassword)
+        return CredencialesInvalidas();
+    if (intentos.MinutosBloqueada("comercio", email) is { } minutos)
+        return DemasiadosIntentos(minutos);
 
+    var comercio = await context.Comercios.FirstOrDefaultAsync(c => c.Email == email);
+    // Si el email no existe igual se calcula un hash, para que el tiempo de respuesta no
+    // delate qué emails tienen cuenta.
+    var passwordOk = Contrasenias.Verificar(req.Password, comercio?.PasswordHash ?? HashDeRelleno);
+    if (comercio is null || !passwordOk)
+    {
+        intentos.RegistrarFallo("comercio", email);
+        return CredencialesInvalidas();
+    }
+    intentos.RegistrarExito("comercio", email);
+
+    // Contraseña guardada con el algoritmo viejo (PBKDF2): se pasa a Argon2id ahora.
+    if (Contrasenias.NecesitaRehash(comercio.PasswordHash))
+        comercio.PasswordHash = Contrasenias.Hashear(req.Password);
     comercio.UltimoAcceso = DateTime.UtcNow;
     await context.SaveChangesAsync();
 
-    return Results.Ok(new LoginResponse(comercio.Id, comercio.Nombre, comercio.AliasUrl, GenerarToken("AdminCliente", comercio.Id), comercio.PlanActual, comercio.CicloFacturacion,
-            comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.LogoUrl, comercio.FechaProximoPago, comercio.Activo));
+    IniciarSesionComercio(response, comercio);
+    return Results.Ok(RespuestaLogin(comercio));
 }).RequireRateLimiting("login");
+
+// Cierra la sesión del navegador (borra la cookie). Público: si la sesión ya venció, igual
+// tiene que poder limpiar la cookie.
+app.MapPost("/api/auth/logout", (HttpRequest request, HttpResponse response) =>
+{
+    CookiesSesion.Borrar(response, request.Headers[CookiesSesion.Header] == "superadmin"
+        ? CookiesSesion.CookieSuperAdmin
+        : CookiesSesion.CookieComercio);
+    return Results.NoContent();
+});
 
 app.MapPost("/api/auth/forgot-password", async (AppDbContext context, IConfiguration config, ILogger<Program> logger, ForgotPasswordRequest req) =>
 {
-    var comercio = await context.Comercios.FirstOrDefaultAsync(c => c.Email == req.Email);
+    var email = req.Email?.Trim() ?? string.Empty;
+    var comercio = EmailValido(email) ? await context.Comercios.FirstOrDefaultAsync(c => c.Email == email) : null;
     if (comercio is not null)
     {
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
@@ -1332,8 +1542,10 @@ app.MapPost("/api/auth/forgot-password", async (AppDbContext context, IConfigura
 
 app.MapPost("/api/auth/reset-password", async (AppDbContext context, ResetPasswordRequest req) =>
 {
-    if ((req.NuevaPassword?.Length ?? 0) < LargoMinimoPassword)
-        return Results.BadRequest(new { mensaje = $"La contraseña tiene que tener al menos {LargoMinimoPassword} caracteres." });
+    if (ErrorPassword(req.NuevaPassword) is { } errorPassword)
+        return Results.BadRequest(new { mensaje = errorPassword });
+    if (string.IsNullOrWhiteSpace(req.Token) || req.Token.Length != 64)
+        return Results.BadRequest(new { mensaje = "El link para restablecer la contraseña es inválido o venció." });
 
     var tokenValido = await context.PasswordResetTokens.FirstOrDefaultAsync(t => t.Token == req.Token);
     if (tokenValido is null || tokenValido.Usado || tokenValido.FechaExpiracion < DateTime.UtcNow)
@@ -1343,21 +1555,38 @@ app.MapPost("/api/auth/reset-password", async (AppDbContext context, ResetPasswo
     if (comercio is null)
         return Results.BadRequest(new { mensaje = "El link para restablecer la contraseña es inválido o venció." });
 
-    comercio.PasswordHash = HashPassword(req.NuevaPassword!);
+    // La nueva contraseña cambia la huella del token: se cierran todas las sesiones abiertas.
+    comercio.PasswordHash = Contrasenias.Hashear(req.NuevaPassword!);
     tokenValido.Usado = true;
+    // Cualquier otro link de reseteo pendiente de esa cuenta deja de servir.
+    await context.PasswordResetTokens
+        .Where(t => t.ComercioId == comercio.Id && !t.Usado && t.Id != tokenValido.Id)
+        .ExecuteUpdateAsync(u => u.SetProperty(t => t.Usado, true));
     await context.SaveChangesAsync();
 
     return Results.Ok(new { mensaje = "Contraseña actualizada. Ya podés ingresar con tu nueva contraseña." });
 }).RequireRateLimiting("login");
 
-app.MapPost("/api/auth/super-admin/login", (IConfiguration config, SuperAdminLoginRequest req) =>
+app.MapPost("/api/auth/super-admin/login", (IConfiguration config, HttpResponse response, IntentosLogin intentos, SuperAdminLoginRequest req) =>
 {
     var email = config["SuperAdmin:Email"];
     var passwordHash = config["SuperAdmin:PasswordHash"];
-    if (email is null || passwordHash is null || req.Email != email || !VerifyPassword(req.Password, passwordHash))
-        return Results.Unauthorized();
+    if (intentos.MinutosBloqueada("superadmin", "superadmin") is { } minutos)
+        return DemasiadosIntentos(minutos);
 
-    return Results.Ok(new SuperAdminLoginResponse(GenerarToken("SuperAdmin")));
+    var emailOk = email is not null && string.Equals(req.Email?.Trim(), email, StringComparison.OrdinalIgnoreCase);
+    var passwordOk = Contrasenias.Verificar(req.Password, passwordHash ?? HashDeRelleno);
+    if (passwordHash is null || !emailOk || !passwordOk)
+    {
+        // Una sola cuenta: el bloqueo es para ella, venga el intento de donde venga.
+        intentos.RegistrarFallo("superadmin", "superadmin");
+        return CredencialesInvalidas();
+    }
+    intentos.RegistrarExito("superadmin", "superadmin");
+
+    CookiesSesion.Guardar(response, CookiesSesion.CookieSuperAdmin,
+        GenerarToken("SuperAdmin", passwordHash, null, DuracionSesionSuperAdmin), DuracionSesionSuperAdmin);
+    return Results.Ok(new SuperAdminLoginResponse(Contrasenias.NecesitaRehash(passwordHash)));
 }).RequireRateLimiting("login");
 
 // ==========================================
@@ -1418,6 +1647,8 @@ app.MapPatch("/api/comercios/{id:int}/monto-acordado", async (AppDbContext conte
     var comercio = await context.Comercios.FindAsync(id);
     if (comercio is null) return Results.NotFound();
 
+    if (req.MontoMensualAcordado is < 0 or > 100_000_000m)
+        return Results.BadRequest(new { mensaje = "El monto acordado no es válido." });
     comercio.MontoMensualAcordado = req.MontoMensualAcordado;
     await context.SaveChangesAsync();
 
@@ -1850,34 +2081,52 @@ app.MapPatch("/api/comercios/{comercioId:int}/perfil", async (AppDbContext conte
 
     if (string.IsNullOrWhiteSpace(req.Nombre))
         return Results.BadRequest(new { mensaje = "El nombre del negocio no puede estar vacío." });
+    var nombre = req.Nombre.Trim();
+    var telefono = req.TelefonoNotificaciones?.Trim() ?? string.Empty;
+    var datosBancarios = req.DatosBancarios?.Trim() ?? string.Empty;
+    if ((ErrorTexto(nombre, "El nombre del negocio", LargoMaximoNombre)
+         ?? ErrorTelefono(telefono)
+         ?? ErrorTexto(datosBancarios, "Los datos bancarios", LargoMaximoDatosBancarios, multilinea: true)) is { } error)
+        return Results.BadRequest(new { mensaje = error });
 
     var comercio = await context.Comercios.FindAsync(comercioId);
     if (comercio is null) return Results.NotFound();
 
-    comercio.Nombre = req.Nombre.Trim();
-    comercio.TelefonoNotificaciones = req.TelefonoNotificaciones.Trim();
-    comercio.DatosBancarios = req.DatosBancarios.Trim();
+    comercio.Nombre = nombre;
+    comercio.TelefonoNotificaciones = telefono;
+    comercio.DatosBancarios = datosBancarios;
     await context.SaveChangesAsync();
 
     return Results.Ok(new PerfilDto(comercio.Nombre, comercio.TelefonoNotificaciones, comercio.DatosBancarios, comercio.LogoUrl));
 }).RequireAuthorization("AdminCliente");
 
 // Cambiar contraseña estando logueado (distinto del flujo de "olvidé mi contraseña").
-app.MapPost("/api/comercios/{comercioId:int}/cambiar-password", async (AppDbContext context, int comercioId, CambiarPasswordRequest req, ClaimsPrincipal user) =>
+app.MapPost("/api/comercios/{comercioId:int}/cambiar-password", async (AppDbContext context, HttpResponse response, IntentosLogin intentos, int comercioId, CambiarPasswordRequest req, ClaimsPrincipal user) =>
 {
     if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
 
     var comercio = await context.Comercios.FindAsync(comercioId);
     if (comercio is null) return Results.NotFound();
 
-    if (!VerifyPassword(req.PasswordActual, comercio.PasswordHash))
+    // Mismo límite que el login: con una sesión robada no se puede adivinar la contraseña actual.
+    var cuenta = comercioId.ToString();
+    if (intentos.MinutosBloqueada("cambiar-password", cuenta) is { } minutos)
+        return DemasiadosIntentos(minutos);
+    if (!Contrasenias.Verificar(req.PasswordActual, comercio.PasswordHash))
+    {
+        intentos.RegistrarFallo("cambiar-password", cuenta);
         return Results.BadRequest(new { mensaje = "La contraseña actual no es correcta." });
+    }
+    intentos.RegistrarExito("cambiar-password", cuenta);
 
-    if (req.PasswordNueva.Length < LargoMinimoPassword)
-        return Results.BadRequest(new { mensaje = $"La contraseña nueva tiene que tener al menos {LargoMinimoPassword} caracteres." });
+    if (ErrorPassword(req.PasswordNueva) is { } errorPassword)
+        return Results.BadRequest(new { mensaje = errorPassword });
 
-    comercio.PasswordHash = HashPassword(req.PasswordNueva);
+    comercio.PasswordHash = Contrasenias.Hashear(req.PasswordNueva!);
     await context.SaveChangesAsync();
+
+    // Las demás sesiones abiertas (otros dispositivos) quedan cerradas; esta sigue con una cookie nueva.
+    IniciarSesionComercio(response, comercio);
 
     return Results.Ok(new { mensaje = "Contraseña actualizada." });
 }).RequireAuthorization("AdminCliente").RequireRateLimiting("login");
@@ -1896,8 +2145,21 @@ app.MapPost("/api/comercios/{comercioId:int}/logo", async (AppDbContext context,
         return Results.BadRequest(new { mensaje = "El logo tiene que ser una imagen (PNG, JPG o WEBP)." });
 
     const long tamañoMaximo = 2 * 1024 * 1024; // 2MB
-    if (archivo.Length > tamañoMaximo)
+    if (archivo.Length == 0 || archivo.Length > tamañoMaximo)
         return Results.BadRequest(new { mensaje = "El logo no puede pesar más de 2MB." });
+
+    // Queda servido públicamente: se valida que de verdad sea una imagen por su contenido,
+    // no solo por la extensión del nombre (que la elige quien sube el archivo).
+    byte[] contenidoLogo;
+    using (var memoria = new MemoryStream())
+    {
+        await archivo.CopyToAsync(memoria);
+        contenidoLogo = memoria.ToArray();
+    }
+    var extensionReal = ExtensionDeImagen(contenidoLogo);
+    if (extensionReal is null)
+        return Results.BadRequest(new { mensaje = "El logo tiene que ser una imagen (PNG, JPG o WEBP)." });
+    extension = extensionReal;
 
     var carpeta = rutaLogos;
     Directory.CreateDirectory(carpeta);
@@ -1910,10 +2172,7 @@ app.MapPost("/api/comercios/{comercioId:int}/logo", async (AppDbContext context,
     }
 
     var rutaArchivo = Path.Combine(carpeta, $"{comercioId}{extension}");
-    await using (var stream = File.Create(rutaArchivo))
-    {
-        await archivo.CopyToAsync(stream);
-    }
+    await File.WriteAllBytesAsync(rutaArchivo, contenidoLogo);
 
     comercio.LogoUrl = $"/uploads/logos/{comercioId}{extension}";
     await context.SaveChangesAsync();
@@ -1936,6 +2195,9 @@ app.MapPost("/api/servicios", async (AppDbContext context, Servicio servicio, Cl
     if (ErrorServicio(servicio.Nombre, servicio.DuracionMinutos, servicio.Precio, servicio.MontoSeña) is { } error)
         return Results.BadRequest(new { mensaje = error });
 
+    // Lo que no elige el dueño se fija acá (que no pueda mandar un Id ni un servicio ya borrado).
+    servicio.Id = 0;
+    servicio.Activo = true;
     servicio.Nombre = servicio.Nombre.Trim();
     context.Servicios.Add(servicio);
     await context.SaveChangesAsync();
@@ -1958,7 +2220,7 @@ app.MapPut("/api/servicios/{id:int}", async (AppDbContext context, int id, Edita
     if (ErrorServicio(req.Nombre, req.DuracionMinutos, req.Precio, req.MontoSeña) is { } error)
         return Results.BadRequest(new { mensaje = error });
 
-    servicio.Nombre = req.Nombre.Trim();
+    servicio.Nombre = req.Nombre!.Trim();
     servicio.DuracionMinutos = req.DuracionMinutos;
     servicio.Precio = req.Precio;
     servicio.MontoSeña = req.MontoSeña;
@@ -1995,6 +2257,8 @@ app.MapPost("/api/comercios/{comercioId:int}/profesionales", async (AppDbContext
 
     if (string.IsNullOrWhiteSpace(req.Nombre))
         return Results.BadRequest(new { mensaje = "El nombre no puede estar vacío." });
+    if (ErrorTexto(req.Nombre.Trim(), "El nombre", LargoMaximoNombre) is { } errorNombre)
+        return Results.BadRequest(new { mensaje = errorNombre });
 
     var especialidad = NormalizarEspecialidad(req.Especialidad);
     if (especialidad is { Length: > 30 })
@@ -2024,6 +2288,8 @@ app.MapPut("/api/profesionales/{id:int}", async (AppDbContext context, int id, P
 {
     if (string.IsNullOrWhiteSpace(req.Nombre))
         return Results.BadRequest(new { mensaje = "El nombre no puede estar vacío." });
+    if (ErrorTexto(req.Nombre.Trim(), "El nombre", LargoMaximoNombre) is { } errorNombre)
+        return Results.BadRequest(new { mensaje = errorNombre });
 
     var especialidad = NormalizarEspecialidad(req.Especialidad);
     if (especialidad is { Length: > 30 })
@@ -2120,6 +2386,8 @@ app.MapPost("/api/comercios/{comercioId:int}/sucursales", async (AppDbContext co
     if (ComercioIdDelToken(user) != comercioId) return Results.Forbid();
     if (string.IsNullOrWhiteSpace(req.Nombre))
         return Results.BadRequest(new { mensaje = "El nombre no puede estar vacío." });
+    if (ErrorSucursal(req) is { } errorSucursal)
+        return Results.BadRequest(new { mensaje = errorSucursal });
 
     var comercio = await context.Comercios.FindAsync(comercioId);
     if (comercio is null) return Results.NotFound();
@@ -2136,7 +2404,7 @@ app.MapPost("/api/comercios/{comercioId:int}/sucursales", async (AppDbContext co
         ComercioId = comercioId,
         Nombre = req.Nombre.Trim(),
         Direccion = req.Direccion?.Trim() ?? string.Empty,
-        Telefono = req.Telefono,
+        Telefono = req.Telefono?.Trim(),
         Activa = req.Activa
     };
     context.Sucursales.Add(sucursal);
@@ -2159,6 +2427,8 @@ app.MapPut("/api/sucursales/{id:int}", async (AppDbContext context, int id, Sucu
 {
     if (string.IsNullOrWhiteSpace(req.Nombre))
         return Results.BadRequest(new { mensaje = "El nombre no puede estar vacío." });
+    if (ErrorSucursal(req) is { } errorSucursal)
+        return Results.BadRequest(new { mensaje = errorSucursal });
 
     var sucursal = await context.Sucursales.FindAsync(id);
     if (sucursal is null) return Results.NotFound();
@@ -2166,7 +2436,7 @@ app.MapPut("/api/sucursales/{id:int}", async (AppDbContext context, int id, Sucu
 
     sucursal.Nombre = req.Nombre.Trim();
     sucursal.Direccion = req.Direccion?.Trim() ?? string.Empty;
-    sucursal.Telefono = req.Telefono;
+    sucursal.Telefono = req.Telefono?.Trim();
     sucursal.Activa = req.Activa;
     await context.SaveChangesAsync();
 
@@ -2345,8 +2615,15 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
     if (string.IsNullOrWhiteSpace(req.ClienteNombre))
         return Results.BadRequest(new { mensaje = "Ingresá tu nombre." });
     var nombreCliente = req.ClienteNombre.Trim();
-    if (nombreCliente.Length > LargoMaximoNombreCliente)
-        return Results.BadRequest(new { mensaje = $"El nombre puede tener hasta {LargoMaximoNombreCliente} caracteres." });
+    if (ErrorTexto(nombreCliente, "El nombre", LargoMaximoNombreCliente) is { } errorNombre)
+        return Results.BadRequest(new { mensaje = errorNombre });
+    if (ErrorTelefono(req.ClienteWhatsApp, "El WhatsApp") is { } errorWhatsApp)
+        return Results.BadRequest(new { mensaje = errorWhatsApp });
+    if (req.MedioSenia is not (null or "MercadoPago" or "Transferencia"))
+        return Results.BadRequest(new { mensaje = "Medio de pago de la seña inválido." });
+    // Nadie reserva a más de un año: frena pedidos armados a mano para llenar la agenda.
+    if (req.FechaHoraInicio > AhoraArgentina().AddYears(1))
+        return Results.BadRequest(new { mensaje = "Elegí un horario dentro del próximo año." });
 
     // La página pública no ofrece horarios que ya empezaron; esto frena a quien arme el pedido a mano.
     if (req.FechaHoraInicio <= AhoraArgentina())
@@ -2454,7 +2731,7 @@ app.MapPost("/api/turnos", async (AppDbContext context, IConfiguration config, I
         FechaHoraInicio = req.FechaHoraInicio,
         FechaHoraFin = finTurno,
         ClienteNombre = nombreCliente,
-        ClienteWhatsApp = req.ClienteWhatsApp,
+        ClienteWhatsApp = req.ClienteWhatsApp?.Trim() ?? string.Empty,
         ClienteEmail = req.ClienteEmail.Trim(),
         // Las reservas de la página pública entran confirmadas: ya no hay pre-reserva que el
         // comercio tenga que confirmar en 2 horas. Si el servicio pide seña por transferencia,
@@ -2533,6 +2810,13 @@ app.MapPost("/api/comercios/{comercioId:int}/turnos", async (AppDbContext contex
 
     if (string.IsNullOrWhiteSpace(req.ClienteNombre))
         return Results.BadRequest(new { mensaje = "Ingresá el nombre del cliente." });
+    if ((ErrorTexto(req.ClienteNombre.Trim(), "El nombre del cliente", LargoMaximoNombreCliente)
+         ?? ErrorTelefono(req.ClienteWhatsApp, "El WhatsApp")) is { } errorCliente)
+        return Results.BadRequest(new { mensaje = errorCliente });
+    if (!string.IsNullOrWhiteSpace(req.ClienteEmail) && !EmailValido(req.ClienteEmail.Trim()))
+        return Results.BadRequest(new { mensaje = "El email del cliente no es válido." });
+    if (req.FechaHoraInicio < AhoraArgentina().AddYears(-1) || req.FechaHoraInicio > AhoraArgentina().AddYears(2))
+        return Results.BadRequest(new { mensaje = "La fecha del turno no es válida." });
 
     var comercio = await context.Comercios.FindAsync(comercioId);
     if (comercio is null) return Results.NotFound();
@@ -2619,6 +2903,8 @@ app.MapGet("/api/comercios/{comercioId:int}/historial", async (AppDbContext cont
 
     var anioFiltro = anio ?? ahora.Year;
     var mesFiltro = mes ?? ahora.Month;
+    if (anioFiltro is < 2000 or > 2100 || mesFiltro is < 1 or > 12)
+        return Results.BadRequest(new { mensaje = "Mes o año inválido." });
     var inicioFiltro = new DateTime(anioFiltro, mesFiltro, 1);
     var finFiltro = inicioFiltro.AddMonths(1);
 
@@ -2650,6 +2936,8 @@ app.MapGet("/api/comercios/{comercioId:int}/ganancias", async (AppDbContext cont
     var hoy = DateOnly.FromDateTime(AhoraArgentina());
     var fechaDesde = desde ?? new DateOnly(hoy.Year, hoy.Month, 1);
     var fechaHasta = hasta ?? hoy;
+    if (fechaDesde > fechaHasta) return Results.BadRequest(new { mensaje = "La fecha \"desde\" no puede ser posterior a \"hasta\"." });
+    if (fechaHasta.DayNumber - fechaDesde.DayNumber > 366 * 3) return Results.BadRequest(new { mensaje = "El rango no puede superar tres años." });
 
     var inicio = fechaDesde.ToDateTime(TimeOnly.MinValue);
     var fin = fechaHasta.ToDateTime(TimeOnly.MaxValue);
@@ -3477,28 +3765,30 @@ record ComercioDetalleDto(
     int CantidadServicios, decimal FacturacionDelMes, List<TurnosDiaDto> TurnosPorDia, int TopeTurnosGratuito,
     bool AddonCobrosOnline, bool MercadoPagoConectado,
     int WhatsAppDelMes, int WhatsAppMesAnterior);
-record RegistroRequest(string Nombre, string AliasUrl, string TipoPlantilla, string TelefonoNotificaciones, string DatosBancarios, string Email, string Password, string? PlanActual = null, string? CicloFacturacion = null, int? CantidadProfesionales = null, int? CantidadSucursales = null);
-record PerfilRequest(string Nombre, string TelefonoNotificaciones, string DatosBancarios);
+record RegistroRequest(string? Nombre, string? AliasUrl, string? TipoPlantilla, string? TelefonoNotificaciones, string? DatosBancarios, string? Email, string? Password, string? PlanActual = null, string? CicloFacturacion = null, int? CantidadProfesionales = null, int? CantidadSucursales = null);
+record PerfilRequest(string? Nombre, string? TelefonoNotificaciones, string? DatosBancarios);
 record PerfilDto(string Nombre, string TelefonoNotificaciones, string DatosBancarios, string? LogoUrl);
-record EditarServicioRequest(string Nombre, int DuracionMinutos, decimal Precio, decimal? MontoSeña);
-record CambiarPasswordRequest(string PasswordActual, string PasswordNueva);
+record EditarServicioRequest(string? Nombre, int DuracionMinutos, decimal Precio, decimal? MontoSeña);
+record CambiarPasswordRequest(string? PasswordActual, string? PasswordNueva);
 record TurnoPorTokenDto(int Id, string NombreComercio, string NombreServicio, DateTime FechaHoraInicio, int EstadoReserva,
     bool PuedeCancelar, int HorasMinimasParaCancelar, string? TelefonoComercio);
-record LoginRequest(string Email, string Password);
-record ForgotPasswordRequest(string Email);
-record ResetPasswordRequest(string Token, string NuevaPassword);
-record LoginResponse(int ComercioId, string Nombre, string AliasUrl, string Token, string PlanActual, string CicloFacturacion,
+record LoginRequest(string? Email, string? Password);
+record ForgotPasswordRequest(string? Email);
+record ResetPasswordRequest(string? Token, string? NuevaPassword);
+// El token de sesión NO va acá: viaja solo en la cookie HttpOnly.
+record LoginResponse(int ComercioId, string Nombre, string AliasUrl, string PlanActual, string CicloFacturacion,
     string TelefonoNotificaciones, string DatosBancarios, string? LogoUrl, DateTime? FechaProximoPago, bool Activo);
-record SuperAdminLoginRequest(string Email, string Password);
-record SuperAdminLoginResponse(string Token);
-record ProfesionalRequest(string Nombre, int? SucursalId = null, string? Especialidad = null);
-record SucursalRequest(string Nombre, string Direccion, string? Telefono, bool Activa = true);
+record SuperAdminLoginRequest(string? Email, string? Password);
+// HashParaActualizar: el hash de SuperAdmin:PasswordHash es del formato viejo (PBKDF2) y conviene regenerarlo.
+record SuperAdminLoginResponse(bool HashParaActualizar);
+record ProfesionalRequest(string? Nombre, int? SucursalId = null, string? Especialidad = null);
+record SucursalRequest(string? Nombre, string? Direccion, string? Telefono, bool Activa = true);
 record HorarioRequest(int DiaSemana, TimeSpan HoraInicio, TimeSpan HoraFin, int? ProfesionalId = null);
 record SlotDisponibilidad(DateTime Inicio, DateTime Fin, bool Disponible);
 // ComprobanteBase64: captura del comprobante de la seña (PNG, JPG o WEBP, hasta 5MB), en
 // base64 con o sin el prefijo "data:image/...;base64,". Obligatorio solo si el servicio
 // tiene seña; se ignora si no la tiene.
-record CrearTurnoRequest(int ComercioId, int ServicioId, DateTime FechaHoraInicio, string ClienteNombre, string ClienteWhatsApp, string ClienteEmail, int? ProfesionalId = null, string? ComprobanteBase64 = null, string? MedioSenia = null, int? SucursalId = null);
+record CrearTurnoRequest(int ComercioId, int ServicioId, DateTime FechaHoraInicio, string? ClienteNombre, string? ClienteWhatsApp, string? ClienteEmail, int? ProfesionalId = null, string? ComprobanteBase64 = null, string? MedioSenia = null, int? SucursalId = null);
 record AdminCrearTurnoRequest(int ServicioId, DateTime FechaHoraInicio, string ClienteNombre, string? ClienteWhatsApp, string? ClienteEmail, int? ProfesionalId = null);
 record HistorialItemDto(int Id, DateTime FechaHoraInicio, string ClienteNombre, string ServicioNombre, decimal Monto);
 record HistorialDto(List<HistorialItemDto> Items, decimal TotalHoy, decimal TotalSemana, decimal TotalMes);

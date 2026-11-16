@@ -7,6 +7,7 @@ import { Api, Turno, Servicio, Horario, Profesional, Sucursal, LoginResponse, Hi
 import { Session } from '../../core/session';
 import { linkWhatsApp, mensajeReserva, EJEMPLO_DATOS_MENSAJE_RESERVA } from '../../core/whatsapp';
 import { PlanSelector } from '../../shared/plan-selector/plan-selector';
+import { vibrar } from '../../core/haptica';
 
 type TabPanel = 'inicio' | 'turnos' | 'servicios' | 'horarios' | 'profesionales' | 'sucursales' | 'historial' | 'ganancias' | 'whatsapp' | 'plan' | 'perfil';
 
@@ -552,8 +553,17 @@ export class Panel {
     // Permite entrar directo a /panel?tab=ganancias, ?tab=whatsapp o ?tab=plan (ej. un link
     // guardado); si el comercio no es Premium, la pestaña igual se abre pero muestra el aviso.
     const tabPorUrl = this.route.snapshot.queryParamMap.get('tab');
-    if (tabPorUrl === 'ganancias' || tabPorUrl === 'whatsapp' || tabPorUrl === 'plan' || tabPorUrl === 'perfil') this.abrirTab(tabPorUrl);
+    if (this.esTabValida(tabPorUrl)) this.abrirTab(tabPorUrl, false);
     this.procesarVueltaDeMercadoPago();
+
+    // Navegación del sistema: cada pestaña es una entrada del historial del navegador, así el
+    // botón o el gesto "atrás" del celular vuelve a la pestaña anterior en vez de salir del panel.
+    const suscripcionTabs = this.route.queryParamMap.subscribe(params => {
+      // Sin ?tab= (la primera entrada del historial, /panel a secas) es la pestaña Inicio.
+      const tab = params.get('tab') ?? 'inicio';
+      if (this.esTabValida(tab) && tab !== this.tabActiva()) this.abrirTab(tab, false);
+    });
+    inject(DestroyRef).onDestroy(() => suscripcionTabs.unsubscribe());
   }
 
   // Vueltas de Mercado Pago al panel: de conectar la cuenta (?mercadopago=conectado|error|vencido)
@@ -773,8 +783,17 @@ export class Panel {
     return palabras.slice(0, 2).map(p => p[0].toUpperCase()).join('') || 'R2';
   }
 
-  abrirTab(tab: TabPanel): void {
+  private esTabValida(tab: string | null): tab is TabPanel {
+    return MENU_PANEL.some(i => i.tab === tab);
+  }
+
+  // agregarAlHistorial = false cuando la pestaña cambia porque cambió la URL (atrás/adelante):
+  // ahí no hay que volver a empujar otra entrada al historial.
+  abrirTab(tab: TabPanel, agregarAlHistorial = true): void {
+    const cambio = tab !== this.tabActiva();
     this.tabActiva.set(tab);
+    if (agregarAlHistorial && cambio && this.route.snapshot.queryParamMap.get('tab') !== tab)
+      this.router.navigate([], { relativeTo: this.route, queryParams: { tab } });
     if (tab === 'ganancias' && !this.gananciasCargadaAlMenosUnaVez) this.cargarGanancias();
     if (tab === 'whatsapp' && !this.whatsAppCargadoAlMenosUnaVez) this.cargarWhatsAppConfig();
     if (tab === 'plan') {
@@ -979,11 +998,11 @@ export class Panel {
   }
 
   confirmar(t: Turno): void {
-    this.api.confirmarTurno(t.id).subscribe(() => this.cargarTurnos());
+    this.api.confirmarTurno(t.id).subscribe(() => { vibrar('exito'); this.cargarTurnos(); });
   }
 
   cancelar(t: Turno): void {
-    this.api.cancelarTurno(t.id).subscribe(() => this.cargarTurnos());
+    this.api.cancelarTurno(t.id).subscribe(() => { vibrar('exito'); this.cargarTurnos(); });
   }
 
   etiquetaEstado(estado: number): string {
@@ -1017,6 +1036,7 @@ export class Panel {
     }).subscribe({
       next: () => {
         this.cargandoTurnoManual.set(false);
+        vibrar('exito');
         this.nuevoTurnoClienteNombre = '';
         this.nuevoTurnoClienteWhatsApp = '';
         this.cargarTurnos();

@@ -7,7 +7,7 @@ import { Observable } from 'rxjs';
 // Ajustá el puerto si corrés el backend en otro (ver Properties/launchSettings.json).
 const esLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
 const API_ROOT = esLocal ? 'http://localhost:5267' : '';
-const API_BASE = `${API_ROOT}/api`;
+export const API_BASE = `${API_ROOT}/api`;
 
 // Las rutas de archivos (ej. LogoUrl) vienen relativas al backend ("/uploads/logos/1.png"),
 // no al frontend, así que hay que anteponerles el host del backend para poder mostrarlas.
@@ -251,7 +251,7 @@ export interface LoginResponse {
   comercioId: number;
   nombre: string;
   aliasUrl: string;
-  token: string;
+  // El token de sesión ya no viene acá: queda en una cookie HttpOnly que el JavaScript no ve.
   planActual: string;
   cicloFacturacion: string;
   telefonoNotificaciones: string;
@@ -282,8 +282,9 @@ export interface RegistroRequest {
   cantidadSucursales?: number;
 }
 
+// Marca local de "hay sesión de Super Admin" (el token real vive en una cookie HttpOnly).
 export interface SuperAdminSession {
-  token: string;
+  hashParaActualizar: boolean;
 }
 
 export interface ComercioAdmin {

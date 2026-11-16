@@ -82,6 +82,21 @@ Variables de entorno del servicio `reserva2-api` (nunca en el repo):
 Webhooks (los arma la API sola en cada pago, no hace falta configurarlos):
 `POST /api/mercadopago/webhook/senias` y `POST /api/mercadopago/webhook/planes`.
 
+## 🔐 Seguridad
+
+| | Cómo está resuelto |
+|---|---|
+| 🔑 Llaves | Todas en variables de entorno del servicio `reserva2-api` (systemd). En el repo no hay ninguna; `Jwt:Key` tiene que tener al menos 32 caracteres o la API no arranca. |
+| 🧹 Validación | Todo lo que escribe el usuario se valida en el backend (largos, formato de email/teléfono, rangos de fechas y montos, imágenes por contenido y no por extensión). |
+| 🛡 Inyección SQL | Todo pasa por Entity Framework (consultas parametrizadas); el único SQL a mano usa `ExecuteSqlInterpolated`, que también parametriza. |
+| 🔒 Contraseñas | Argon2id (19 MiB, 2 pasadas). Las viejas en PBKDF2 se pasan a Argon2id solas en el siguiente login. Generar un hash: `dotnet run -- hash-password "clave"`. |
+| 🚦 Permisos | Cada endpoint pide su rol (`AdminCliente` / `SuperAdmin`) y además verifica que el recurso sea del comercio del token. Cambiar la contraseña cierra las demás sesiones. |
+| 🗄 Seguridad por filas | Row-Level Security de SQL Server (`seguridad.PoliticaComercio`): en los pedidos del panel la conexión solo ve y escribe filas de su comercio. Apagado de emergencia: `ALTER SECURITY POLICY seguridad.PoliticaComercio WITH (STATE = OFF);` |
+| ⏱ Login | 5 intentos por minuto por IP y bloqueo de 15 minutos por cuenta tras 5 fallos. |
+| 🌐 HTTPS y cookies | HSTS; la sesión va en una cookie `HttpOnly` + `Secure` + `SameSite=Strict` (el JavaScript no la ve) y la API exige el header `X-Reserva2-Sesion` (anti-CSRF). |
+| 🙈 Errores | El usuario nunca ve errores internos: se loguean en el servidor y la respuesta es un mensaje genérico. |
+| 📦 Dependencias | NuGet en la última 10.0.x; npm en la última 21.x sin vulnerabilidades en producción. |
+
 ## 📌 Estado actual y roadmap
 
 Ver [`spec-pendiente.md`](./spec-pendiente.md) para el detalle completo de lo

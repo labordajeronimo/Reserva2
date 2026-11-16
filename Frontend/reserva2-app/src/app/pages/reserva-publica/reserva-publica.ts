@@ -6,6 +6,7 @@ import { catchError, forkJoin, of } from 'rxjs';
 
 import { Api, ComercioPublico, Servicio, SlotDisponibilidad, Sucursal, Profesional, urlArchivo } from '../../core/api';
 import { mensajeReserva } from '../../core/whatsapp';
+import { vibrar } from '../../core/haptica';
 
 // Foto de la reserva recién hecha para la pantalla de confirmación (el formulario se puede
 // resetear con "Reservar otro turno" sin perder lo que se muestra).
@@ -409,6 +410,7 @@ export class ReservaPublica implements OnInit {
         }
 
         if (estado === 'confirmado') {
+          vibrar('exito');
           if (reservaGuardada) {
             this.reservaHecha.set(reservaGuardada);
             this.reservaConfirmada.set(true);
@@ -686,11 +688,13 @@ export class ReservaPublica implements OnInit {
           ? { ...reservaHecha, profesional: asignado.nombre }
           : reservaHecha);
         this.reservaConfirmada.set(true);
+        vibrar('exito');
         if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
         this.cargarResumenDias();
       },
       error: err => {
         this.reservando.set(false);
+        vibrar('error');
         if (err.status === 409) {
           this.errorReserva.set(err.error?.mensaje ?? 'Ese horario ya no está disponible. Elegí otro.');
           this.buscarDisponibilidad();
