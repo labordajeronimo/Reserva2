@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { Api, TurnoPorToken } from '../../core/api';
+import { vibrar } from '../../core/haptica';
 
 @Component({
   selector: 'app-cancelar-turno',
@@ -51,9 +52,11 @@ export class CancelarTurno implements OnInit {
       next: () => {
         this.cancelando.set(false);
         this.canceladoOk.set(true);
+        vibrar('exito');
       },
       error: err => {
         this.cancelando.set(false);
+        vibrar('error');
         this.errorCancelar.set(err.error?.mensaje ?? 'No pudimos cancelar el turno.');
       }
     });

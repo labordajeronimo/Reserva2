@@ -33,9 +33,9 @@ export class SuperAdminLogin {
         this.cargandoAuth.set(false);
         this.router.navigateByUrl('/super-admin');
       },
-      error: () => {
+      error: err => {
         this.cargandoAuth.set(false);
-        this.errorAuth.set('Email o contraseña incorrectos.');
+        this.errorAuth.set(err.status === 429 && err.error?.mensaje ? err.error.mensaje : 'Email o contraseña incorrectos.');
       }
     });
   }

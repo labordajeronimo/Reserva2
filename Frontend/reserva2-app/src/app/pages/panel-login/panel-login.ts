@@ -82,9 +82,10 @@ export class PanelLogin {
         this.cargandoAuth.set(false);
         this.router.navigateByUrl('/panel');
       },
-      error: () => {
+      error: err => {
         this.cargandoAuth.set(false);
-        this.errorAuth.set('Email o contraseña incorrectos.');
+        // 429: demasiados intentos (el backend dice cuánto esperar).
+        this.errorAuth.set(err.status === 429 && err.error?.mensaje ? err.error.mensaje : 'Email o contraseña incorrectos.');
       }
     });
   }
